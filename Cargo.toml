@@ -1,0 +1,14 @@
+[package]
+name = "phase2"
+version = "0.0.1"
+authors = ["Sean Bowe <ewillbefull@gmail.com>"]
+description = "zk-SNARK MPC"
+documentation = "https://github.com/ebfull/phase2"
+homepage = "https://github.com/ebfull/phase2"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/ebfull/phase2"
+
+[dependencies]
+pairing = "0.14"
+rand = "0.4"
+bellman = "0.1"

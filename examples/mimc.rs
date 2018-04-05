@@ -191,6 +191,14 @@ fn main() {
     let (pubkey, privkey) = phase2::keypair(rng, &params);
     params.transform(&pubkey, &privkey);
 
+    {
+        let mut w = vec![];
+        pubkey.write(&mut w).unwrap();
+
+        let deser = phase2::PublicKey::read(&w[..]).unwrap();
+        assert!(pubkey == deser);
+    }
+
     assert!(phase2::verify_transform(&old_params, &params));
 
     let old_params = params.clone();
@@ -198,6 +206,14 @@ fn main() {
     params.transform(&pubkey, &privkey);
 
     assert!(phase2::verify_transform(&old_params, &params));
+
+    {
+        let mut w = vec![];
+        params.write(&mut w).unwrap();
+
+        let deser = phase2::MPCParameters::read(&w[..], true).unwrap();
+        assert!(params == deser);
+    }
 
     let params = params.params();
 

@@ -199,13 +199,21 @@ fn main() {
         assert!(pubkey == deser);
     }
 
-    assert!(phase2::verify_transform(&old_params, &params));
+    phase2::verify_transform(MiMCDemo::<Bls12> {
+        xl: None,
+        xr: None,
+        constants: &constants
+    }, &old_params, &params).unwrap();
 
     let old_params = params.clone();
     let (pubkey, privkey) = phase2::keypair(rng, &params);
     params.transform(&pubkey, &privkey);
 
-    assert!(phase2::verify_transform(&old_params, &params));
+    phase2::verify_transform(MiMCDemo::<Bls12> {
+        xl: None,
+        xr: None,
+        constants: &constants
+    }, &old_params, &params).unwrap();
 
     {
         let mut w = vec![];

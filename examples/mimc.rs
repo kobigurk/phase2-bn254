@@ -177,7 +177,7 @@ fn main() {
     println!("Creating parameters...");
 
     // Create parameters for our circuit
-    let params = {
+    let mut params = {
         let c = MiMCDemo::<Bls12> {
             xl: None,
             xr: None,
@@ -186,6 +186,20 @@ fn main() {
 
         phase2::new_parameters(c).unwrap()
     };
+
+    let old_params = params.clone();
+    let (pubkey, privkey) = phase2::keypair(rng, &params);
+    params.transform(&pubkey, &privkey);
+
+    assert!(phase2::verify_transform(&old_params, &params));
+
+    let old_params = params.clone();
+    let (pubkey, privkey) = phase2::keypair(rng, &params);
+    params.transform(&pubkey, &privkey);
+
+    assert!(phase2::verify_transform(&old_params, &params));
+
+    let params = params.params();
 
     // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);
@@ -220,7 +234,7 @@ fn main() {
             };
 
             // Create a groth16 proof with our parameters.
-            let proof = create_random_proof(c, &params, rng).unwrap();
+            let proof = create_random_proof(c, params, rng).unwrap();
 
             proof.write(&mut proof_vec).unwrap();
         }

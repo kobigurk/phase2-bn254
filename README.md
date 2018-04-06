@@ -1,6 +1,12 @@
 # phase2 [![Crates.io](https://img.shields.io/crates/v/phase2.svg)](https://crates.io/crates/phase2) #
 
-Under construction. ;)
+This library is still under development.
+
+## [Documentation](https://docs.rs/phase2/)
+
+## Security Warnings
+
+This library does not make any guarantees about constant-time operations, memory access patterns, or resistance to side-channel attacks.
 
 ## License
 

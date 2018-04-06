@@ -184,46 +184,20 @@ fn main() {
             constants: &constants
         };
 
-        phase2::new_parameters(c).unwrap()
+        phase2::MPCParameters::new(c).unwrap()
     };
 
     let old_params = params.clone();
     let (pubkey, privkey) = phase2::keypair(rng, &params);
-    params.transform(&pubkey, &privkey);
+    params.contribute(&pubkey, &privkey);
 
-    {
-        let mut w = vec![];
-        pubkey.write(&mut w).unwrap();
-
-        let deser = phase2::PublicKey::read(&w[..]).unwrap();
-        assert!(pubkey == deser);
-    }
-
-    phase2::verify_transform(MiMCDemo::<Bls12> {
+    phase2::verify_contribution(MiMCDemo::<Bls12> {
         xl: None,
         xr: None,
         constants: &constants
     }, &old_params, &params).unwrap();
 
-    let old_params = params.clone();
-    let (pubkey, privkey) = phase2::keypair(rng, &params);
-    params.transform(&pubkey, &privkey);
-
-    phase2::verify_transform(MiMCDemo::<Bls12> {
-        xl: None,
-        xr: None,
-        constants: &constants
-    }, &old_params, &params).unwrap();
-
-    {
-        let mut w = vec![];
-        params.write(&mut w).unwrap();
-
-        let deser = phase2::MPCParameters::read(&w[..], true).unwrap();
-        assert!(params == deser);
-    }
-
-    let params = params.params();
+    let params = params.get_params();
 
     // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);

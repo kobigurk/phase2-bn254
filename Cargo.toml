@@ -2,8 +2,8 @@
 name = "phase2"
 version = "0.2.1"
 authors = ["Sean Bowe <ewillbefull@gmail.com>"]
-description = "zk-SNARK MPC"
-documentation = "https://github.com/ebfull/phase2"
+description = "Library for performing MPCs for creating zk-SNARK public parameters"
+documentation = "https://docs.rs/phase2"
 homepage = "https://github.com/ebfull/phase2"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/ebfull/phase2"

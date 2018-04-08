@@ -188,14 +188,23 @@ fn main() {
     };
 
     let old_params = params.clone();
-    let (pubkey, privkey) = phase2::keypair(rng, &params);
-    params.contribute(&pubkey, &privkey);
+    params.contribute(rng);
 
-    phase2::verify_contribution(MiMCDemo::<Bls12> {
+    let first_contrib = phase2::verify_contribution(&old_params, &params).unwrap();
+
+    let old_params = params.clone();
+    params.contribute(rng);
+
+    let second_contrib = phase2::verify_contribution(&old_params, &params).unwrap();
+
+    let verification_result = params.verify(MiMCDemo::<Bls12> {
         xl: None,
         xr: None,
         constants: &constants
-    }, &old_params, &params).unwrap();
+    }).unwrap();
+
+    assert!(phase2::contains_contribution(&verification_result, &first_contrib));
+    assert!(phase2::contains_contribution(&verification_result, &second_contrib));
 
     let params = params.get_params();
 

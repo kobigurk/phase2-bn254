@@ -190,12 +190,12 @@ fn main() {
     let old_params = params.clone();
     params.contribute(rng);
 
-    let first_contrib = phase2::verify_contribution(&old_params, &params).unwrap();
+    let first_contrib = phase2::verify_contribution(&old_params, &params).expect("should verify");
 
     let old_params = params.clone();
     params.contribute(rng);
 
-    let second_contrib = phase2::verify_contribution(&old_params, &params).unwrap();
+    let second_contrib = phase2::verify_contribution(&old_params, &params).expect("should verify");
 
     let verification_result = params.verify(MiMCDemo::<Bls12> {
         xl: None,

@@ -1,5 +1,6 @@
 /target/
 **/*.rs.bk
-transcript
-challenge
-response
+transcript*
+challenge*
+response*
+new_challenge*

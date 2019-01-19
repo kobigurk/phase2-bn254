@@ -15,7 +15,7 @@ use memmap::*;
 
 use powersoftau::parameters::PowersOfTauParameters;
 
-const compress_new_challenge: UseCompression = UseCompression::No;
+const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
     println!("Will generate an empty accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
@@ -27,7 +27,7 @@ fn main() {
                             .create_new(true)
                             .open("challenge").expect("unable to create `./challenge`");
             
-    let expected_challenge_length = match compress_new_challenge {
+    let expected_challenge_length = match COMPRESS_NEW_CHALLENGE {
         UseCompression::Yes => {
             Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
         },
@@ -57,7 +57,7 @@ fn main() {
         println!("");
     }
 
-    BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, compress_new_challenge).expect("generation of initial accumulator is successful");
+    BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE).expect("generation of initial accumulator is successful");
     writable_map.flush().expect("unable to flush memmap to disk");
 
     // Get the hash of the contribution, so the user can compare later

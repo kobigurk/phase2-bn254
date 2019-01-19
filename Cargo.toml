@@ -7,8 +7,8 @@ edition = "2018"
 
 description = "Communal zk-SNARK MPC for Public Parameters"
 documentation = "https://docs.rs/powersoftau/"
-homepage = "https://github.com/ebfull/powersoftau"
-repository = "https://github.com/ebfull/powersoftau"
+homepage = "https://github.com/matterinc/powersoftau"
+repository = "https://github.com/matterinc/powersoftau"
 
 [dependencies]
 rand = "0.4"

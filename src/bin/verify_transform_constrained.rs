@@ -19,9 +19,9 @@ use std::io::{Read, Write};
 
 use powersoftau::parameters::PowersOfTauParameters;
 
-const previous_challenge_is_compressed: UseCompression = UseCompression::No;
-const contribution_is_compressed: UseCompression = UseCompression::Yes;
-const compress_new_challenge: UseCompression = UseCompression::No;
+const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
+const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
+const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
     println!("Will verify and decompress a contribution to accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
@@ -33,7 +33,7 @@ fn main() {
 
     {
         let metadata = challenge_reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
-        let expected_challenge_length = match previous_challenge_is_compressed {
+        let expected_challenge_length = match PREVIOUS_CHALLENGE_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
             },
@@ -55,7 +55,7 @@ fn main() {
 
     {
         let metadata = response_reader.metadata().expect("unable to get filesystem metadata for `./response`");
-        let expected_response_length = match contribution_is_compressed {
+        let expected_response_length = match CONTRIBUTION_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE 
             },
@@ -112,7 +112,7 @@ fn main() {
     }
 
     // get the contributor's public key
-    let public_key = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, contribution_is_compressed)
+    let public_key = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, CONTRIBUTION_IS_COMPRESSED)
                                            .expect("wasn't able to deserialize the response file's public key");
 
 
@@ -123,8 +123,8 @@ fn main() {
         &response_readable_map,
         &public_key, 
         current_accumulator_hash.as_slice(),
-        previous_challenge_is_compressed,
-        contribution_is_compressed,
+        PREVIOUS_CHALLENGE_IS_COMPRESSED,
+        CONTRIBUTION_IS_COMPRESSED,
         CheckForCorrectness::No,
         CheckForCorrectness::Yes,
     );
@@ -152,7 +152,7 @@ fn main() {
         println!("");
     }
 
-    if compress_new_challenge == UseCompression::Yes {
+    if COMPRESS_NEW_CHALLENGE == UseCompression::Yes {
         println!("Don't need to recompress the contribution, please copy `./response` as `./new_challenge`");
     } else {
         println!("Verification succeeded! Writing to `./new_challenge`...");

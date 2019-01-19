@@ -8,17 +8,17 @@ extern crate typenum;
 extern crate byteorder;
 extern crate ff;
 
-use self::ff::{Field, PrimeField};
-use self::byteorder::{ReadBytesExt, BigEndian};
-use self::rand::{SeedableRng, Rng, Rand};
-use self::rand::chacha::ChaChaRng;
-use self::pairing::bn256::{Bn256};
-use self::pairing::*;
+use ff::{Field, PrimeField};
+use byteorder::{ReadBytesExt, BigEndian};
+use rand::{SeedableRng, Rng, Rand};
+use rand::chacha::ChaChaRng;
+use pairing::bn256::{Bn256};
+use pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
-use self::generic_array::GenericArray;
-use self::typenum::consts::U64;
-use self::blake2::{Blake2b, Digest};
+use generic_array::GenericArray;
+use typenum::consts::U64;
+use blake2::{Blake2b, Digest};
 use std::fmt;
 
 use super::keypair::*;

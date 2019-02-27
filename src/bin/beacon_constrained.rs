@@ -40,26 +40,24 @@ fn main() {
         use crypto::sha2::Sha256;
         use crypto::digest::Digest;
 
-        // Place block hash here (block number #514200)
-        let mut cur_hash: [u8; 32] = hex!("00000000000000000034b33e842ac1c50456abe5fa92b60f6b3dfc5d247f7b58");
+        // Place block hash here (block number #564321)
+        let mut cur_hash: [u8; 32] = hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
 
         // Performs 2^n hash iterations over it
-        // const N: usize = 42;
-
-        const N: usize = 16;
+        const N: usize = 31;
 
         for i in 0..(1u64<<N) {
             // Print 1024 of the interstitial states
             // so that verification can be
             // parallelized
 
-            // if i % (1u64<<(N-10)) == 0 {
-            //     print!("{}: ", i);
-            //     for b in cur_hash.iter() {
-            //         print!("{:02x}", b);
-            //     }
-            //     println!("");
-            // }
+            if i % (1u64<<(N-10)) == 0 {
+                print!("{}: ", i);
+                for b in cur_hash.iter() {
+                    print!("{:02x}", b);
+                }
+                println!("");
+            }
 
             let mut h = Sha256::new();
             h.input(&cur_hash);

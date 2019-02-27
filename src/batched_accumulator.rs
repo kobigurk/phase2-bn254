@@ -432,10 +432,6 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         Ok(())
     }
 
-    // fn read_point<ENC: EncodedPoint>(
-
-    // ) -> 
-
     fn read_points_chunk<ENC: EncodedPoint>(
         &mut self,
         from: usize,

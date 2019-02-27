@@ -19,9 +19,9 @@ use std::io::Write;
 
 use powersoftau::parameters::PowersOfTauParameters;
 
-const input_is_compressed: UseCompression = UseCompression::No;
-const compress_the_output: UseCompression = UseCompression::Yes;
-const check_input_correctness: CheckForCorrectness = CheckForCorrectness::No;
+const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
+const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
+const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 fn main() {
     println!("Will contribute to accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
@@ -72,7 +72,7 @@ fn main() {
 
     {
         let metadata = reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
-        let expected_challenge_length = match input_is_compressed {
+        let expected_challenge_length = match INPUT_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
             },
@@ -95,7 +95,7 @@ fn main() {
                             .create_new(true)
                             .open("response").expect("unable to create `./response` in this directory");
 
-    let required_output_length = match compress_the_output {
+    let required_output_length = match COMPRESS_THE_OUTPUT {
         UseCompression::Yes => {
             Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
         },
@@ -110,7 +110,7 @@ fn main() {
     
     println!("Calculating previous contribution hash...");
 
-    assert!(UseCompression::No == input_is_compressed, "Hashing the compressed file in not yet defined");
+    assert!(UseCompression::No == INPUT_IS_COMPRESSED, "Hashing the compressed file in not yet defined");
     let current_accumulator_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
 
     {
@@ -141,16 +141,16 @@ fn main() {
     BachedAccumulator::<Bn256, Bn256CeremonyParameters>::transform(
         &readable_map, 
         &mut writable_map, 
-        input_is_compressed, 
-        compress_the_output, 
-        check_input_correctness, 
+        INPUT_IS_COMPRESSED, 
+        COMPRESS_THE_OUTPUT, 
+        CHECK_INPUT_CORRECTNESS, 
         &privkey
     ).expect("must transform with the key");
 
     println!("Finihsing writing your contribution to `./response`...");
 
     // Write the public key
-    pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, compress_the_output).expect("unable to write public key");
+    pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, COMPRESS_THE_OUTPUT).expect("unable to write public key");
 
     writable_map.flush().expect("must flush a memory map");
 

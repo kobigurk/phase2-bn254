@@ -56,7 +56,7 @@ fn test_pubkey_serialization() {
 #[test]
 fn test_power_pairs() {
     use self::rand::thread_rng;
-    use self::pairing::bn256::{Fr, G1Affine, G2Affine};
+    use self::bellman::pairing::bn256::{Fr, G1Affine, G2Affine};
     let rng = &mut thread_rng();
 
     let mut v = vec![];
@@ -79,7 +79,7 @@ fn test_power_pairs() {
 #[test]
 fn test_same_ratio() {
     use self::rand::thread_rng;
-    use self::pairing::bn256::{Fr, G1Affine, G2Affine};
+    use self::bellman::pairing::bn256::{Fr, G1Affine, G2Affine};
 
     let rng = &mut thread_rng();
 
@@ -98,7 +98,7 @@ fn test_accumulator_serialization() {
     use crate::accumulator::*;
 
     use self::rand::thread_rng;
-    use self::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
+    use self::bellman::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
     use self::PowersOfTauParameters;
 
     let rng = &mut thread_rng();

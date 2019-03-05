@@ -1,4 +1,3 @@
-extern crate pairing;
 extern crate rand;
 extern crate crossbeam;
 extern crate num_cpus;
@@ -6,14 +5,14 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
-extern crate ff;
+extern crate bellman;
 
-use self::ff::{Field, PrimeField};
+use self::bellman::pairing::ff::{Field, PrimeField};
 use self::byteorder::{ReadBytesExt, BigEndian};
 use self::rand::{SeedableRng, Rng, Rand};
 use self::rand::chacha::ChaChaRng;
-use self::pairing::bn256::{Bn256};
-use self::pairing::*;
+use self::bellman::pairing::bn256::{Bn256};
+use self::bellman::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use self::generic_array::GenericArray;

@@ -34,12 +34,13 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
+extern crate bellman;
 
 use byteorder::{ReadBytesExt, BigEndian};
 use rand::{SeedableRng, Rng, Rand};
 use rand::chacha::ChaChaRng;
-use pairing::bls12_381::*;
-use pairing::*;
+use bellman::pairing::bls12_381::*;
+use bellman::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use generic_array::GenericArray;

@@ -1,5 +1,5 @@
 extern crate powersoftau;
-extern crate pairing;
+extern crate bellman;
 
 // use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::small_bn256::{Bn256CeremonyParameters};
@@ -9,7 +9,7 @@ use powersoftau::parameters::{UseCompression};
 
 use std::fs::OpenOptions;
 use std::io::{Write, BufWriter};
-use pairing::bn256::Bn256;
+use bellman::pairing::bn256::Bn256;
 
 fn main() {
     let writer = OpenOptions::new()

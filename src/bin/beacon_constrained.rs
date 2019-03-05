@@ -1,5 +1,5 @@
 extern crate powersoftau;
-extern crate pairing;
+extern crate bellman;
 extern crate memmap;
 extern crate rand;
 extern crate blake2;
@@ -13,7 +13,7 @@ use powersoftau::keypair::{keypair};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};
 
 use std::fs::OpenOptions;
-use pairing::bn256::Bn256;
+use bellman::pairing::bn256::Bn256;
 use memmap::*;
 
 use std::io::Write;

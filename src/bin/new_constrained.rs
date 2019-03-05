@@ -1,5 +1,5 @@
 extern crate powersoftau;
-extern crate pairing;
+extern crate bellman;
 extern crate memmap;
 
 // use powersoftau::bn256::{Bn256CeremonyParameters};
@@ -10,7 +10,7 @@ use powersoftau::utils::{blank_hash};
 
 use std::fs::OpenOptions;
 use std::io::{Write};
-use pairing::bn256::Bn256;
+use bellman::pairing::bn256::Bn256;
 use memmap::*;
 
 use powersoftau::parameters::PowersOfTauParameters;

@@ -5,8 +5,8 @@ extern crate blake2;
 extern crate byteorder;
 extern crate bellman;
 
-use pairing::{CurveAffine, CurveProjective};
-use pairing::bls12_381::{G1, G2};
+use bellman::pairing::{CurveAffine, CurveProjective};
+use bellman::pairing::bls12_381::{G1, G2};
 use powersoftau::*;
 
 use bellman::multicore::Worker;

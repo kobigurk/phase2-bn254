@@ -24,19 +24,7 @@ rust-crypto = "0.2"
 memmap = "0.7.0"
 itertools = "0.8.0"
 
-ff = { git = 'https://github.com/matterinc/ff', features = ["derive"] }
-pairing = { git = 'https://github.com/matterinc/pairing', features = ["expose-arith"]}
-bellman = { git = 'https://github.com/matterinc/bellman'}
-
-#ff = { git = 'https://github.com/matterinc/ff', features = ["derive"], rev = "056a13b9" }
-#pairing = { git = 'https://github.com/matterinc/pairing', features = ["expose-arith"], rev = "84b57df3" }
-#bellman = { git = 'https://github.com/matterinc/bellman', rev = "e775b47d"}
-
-#[patch.'https://https://github.com/matterinc/ff']
-#ff = { git = 'https://github.com/matterinc/ff', features = ["derive"], rev = "056a13b9" }
-
-#[patch.'https://https://github.com/matterinc/pairing']
-#pairing = { git = 'https://github.com/matterinc/pairing', features = ["expose-arith"], rev = "84b57df3" }
+bellman = { git = 'https://github.com/matterinc/bellman', tag = "0.2.0"}
 
 [features]
 

@@ -25,8 +25,6 @@
 //! After some time has elapsed for participants to contribute to the ceremony, a participant is
 //! simulated with a randomness beacon. The resulting `Accumulator` contains partial zk-SNARK
 //! public parameters for all circuits within a bounded size.
-
-extern crate pairing;
 extern crate rand;
 extern crate crossbeam;
 extern crate num_cpus;
@@ -34,16 +32,16 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
-extern crate ff;
+extern crate bellman;
 extern crate memmap;
 
 use memmap::{Mmap, MmapMut};
-use ff::{Field, PrimeField};
+use bellman::pairing::ff::{Field, PrimeField};
 use byteorder::{ReadBytesExt, BigEndian};
 use rand::{SeedableRng, Rng, Rand};
 use rand::chacha::ChaChaRng;
-use pairing::bn256::{Bn256};
-use pairing::*;
+use bellman::pairing::bn256::{Bn256};
+use bellman::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use generic_array::GenericArray;

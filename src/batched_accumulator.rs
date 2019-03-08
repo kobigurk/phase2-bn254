@@ -579,7 +579,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
             }
         };
 
-        output_map.flush_async()?;
+        output_map.flush()?;
 
         Ok(())
     }

@@ -76,7 +76,7 @@ fn main() {
 
     let current_accumulator_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&challenge_readable_map);
 
-    println!("Previous challenge hash");
+    println!("Hash of the `challenge` file for verification:");
     for line in current_accumulator_hash.as_slice().chunks(16) {
         print!("\t");
         for section in line.chunks(4) {
@@ -94,7 +94,7 @@ fn main() {
         let memory_slice = response_readable_map.get(0..64).expect("must read point data from file");
         memory_slice.clone().read_exact(&mut response_challenge_hash).expect("couldn't read hash of challenge file from response file");
 
-        println!("Response was based on the hash");
+        println!("`response` was based on the hash:");
         for line in response_challenge_hash.chunks(16) {
             print!("\t");
             for section in line.chunks(4) {
@@ -118,6 +118,8 @@ fn main() {
 
     // check that it follows the protocol
 
+    println!("Verifying a contribution to contain proper powers and correspond to the public key...");
+
     let valid = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
@@ -136,10 +138,9 @@ fn main() {
         println!("Verification succeeded!");
     }
 
-
     let response_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
 
-    println!("Here's the BLAKE2b hash of the participant's response file:");
+    println!("Here's the BLAKE2b hash of the participant's original compressed `response` file:");
 
     for line in response_hash.as_slice().chunks(16) {
         print!("\t");
@@ -183,6 +184,23 @@ fn main() {
             CheckForCorrectness::No).expect("must decompress a response for a new challenge");
         
         writable_map.flush().expect("must flush the memory map");
+
+        let new_challenge_readable_map = writable_map.make_read_only().expect("must make a map readonly");
+
+        let recompressed_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&new_challenge_readable_map);
+
+        println!("Here's the BLAKE2b hash of the decompressed participant's response as `new_challenge` file:");
+
+        for line in recompressed_hash.as_slice().chunks(16) {
+            print!("\t");
+            for section in line.chunks(4) {
+                for b in section {
+                    print!("{:02x}", b);
+                }
+                print!(" ");
+            }
+            println!("");
+        }
 
         println!("Done! `./new_challenge` contains the new challenge file. The other files");
         println!("were left alone.");

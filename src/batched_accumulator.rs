@@ -302,6 +302,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                     println!("Invalid ratio power_pairs(&after.beta_tau_powers_g1), (tau_powers_g2_0, tau_powers_g2_1)");
                     return false;
                 }
+                println!("Done processing {} powers of tau", end);
             } else {
                 panic!("Chunk does not have a min and max");
             }
@@ -321,6 +322,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                     println!("Invalid ratio power_pairs(&after.tau_powers_g1), (tau_powers_g2_0, tau_powers_g2_1) in extra TauG1 contribution");
                     return false;
                 }
+                println!("Done processing {} powers of tau", end);
             } else {
                 panic!("Chunk does not have a min and max");
             }

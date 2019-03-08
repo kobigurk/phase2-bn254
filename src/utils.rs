@@ -7,7 +7,7 @@ extern crate typenum;
 extern crate byteorder;
 extern crate bellman;
 
-use bellman::pairing::ff::{Field, PrimeField};
+use bellman::pairing::ff::{Field, PrimeField, PrimeFieldRepr};
 use byteorder::{ReadBytesExt, BigEndian};
 use rand::{SeedableRng, Rng, Rand};
 use rand::chacha::ChaChaRng;
@@ -65,50 +65,65 @@ fn test_hash_to_g2() {
 /// e(g, (as)*r1 + (bs)*r2 + (cs)*r3) = e(g^s, a*r1 + b*r2 + c*r3)
 ///
 /// ... with high probability.
+// fn merge_pairs<E: Engine, G: CurveAffine<Engine = E, Scalar = E::Fr>>(v1: &[G], v2: &[G]) -> (G, G)
+// {
+//     use std::sync::{Arc, Mutex};
+//     use self::rand::{thread_rng};
+
+//     assert_eq!(v1.len(), v2.len());
+
+//     let chunk = (v1.len() / num_cpus::get()) + 1;
+
+//     let s = Arc::new(Mutex::new(G::Projective::zero()));
+//     let sx = Arc::new(Mutex::new(G::Projective::zero()));
+
+//     crossbeam::scope(|scope| {
+//         for (v1, v2) in v1.chunks(chunk).zip(v2.chunks(chunk)) {
+//             let s = s.clone();
+//             let sx = sx.clone();
+
+//             scope.spawn(move || {
+//                 // We do not need to be overly cautious of the RNG
+//                 // used for this check.
+//                 let rng = &mut thread_rng();
+
+//                 let mut wnaf = Wnaf::new();
+//                 let mut local_s = G::Projective::zero();
+//                 let mut local_sx = G::Projective::zero();
+
+//                 for (v1, v2) in v1.iter().zip(v2.iter()) {
+//                     let rho = G::Scalar::rand(rng);
+//                     let mut wnaf = wnaf.scalar(rho.into_repr());
+//                     let v1 = wnaf.base(v1.into_projective());
+//                     let v2 = wnaf.base(v2.into_projective());
+
+//                     local_s.add_assign(&v1);
+//                     local_sx.add_assign(&v2);
+//                 }
+
+//                 s.lock().unwrap().add_assign(&local_s);
+//                 sx.lock().unwrap().add_assign(&local_sx);
+//             });
+//         }
+//     });
+
+//     let s = s.lock().unwrap().into_affine();
+//     let sx = sx.lock().unwrap().into_affine();
+
+//     (s, sx)
+// }
+
 fn merge_pairs<E: Engine, G: CurveAffine<Engine = E, Scalar = E::Fr>>(v1: &[G], v2: &[G]) -> (G, G)
 {
-    use std::sync::{Arc, Mutex};
     use self::rand::{thread_rng};
-
+    
     assert_eq!(v1.len(), v2.len());
+    let rng = &mut thread_rng();
 
-    let chunk = (v1.len() / num_cpus::get()) + 1;
+    let randomness: Vec<<G::Scalar as PrimeField>::Repr> = (0..v1.len()).map(|_| G::Scalar::rand(rng).into_repr()).collect();
 
-    let s = Arc::new(Mutex::new(G::Projective::zero()));
-    let sx = Arc::new(Mutex::new(G::Projective::zero()));
-
-    crossbeam::scope(|scope| {
-        for (v1, v2) in v1.chunks(chunk).zip(v2.chunks(chunk)) {
-            let s = s.clone();
-            let sx = sx.clone();
-
-            scope.spawn(move || {
-                // We do not need to be overly cautious of the RNG
-                // used for this check.
-                let rng = &mut thread_rng();
-
-                let mut wnaf = Wnaf::new();
-                let mut local_s = G::Projective::zero();
-                let mut local_sx = G::Projective::zero();
-
-                for (v1, v2) in v1.iter().zip(v2.iter()) {
-                    let rho = G::Scalar::rand(rng);
-                    let mut wnaf = wnaf.scalar(rho.into_repr());
-                    let v1 = wnaf.base(v1.into_projective());
-                    let v2 = wnaf.base(v2.into_projective());
-
-                    local_s.add_assign(&v1);
-                    local_sx.add_assign(&v2);
-                }
-
-                s.lock().unwrap().add_assign(&local_s);
-                sx.lock().unwrap().add_assign(&local_sx);
-            });
-        }
-    });
-
-    let s = s.lock().unwrap().into_affine();
-    let sx = sx.lock().unwrap().into_affine();
+    let s = dense_multiexp(&v1, &randomness[..]).into_affine();
+    let sx = dense_multiexp(&v2, &randomness[..]).into_affine();
 
     (s, sx)
 }
@@ -164,4 +179,122 @@ pub fn compute_g2_s<E: Engine> (
     h.input(g1_s_x.into_uncompressed().as_ref());
 
     hash_to_g2::<E>(h.result().as_ref()).into_affine()
+}
+
+/// Perform multi-exponentiation. The caller is responsible for ensuring that
+/// the number of bases is the same as the number of exponents.
+#[allow(dead_code)]
+pub fn dense_multiexp<G: CurveAffine>(
+    bases: & [G],
+    exponents: & [<G::Scalar as PrimeField>::Repr]
+) -> <G as CurveAffine>::Projective
+{
+    if exponents.len() != bases.len() {
+        panic!("invalid length")
+    }
+    let c = if exponents.len() < 32 {
+        3u32
+    } else {
+        (f64::from(exponents.len() as u32)).ln().ceil() as u32
+    };
+
+    dense_multiexp_inner(bases, exponents, 0, c, true)
+}
+
+fn dense_multiexp_inner<G: CurveAffine>(
+    bases: & [G],
+    exponents: & [<G::Scalar as PrimeField>::Repr],
+    mut skip: u32,
+    c: u32,
+    handle_trivial: bool
+) -> <G as CurveAffine>::Projective
+{   
+    use std::sync::{Mutex};
+    // Perform this region of the multiexp. We use a different strategy - go over region in parallel,
+    // then over another region, etc. No Arc required
+    let chunk = (bases.len() / num_cpus::get()) + 1;
+    let this = {
+        // let mask = (1u64 << c) - 1u64;
+        let this_region = Mutex::new(<G as CurveAffine>::Projective::zero());
+        let arc = Arc::new(this_region);
+        crossbeam::scope(|scope| {
+            for (base, exp) in bases.chunks(chunk).zip(exponents.chunks(chunk)) {
+                let this_region_rwlock = arc.clone();
+                // let handle = 
+                scope.spawn(move || {
+                    let mut buckets = vec![<G as CurveAffine>::Projective::zero(); (1 << c) - 1];
+                    // Accumulate the result
+                    let mut acc = G::Projective::zero();
+                    let zero = G::Scalar::zero().into_repr();
+                    let one = G::Scalar::one().into_repr();
+
+                    for (base, &exp) in base.iter().zip(exp.iter()) {
+                        // let index = (exp.as_ref()[0] & mask) as usize;
+
+                        // if index != 0 {
+                        //     buckets[index - 1].add_assign_mixed(base);
+                        // }
+
+                        // exp.shr(c as u32);
+
+                        if exp != zero {
+                            if exp == one {
+                                if handle_trivial {
+                                    acc.add_assign_mixed(base);
+                                }
+                            } else {
+                                let mut exp = exp;
+                                exp.shr(skip);
+                                let exp = exp.as_ref()[0] % (1 << c);
+                                if exp != 0 {
+                                    buckets[(exp - 1) as usize].add_assign_mixed(base);
+                                }
+                            }
+                        }
+                    }
+
+                    // buckets are filled with the corresponding accumulated value, now sum
+                    let mut running_sum = G::Projective::zero();
+                    for exp in buckets.into_iter().rev() {
+                        running_sum.add_assign(&exp);
+                        acc.add_assign(&running_sum);
+                    }
+
+                    let mut guard = match this_region_rwlock.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => {
+                            panic!("poisoned!"); 
+                            // poisoned.into_inner()
+                        }
+                    };
+
+                    (*guard).add_assign(&acc);
+                });
+        
+            }
+        });
+
+        let this_region = Arc::try_unwrap(arc).unwrap();
+        let this_region = this_region.into_inner().unwrap();
+
+        this_region
+    };
+
+    skip += c;
+
+    if skip >= <G::Scalar as PrimeField>::NUM_BITS {
+        // There isn't another region, and this will be the highest region
+        return this;
+    } else {
+        // next region is actually higher than this one, so double it enough times
+        let mut next_region = dense_multiexp_inner(
+            bases, exponents, skip, c, false);
+        for _ in 0..c {
+            next_region.double();
+        }
+
+        next_region.add_assign(&this);
+
+        return next_region;
+    }
 }

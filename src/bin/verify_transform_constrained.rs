@@ -111,6 +111,20 @@ fn main() {
         }
     }
 
+    let response_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
+
+    println!("Hash of the `response` file for verification:");
+    for line in response_hash.as_slice().chunks(16) {
+        print!("\t");
+        for section in line.chunks(4) {
+            for b in section {
+                print!("{:02x}", b);
+            }
+            print!(" ");
+        }
+        println!("");
+    }
+
     // get the contributor's public key
     let public_key = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, CONTRIBUTION_IS_COMPRESSED)
                                            .expect("wasn't able to deserialize the response file's public key");
@@ -136,21 +150,6 @@ fn main() {
         panic!("INVALID CONTRIBUTION!!!");
     } else {
         println!("Verification succeeded!");
-    }
-
-    let response_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
-
-    println!("Here's the BLAKE2b hash of the participant's original compressed `response` file:");
-
-    for line in response_hash.as_slice().chunks(16) {
-        print!("\t");
-        for section in line.chunks(4) {
-            for b in section {
-                print!("{:02x}", b);
-            }
-            print!(" ");
-        }
-        println!("");
     }
 
     if COMPRESS_NEW_CHALLENGE == UseCompression::Yes {

@@ -234,8 +234,8 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
         {
             let chunk_size = 2;
-            before.read_chunk(0, chunk_size, input_is_compressed, check_input_for_correctness, &input_map).expect("must read a first chunk");
-            after.read_chunk(0, chunk_size, output_is_compressed, check_output_for_correctness, &output_map).expect("must read a first chunk");
+            before.read_chunk(0, chunk_size, input_is_compressed, check_input_for_correctness, &input_map).expect("must read a first chunk from `challenge`");
+            after.read_chunk(0, chunk_size, output_is_compressed, check_output_for_correctness, &output_map).expect("must read a first chunk from `response`");
 
             // Check the correctness of the generators for tau powers
             if after.tau_powers_g1[0] != E::G1Affine::one() {
@@ -282,8 +282,8 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         for chunk in &(0..P::TAU_POWERS_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
                 let size = end - start + 1;
-                before.read_chunk(start, size, input_is_compressed, check_input_for_correctness, &input_map).expect("must read a first chunk");
-                after.read_chunk(start, size, output_is_compressed, check_output_for_correctness, &output_map).expect("must read a first chunk");
+                before.read_chunk(start, size, input_is_compressed, check_input_for_correctness, &input_map).expect(&format!("must read a chunk from {} to {} from `challenge`", start, end));
+                after.read_chunk(start, size, output_is_compressed, check_output_for_correctness, &output_map).expect(&format!("must read a chunk from {} to {} from `response`", start, end));
 
                 // Are the powers of tau correct?
                 if !same_ratio(power_pairs(&after.tau_powers_g1), (tau_powers_g2_0, tau_powers_g2_1)) {
@@ -311,8 +311,8 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         for chunk in &(P::TAU_POWERS_LENGTH..P::TAU_POWERS_G1_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
                 let size = end - start + 1;
-                before.read_chunk(start, size, input_is_compressed, check_input_for_correctness, &input_map).expect("must read a first chunk");
-                after.read_chunk(start, size, output_is_compressed, check_output_for_correctness, &output_map).expect("must read a first chunk");
+                before.read_chunk(start, size, input_is_compressed, check_input_for_correctness, &input_map).expect(&format!("must read a chunk from {} to {} from `challenge`", start, end));
+                after.read_chunk(start, size, output_is_compressed, check_output_for_correctness, &output_map).expect(&format!("must read a chunk from {} to {} from `response`", start, end));
 
                 assert_eq!(before.tau_powers_g2.len(), 0, "during rest of tau g1 generation tau g2 must be empty");
                 assert_eq!(after.tau_powers_g2.len(), 0, "during rest of tau g1 generation tau g2 must be empty");
@@ -344,7 +344,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         for chunk in &(0..P::TAU_POWERS_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
                 let size = end - start + 1;
-                accumulator.read_chunk(start, size, UseCompression::Yes, check_input_for_correctness, &input_map).expect("Must read a chunk");
+                accumulator.read_chunk(start, size, UseCompression::Yes, check_input_for_correctness, &input_map).expect(&format!("must read a chunk from {} to {} from source of decompression", start, end));
                 accumulator.write_chunk(start, UseCompression::No, output_map)?;
             } else {
                 panic!("Chunk does not have a min and max");
@@ -354,9 +354,11 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         for chunk in &(P::TAU_POWERS_LENGTH..P::TAU_POWERS_G1_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
                 let size = end - start + 1;
-                accumulator.read_chunk(start, size, UseCompression::Yes, check_input_for_correctness, &input_map).expect("must read a chunk");
+                accumulator.read_chunk(start, size, UseCompression::Yes, check_input_for_correctness, &input_map).expect(&format!("must read a chunk from {} to {} from source of decompression", start, end));
                 assert_eq!(accumulator.tau_powers_g2.len(), 0, "during rest of tau g1 generation tau g2 must be empty");
-                
+                assert_eq!(accumulator.alpha_tau_powers_g1.len(), 0, "during rest of tau g1 generation alpha*tau in g1 must be empty");
+                assert_eq!(accumulator.beta_tau_powers_g1.len(), 0, "during rest of tau g1 generation beta*tau in g1 must be empty");
+
                 accumulator.write_chunk(start, UseCompression::No, output_map)?;
 
             } else {
@@ -483,6 +485,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                 let decoding_error = decoding_error.clone();
 
                 scope.spawn(move || {
+                    assert_eq!(source.len(), target.len());
                     for (source, target) in source.iter().zip(target.iter_mut()) {
                         match {
                             // If we're a participant, we don't need to check all of the
@@ -516,6 +519,14 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                 });
             }
         });
+
+        // extra check that during the decompression all the the initially initialized infinitu points
+        // were replaced with something
+        for decoded in res_affine.iter() {
+            if decoded.is_zero() {
+                return Err(DeserializationError::PointAtInfinity);
+            }
+        }
 
         match Arc::try_unwrap(decoding_error).unwrap().into_inner().unwrap() {
             Some(e) => {
@@ -694,6 +705,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
             // Turn it all back into affine points
             for (projective, affine) in projective.iter().zip(bases.iter_mut()) {
                 *affine = projective.into_affine();
+                assert!(!affine.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
             }
         }
 
@@ -729,6 +741,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                 batch_exp::<E, _>(&mut accumulator.alpha_tau_powers_g1, &taupowers[0..], Some(&key.alpha));
                 batch_exp::<E, _>(&mut accumulator.beta_tau_powers_g1, &taupowers[0..], Some(&key.beta));
                 accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
+                assert!(!accumulator.beta_g2.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output_map)?;
 
                 println!("Done processing {} powers of tau", end);
@@ -763,6 +776,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
                 accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
+                assert!(!accumulator.beta_g2.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output_map)?;
 
                 println!("Done processing {} powers of tau", end);

@@ -14,6 +14,43 @@ Extended to support Ethereum's BN256 curve and made it easier to change size of 
 
 Instructions for a planned ceremony will be posted when everything is tested and finalized.
 
+---
+## To run the ceremony on your laptop:
+
+1. Preparation:
+
+```
+rustup update # tested on rustup 1.17.0
+cargo build
+```
+
+2. Put `response` file from the previous ceremony to root directory.
+3. To generate `new_challenge` run:
+
+```
+cargo run --release --bin verify_transform_constrained # this will generate new_challenge from response file
+```
+
+4. Backup old files and replace `challenge` file:
+
+```
+mv challenge challenge_old
+mv response response_old
+mv new_challenge challenge
+```
+
+5. Run ceremony:
+
+```
+cargo run --release --bin compute_constrained # generate response file
+```
+
+Put your hash from output response to private gist (example: https://gist.github.com/skywinder/c35ab03c66c6b200b33ea2f388a6df89)
+
+6. Reboot laptop to clean up toxic waste.
+
+7. Save `response` file and give it to the next participant.
+
 ## Recommendations from original ceremony
 
 Participants of the ceremony sample some randomness, perform a computation, and then destroy the randomness. **Only one participant needs to do this successfully to ensure the final parameters are secure.** In order to see that this randomness is truly destroyed, participants may take various kinds of precautions:

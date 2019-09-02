@@ -195,8 +195,7 @@
 //! `params.params()`, so that you can interact with the bellman APIs
 //! just as before.
 
-extern crate pairing;
-extern crate bellman;
+extern crate bellman_ce;
 extern crate rand;
 extern crate byteorder;
 extern crate blake2_rfc;
@@ -226,10 +225,12 @@ use std::{
     }
 };
 
-use pairing::{
+use bellman_ce::pairing::{
     Engine,
-    PrimeField,
-    Field,
+    ff::{
+        PrimeField,
+        Field,
+    },
     EncodedPoint,
     CurveAffine,
     CurveProjective,
@@ -246,7 +247,9 @@ use pairing::{
     }
 };
 
-use bellman::{
+pub use bellman_ce::multicore::*;
+
+use bellman_ce::{
     Circuit,
     SynthesisError,
     Variable,
@@ -257,7 +260,6 @@ use bellman::{
         Parameters,
         VerifyingKey
     },
-    multicore::Worker
 };
 
 use rand::{
@@ -565,7 +567,7 @@ impl MPCParameters {
                     let alpha_coeffs_g1 = alpha_coeffs_g1.clone();
                     let beta_coeffs_g1 = beta_coeffs_g1.clone();
 
-                    scope.spawn(move || {
+                    scope.spawn(move |_| {
                         for ((((((a_g1, b_g1), b_g2), ext), at), bt), ct) in
                             a_g1.iter_mut()
                             .zip(b_g1.iter_mut())
@@ -1200,7 +1202,7 @@ fn same_ratio<G1: CurveAffine>(
 /// ... with high probability.
 fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
 {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
     use rand::{thread_rng};
 
     assert_eq!(v1.len(), v2.len());

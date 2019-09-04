@@ -16,3 +16,6 @@ mv response response_old
 mv new_challenge challenge
 cargo run --release --bin beacon_constrained
 cargo run --release --bin verify_transform_constrained
+
+cat response_old response > transcript
+cargo run --release --bin verify

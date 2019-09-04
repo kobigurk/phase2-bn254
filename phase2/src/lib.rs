@@ -235,8 +235,8 @@ use bellman_ce::pairing::{
     CurveAffine,
     CurveProjective,
     Wnaf,
-    bls12_381::{
-        Bls12,
+    bn256::{
+        Bn256,
         Fr,
         G1,
         G2,
@@ -380,7 +380,7 @@ impl<E: Engine> ConstraintSystem<E> for KeypairAssembly<E> {
 /// they contain a transcript of contributions at the end, which can be verified.
 #[derive(Clone)]
 pub struct MPCParameters {
-    params: Parameters<Bls12>,
+    params: Parameters<Bn256>,
     cs_hash: [u8; 64],
     contributions: Vec<PublicKey>
 }
@@ -400,7 +400,7 @@ impl MPCParameters {
     pub fn new<C>(
         circuit: C,
     ) -> Result<MPCParameters, SynthesisError>
-        where C: Circuit<Bls12>
+        where C: Circuit<Bn256>
     {
         let mut assembly = KeypairAssembly {
             num_inputs: 0,
@@ -511,7 +511,7 @@ impl MPCParameters {
         let beta_coeffs_g1 = Arc::new(beta_coeffs_g1);
 
         let mut h = Vec::with_capacity(m - 1);
-        for _ in 0..(m - 1) {
+        for i in 0..(m - 1) {
             h.push(read_g1(f)?);
         }
 
@@ -686,7 +686,7 @@ impl MPCParameters {
     }
 
     /// Get the underlying Groth16 `Parameters`
-    pub fn get_params(&self) -> &Parameters<Bls12> {
+    pub fn get_params(&self) -> &Parameters<Bn256> {
         &self.params
     }
 
@@ -781,7 +781,7 @@ impl MPCParameters {
     /// contributors obtained when they ran
     /// `MPCParameters::contribute`, for ensuring that contributions
     /// exist in the final parameters.
-    pub fn verify<C: Circuit<Bls12>>(
+    pub fn verify<C: Circuit<Bn256>>(
         &self,
         circuit: C
     ) -> Result<Vec<[u8; 64]>, ()>

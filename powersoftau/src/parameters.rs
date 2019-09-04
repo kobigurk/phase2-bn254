@@ -5,14 +5,14 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
-extern crate bellman;
+extern crate bellman_ce;
 
-use bellman::pairing::ff::{Field, PrimeField};
+use bellman_ce::pairing::ff::{Field, PrimeField};
 use byteorder::{ReadBytesExt, BigEndian};
 use rand::{SeedableRng, Rng, Rand};
 use rand::chacha::ChaChaRng;
-use bellman::pairing::bn256::{Bn256};
-use bellman::pairing::*;
+use bellman_ce::pairing::bn256::{Bn256};
+use bellman_ce::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use generic_array::GenericArray;

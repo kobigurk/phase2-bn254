@@ -1,5 +1,5 @@
 extern crate powersoftau;
-extern crate bellman;
+extern crate bellman_ce;
 extern crate memmap;
 extern crate rand;
 extern crate blake2;
@@ -13,7 +13,7 @@ use powersoftau::keypair::{keypair};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};
 
 use std::fs::OpenOptions;
-use bellman::pairing::bn256::Bn256;
+use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
 
 use std::io::Write;
@@ -44,7 +44,7 @@ fn main() {
         let mut cur_hash: [u8; 32] = hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
 
         // Performs 2^n hash iterations over it
-        const N: usize = 31;
+        const N: usize = 10;
 
         for i in 0..(1u64<<N) {
             // Print 1024 of the interstitial states

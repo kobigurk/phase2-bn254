@@ -5,14 +5,14 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
-extern crate bellman;
+extern crate bellman_ce;
 
-use self::bellman::pairing::ff::{Field, PrimeField};
+use self::bellman_ce::pairing::ff::{Field, PrimeField};
 use self::byteorder::{ReadBytesExt, BigEndian};
 use self::rand::{SeedableRng, Rng, Rand};
 use self::rand::chacha::ChaChaRng;
-use self::bellman::pairing::bn256::{Bn256};
-use self::bellman::pairing::*;
+use self::bellman_ce::pairing::bn256::{Bn256};
+use self::bellman_ce::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use self::generic_array::GenericArray;
@@ -30,7 +30,7 @@ pub struct Bn256CeremonyParameters {
 }
 
 impl PowersOfTauParameters for Bn256CeremonyParameters {
-    const REQUIRED_POWER: usize = 25; // generate to have roughly 2 million constraints
+    const REQUIRED_POWER: usize = 12; // generate to have roughly 2 million constraints
 
     // This ceremony is based on the BN256 elliptic curve construction.
     const G1_UNCOMPRESSED_BYTE_SIZE: usize = 64;

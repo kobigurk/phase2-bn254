@@ -5,14 +5,14 @@ extern crate blake2;
 extern crate generic_array;
 extern crate typenum;
 extern crate byteorder;
-extern crate bellman;
+extern crate bellman_ce;
 
-use self::bellman::pairing::ff::{Field, PrimeField};
+use self::bellman_ce::pairing::ff::{Field, PrimeField};
 use self::byteorder::{ReadBytesExt, BigEndian};
 use self::rand::{SeedableRng, Rng, Rand};
 use self::rand::chacha::ChaChaRng;
-use self::bellman::pairing::bn256::{Bn256};
-use self::bellman::pairing::*;
+use self::bellman_ce::pairing::bn256::{Bn256};
+use self::bellman_ce::pairing::*;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
 use self::generic_array::GenericArray;
@@ -56,7 +56,7 @@ fn test_pubkey_serialization() {
 #[test]
 fn test_power_pairs() {
     use self::rand::thread_rng;
-    use self::bellman::pairing::bn256::{Fr, G1Affine, G2Affine};
+    use self::bellman_ce::pairing::bn256::{Fr, G1Affine, G2Affine};
     let rng = &mut thread_rng();
 
     let mut v = vec![];
@@ -79,7 +79,7 @@ fn test_power_pairs() {
 #[test]
 fn test_same_ratio() {
     use self::rand::thread_rng;
-    use self::bellman::pairing::bn256::{Fr, G1Affine, G2Affine};
+    use self::bellman_ce::pairing::bn256::{Fr, G1Affine, G2Affine};
 
     let rng = &mut thread_rng();
 
@@ -98,7 +98,7 @@ fn test_accumulator_serialization() {
     use crate::accumulator::*;
 
     use self::rand::thread_rng;
-    use self::bellman::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
+    use self::bellman_ce::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
     use self::PowersOfTauParameters;
 
     let rng = &mut thread_rng();

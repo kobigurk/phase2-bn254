@@ -1,5 +1,5 @@
 extern crate powersoftau;
-extern crate bellman;
+extern crate bellman_ce;
 extern crate memmap;
 extern crate rand;
 extern crate blake2;
@@ -12,7 +12,7 @@ use powersoftau::keypair::{PublicKey};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};
 
 use std::fs::OpenOptions;
-use bellman::pairing::bn256::Bn256;
+use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
 
 use std::io::{Read, Write};
@@ -35,7 +35,7 @@ fn main() {
         let metadata = challenge_reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
         let expected_challenge_length = match PREVIOUS_CHALLENGE_IS_COMPRESSED {
             UseCompression::Yes => {
-                Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
+                Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
             },
             UseCompression::No => {
                 Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE

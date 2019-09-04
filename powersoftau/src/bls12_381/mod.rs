@@ -191,22 +191,6 @@ pub fn keypair<R: Rng>(rng: &mut R, digest: &[u8]) -> (PublicKey, PrivateKey)
     )
 }
 
-/// Determines if point compression should be used.
-#[derive(Copy, Clone)]
-pub enum UseCompression {
-    Yes,
-    No
-}
-
-/// Determines if points should be checked for correctness during deserialization.
-/// This is not necessary for participants, because a transcript verifier can
-/// check this theirself.
-#[derive(Copy, Clone)]
-pub enum CheckForCorrectness {
-    Yes,
-    No
-}
-
 fn write_point<W, G>(
     writer: &mut W,
     p: &G,
@@ -822,39 +806,4 @@ impl<R: Read> Read for HashReader<R> {
     }
 }
 
-/// Abstraction over a writer which hashes the data being written.
-pub struct HashWriter<W: Write> {
-    writer: W,
-    hasher: Blake2b
-}
 
-impl<W: Write> HashWriter<W> {
-    /// Construct a new `HashWriter` given an existing `writer` by value.
-    pub fn new(writer: W) -> Self {
-        HashWriter {
-            writer: writer,
-            hasher: Blake2b::default()
-        }
-    }
-
-    /// Destroy this writer and return the hash of what was written.
-    pub fn into_hash(self) -> GenericArray<u8, U64> {
-        self.hasher.result()
-    }
-}
-
-impl<W: Write> Write for HashWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let bytes = self.writer.write(buf)?;
-
-        if bytes > 0 {
-            self.hasher.input(&buf[0..bytes]);
-        }
-
-        Ok(bytes)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
-    }
-}

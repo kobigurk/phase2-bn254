@@ -1,19 +1,29 @@
-extern crate pairing;
 extern crate powersoftau;
 extern crate rand;
 extern crate blake2;
 extern crate byteorder;
-extern crate bellman;
+extern crate bellman_ce;
 
-use bellman::pairing::{CurveAffine, CurveProjective};
-use bellman::pairing::bls12_381::{G1, G2};
+use bellman_ce::pairing::{CurveAffine, CurveProjective};
+use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::bn256::{G1, G2};
+use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::batched_accumulator::*;
+use powersoftau::accumulator::HashWriter;
 use powersoftau::*;
 
-use bellman::multicore::Worker;
-use bellman::domain::{EvaluationDomain, Point};
+use crate::utils::*;
+use crate::parameters::*;
+use crate::keypair::*;
 
-use std::fs::OpenOptions;
-use std::io::{self, BufReader, BufWriter, Write};
+use bellman_ce::multicore::Worker;
+use bellman_ce::domain::{EvaluationDomain, Point};
+
+use std::path::Path;
+use std::fs::{OpenOptions, remove_file};
+use std::io::{self, Read, BufWriter, Write};
+
+use memmap::*;
 
 fn into_hex(h: &[u8]) -> String {
     let mut f = String::new();
@@ -29,20 +39,54 @@ fn into_hex(h: &[u8]) -> String {
 // given the current state of the accumulator and the last
 // response file hash.
 fn get_challenge_file_hash(
-    acc: &Accumulator,
-    last_response_file_hash: &[u8; 64]
+    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    last_response_file_hash: &[u8; 64],
+    is_initial: bool,
 ) -> [u8; 64]
 {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
 
-    sink.write_all(last_response_file_hash)
-        .unwrap();
+    let file_name = "tmp_challenge_file_hash";
 
-    acc.serialize(
-        &mut sink,
-        UseCompression::No
-    ).unwrap();
+    if Path::new(file_name).exists() {
+        remove_file(file_name).unwrap();
+    }
+    {
+        let writer = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(file_name)
+            .expect("unable to create temporary tmp_challenge_file_hash");
+
+        writer.set_len(Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE as u64).expect("must make output file large enough");
+        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+
+        (&mut writable_map[0..]).write(&last_response_file_hash[..]).expect("unable to write a default hash to mmap");
+        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+
+        if is_initial {
+            BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+        } else {
+            acc.serialize(
+                &mut writable_map,
+                UseCompression::No
+            ).unwrap();
+        }
+
+        writable_map.flush().expect("must flush the memory map");
+    }
+
+    let mut challenge_reader = OpenOptions::new()
+        .read(true)
+        .open(file_name).expect("unable to open temporary tmp_challenge_file_hash");
+
+    let mut contents = vec![];
+    challenge_reader.read_to_end(&mut contents).unwrap();
+
+    sink.write_all(&contents)
+        .unwrap();
 
     let mut tmp = [0; 64];
     tmp.copy_from_slice(sink.into_hash().as_slice());
@@ -54,28 +98,91 @@ fn get_challenge_file_hash(
 // accumulator, the player's public key, and the challenge
 // file's hash.
 fn get_response_file_hash(
-    acc: &Accumulator,
-    pubkey: &PublicKey,
+    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    pubkey: &PublicKey::<Bn256>,
     last_challenge_file_hash: &[u8; 64]
 ) -> [u8; 64]
 {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
 
-    sink.write_all(last_challenge_file_hash)
+    let file_name = "tmp_response_file_hash";
+    if Path::new(file_name).exists() {
+        remove_file(file_name).unwrap();
+    }
+    {
+        let writer = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(file_name)
+            .expect("unable to create temporary tmp_response_file_hash");
+
+        writer.set_len(Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE as u64).expect("must make output file large enough");
+        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+
+        (&mut writable_map[0..]).write(&last_challenge_file_hash[..]).expect("unable to write a default hash to mmap");
+        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+
+        acc.serialize(
+            &mut writable_map,
+            UseCompression::Yes
+        ).unwrap();
+
+        pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, UseCompression::Yes).expect("unable to write public key");
+        writable_map.flush().expect("must flush the memory map");
+    }
+
+    let mut challenge_reader = OpenOptions::new()
+        .read(true)
+        .open(file_name).expect("unable to open temporary tmp_response_file_hash");
+
+    let mut contents = vec![];
+    challenge_reader.read_to_end(&mut contents).unwrap();
+
+    sink.write_all(&contents)
         .unwrap();
 
-    acc.serialize(
-        &mut sink,
-        UseCompression::Yes
-    ).unwrap();
-
-    pubkey.serialize(&mut sink).unwrap();
 
     let mut tmp = [0; 64];
     tmp.copy_from_slice(sink.into_hash().as_slice());
 
     tmp
+}
+
+fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParameters> {
+    let file_name = "tmp_initial_challenge";
+    {
+        if Path::new(file_name).exists() {
+            remove_file(file_name).unwrap();
+        }
+
+        let file = OpenOptions::new()
+                                .read(true)
+                                .write(true)
+                                .create_new(true)
+                                .open(file_name).expect("unable to create `./tmp_initial_challenge`");
+                
+        let expected_challenge_length = Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE;
+        file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
+
+        let mut writable_map = unsafe { MmapOptions::new().map_mut(&file).expect("unable to create a memory map") };
+        BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+        writable_map.flush().expect("unable to flush memmap to disk");
+    }
+
+    let reader = OpenOptions::new()
+                            .read(true)
+                            .open(file_name)
+                            .expect("unable open `./transcript` in this directory");
+    let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
+    let initial_accumulator = BachedAccumulator::deserialize(
+        &readable_map,
+        CheckForCorrectness::Yes,
+        UseCompression::No,
+    ).expect("unable to read uncompressed accumulator");
+
+    initial_accumulator
 }
 
 fn main() {
@@ -84,11 +191,10 @@ fn main() {
                             .read(true)
                             .open("transcript")
                             .expect("unable open `./transcript` in this directory");
-
-    let mut reader = BufReader::with_capacity(1024 * 1024, reader);
+    let transcript_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
     // Initialize the accumulator
-    let mut current_accumulator = Accumulator::new();
+    let mut current_accumulator = new_accumulator_for_verify();
 
     // The "last response file hash" is just a blank BLAKE2b hash
     // at the beginning of the hash chain.
@@ -96,38 +202,62 @@ fn main() {
     last_response_file_hash.copy_from_slice(blank_hash().as_slice());
 
     // There were 89 rounds.
-    for _ in 0..89 {
+    for i in 0..2 {
         // Compute the hash of the challenge file that the player
         // should have received.
+
+        let file_name = "tmp_response";
+        if Path::new(file_name).exists() {
+            remove_file(file_name).unwrap();
+        }
+
+        let memory_slice = transcript_readable_map.get(i*Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE..(i+1)*Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE).expect("must read point data from file");
+        let writer = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(file_name)
+            .expect("unable to create temporary tmp_response");
+
+        writer.set_len(Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE as u64).expect("must make output file large enough");
+        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+
+        (&mut writable_map[0..]).write(&memory_slice[..]).expect("unable to write a default hash to mmap");
+        writable_map.flush().expect("must flush the memory map");
+
+        let response_readable_map = writable_map.make_read_only().expect("must make a map readonly");
+
         let last_challenge_file_hash = get_challenge_file_hash(
-            &current_accumulator,
-            &last_response_file_hash
+            &mut current_accumulator,
+            &last_response_file_hash,
+            i == 0,
         );
+        println!("last challenge hash: {}", into_hex(&last_challenge_file_hash));
 
         // Deserialize the accumulator provided by the player in
         // their response file. It's stored in the transcript in
         // uncompressed form so that we can more efficiently
         // deserialize it.
-        let response_file_accumulator = Accumulator::deserialize(
-            &mut reader,
-            UseCompression::No,
-            CheckForCorrectness::Yes
+
+        let mut response_file_accumulator = BachedAccumulator::deserialize(
+            &response_readable_map,
+            CheckForCorrectness::Yes,
+            UseCompression::Yes,
         ).expect("unable to read uncompressed accumulator");
 
-        // Deserialize the public key provided by the player.
-        let response_file_pubkey = PublicKey::deserialize(&mut reader)
-            .expect("wasn't able to deserialize the response file's public key");
+        println!("test: {}", response_file_accumulator.tau_powers_g1[8190]);
 
+        let response_file_pubkey = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, UseCompression::Yes).unwrap();
         // Compute the hash of the response file. (we had it in uncompressed
         // form in the transcript, but the response file is compressed to save
         // participants bandwidth.)
         last_response_file_hash = get_response_file_hash(
-            &response_file_accumulator,
+            &mut response_file_accumulator,
             &response_file_pubkey,
             &last_challenge_file_hash
         );
 
-        print!("{}", into_hex(&last_response_file_hash));
+        println!("last response file hash: {}", into_hex(&last_response_file_hash));
 
         // Verify the transformation from the previous accumulator to the new
         // one. This also verifies the correctness of the accumulators and the

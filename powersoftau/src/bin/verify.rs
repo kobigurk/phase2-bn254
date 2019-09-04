@@ -162,7 +162,7 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
                                 .write(true)
                                 .create_new(true)
                                 .open(file_name).expect("unable to create `./tmp_initial_challenge`");
-                
+
         let expected_challenge_length = Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE;
         file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
 
@@ -232,7 +232,6 @@ fn main() {
             &last_response_file_hash,
             i == 0,
         );
-        println!("last challenge hash: {}", into_hex(&last_challenge_file_hash));
 
         // Deserialize the accumulator provided by the player in
         // their response file. It's stored in the transcript in
@@ -245,8 +244,6 @@ fn main() {
             UseCompression::Yes,
         ).expect("unable to read uncompressed accumulator");
 
-        println!("test: {}", response_file_accumulator.tau_powers_g1[8190]);
-
         let response_file_pubkey = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, UseCompression::Yes).unwrap();
         // Compute the hash of the response file. (we had it in uncompressed
         // form in the transcript, but the response file is compressed to save
@@ -256,8 +253,6 @@ fn main() {
             &response_file_pubkey,
             &last_challenge_file_hash
         );
-
-        println!("last response file hash: {}", into_hex(&last_response_file_hash));
 
         // Verify the transformation from the previous accumulator to the new
         // one. This also verifies the correctness of the accumulators and the
@@ -306,7 +301,7 @@ fn main() {
                 .map(|e| Point(e.into_projective()))
                 .collect()
         ).unwrap();
-        
+
         let mut g1_beta_coeffs = EvaluationDomain::from_coeffs(
             current_accumulator.beta_tau_powers_g1[0..degree].iter()
                 .map(|e| Point(e.into_projective()))

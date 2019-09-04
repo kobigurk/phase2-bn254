@@ -5,6 +5,7 @@ rm response
 rm new_challenge
 rm challenge_old
 rm response_old
+rm phase1radix*
 
 cargo run --release --bin new_constrained
 cargo run --release --bin compute_constrained

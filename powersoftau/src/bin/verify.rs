@@ -25,16 +25,6 @@ use std::io::{self, Read, BufWriter, Write};
 
 use memmap::*;
 
-fn into_hex(h: &[u8]) -> String {
-    let mut f = String::new();
-
-    for byte in &h[..] {
-        f += &format!("{:02x}", byte);
-    }
-
-    f
-}
-
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
 // response file hash.

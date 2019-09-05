@@ -90,18 +90,6 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
             marker: std::marker::PhantomData::<P>{}
         }
     }
-
-    pub fn new_for_verify() -> Self {
-        Self {
-            tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_G1_LENGTH],
-            tau_powers_g2: vec![E::G2Affine::one(); P::TAU_POWERS_LENGTH],
-            alpha_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
-            beta_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
-            beta_g2: E::G2Affine::one(),
-            hash: blank_hash(),
-            marker: std::marker::PhantomData::<P>{}
-        }
-    }
 }
 
 impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {

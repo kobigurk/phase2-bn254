@@ -114,7 +114,7 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
         let content = str::from_utf8(&mmap).unwrap();
         let circuit_json: CircuitJson = serde_json::from_str(&content).unwrap();
         let return_err = || Err(SynthesisError::AssignmentMissing);
-        let num_public_inputs = circuit_json.num_inputs + circuit_json.num_outputs;
+        let num_public_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
         for i in 0..circuit_json.num_variables {
             if i < num_public_inputs {
                 cs.alloc_input(|| format!("variable {}", i), return_err);
@@ -123,18 +123,24 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
             }
         }
         let mut constraint_num = 0;
-        for constraint in circuit_json.constraints.iter() {
+        for (i, constraint) in circuit_json.constraints.iter().enumerate() {
             let mut lcs = vec![];
             for lc_description in constraint {
                 let mut lc = LinearCombination::<E>::zero();
+                println!("lc_description: {:?}, i: {}, len: {}", lc_description, i, constraint.len());
                 for (var_index_str, coefficient_str) in lc_description {
+                    println!("var_index_str: {}, coefficient_str: {}", var_index_str, coefficient_str);
                     let var_index_num: usize = var_index_str.parse().unwrap();
                     let var_index = if var_index_num < num_public_inputs {
                         Index::Input(var_index_num)
                     } else {
                         Index::Aux(var_index_num - num_public_inputs)
                     };
-                    lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
+                    if i == 2 {
+                        lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
+                    } else {
+                        lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
+                    }
                 }
                 lcs.push(lc);
             }
@@ -251,7 +257,7 @@ fn main() {
         proving_key.b2.push(p2_to_vec(e));
     }
     let c = params.l.clone();
-    for _ in 0..params.vk.ic.len() {
+    for _ in 1..params.vk.ic.len() {
         proving_key.c.push(None);
     }
     for e in c.iter() {

@@ -383,7 +383,7 @@ impl<E: Engine> Parameters<E> {
 
 pub struct PreparedVerifyingKey<E: Engine> {
     /// Pairing result of alpha*beta
-    alpha_g1_beta_g2: E::Fqk,
+    pub alpha_g1_beta_g2: E::Fqk,
     /// -gamma in G2
     neg_gamma_g2: <E::G2Affine as CurveAffine>::Prepared,
     /// -delta in G2

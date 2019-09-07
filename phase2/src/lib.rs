@@ -399,6 +399,7 @@ impl MPCParameters {
     /// until there are contributions (see `contribute()`).
     pub fn new<C>(
         circuit: C,
+        should_filter_points_at_infinity: bool,
     ) -> Result<MPCParameters, SynthesisError>
         where C: Circuit<Bn256>
     {
@@ -655,15 +656,26 @@ impl MPCParameters {
             ic: ic.into_iter().map(|e| e.into_affine()).collect()
         };
 
-        let params = Parameters {
-            vk: vk,
-            h: Arc::new(h),
-            l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
+        let params = if should_filter_points_at_infinity {
+            Parameters {
+                vk: vk,
+                h: Arc::new(h),
+                l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
 
-            // Filter points at infinity away from A/B queries
-            a: Arc::new(a_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-            b_g1: Arc::new(b_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-            b_g2: Arc::new(b_g2.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect())
+                // Filter points at infinity away from A/B queries
+                a: Arc::new(a_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
+                b_g1: Arc::new(b_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
+                b_g2: Arc::new(b_g2.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect())
+            }
+        } else {
+            Parameters {
+                vk: vk,
+                h: Arc::new(h),
+                l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
+                a: Arc::new(a_g1.into_iter().map(|e| e.into_affine()).collect()),
+                b_g1: Arc::new(b_g1.into_iter().map(|e| e.into_affine()).collect()),
+                b_g2: Arc::new(b_g2.into_iter().map(|e| e.into_affine()).collect())
+            }
         };
 
         let h = {
@@ -783,10 +795,11 @@ impl MPCParameters {
     /// exist in the final parameters.
     pub fn verify<C: Circuit<Bn256>>(
         &self,
-        circuit: C
+        circuit: C,
+        should_filter_points_at_infinity: bool,
     ) -> Result<Vec<[u8; 64]>, ()>
     {
-        let initial_params = MPCParameters::new(circuit).map_err(|_| ())?;
+        let initial_params = MPCParameters::new(circuit, should_filter_points_at_infinity).map_err(|_| ())?;
 
         // H/L will change, but should have same length
         if initial_params.params.h.len() != self.params.h.len() {

@@ -85,6 +85,14 @@ macro_rules! curve_impl {
         }
 
         impl $affine {
+            pub fn get_x(&self) -> $basefield {
+                self.x.clone()
+            }
+
+            pub fn get_y(&self) -> $basefield {
+                self.y.clone()
+            }
+
             fn mul_bits<S: AsRef<[u64]>>(&self, bits: BitIterator<S>) -> $projective {
                 let mut res = $projective::zero();
                 for i in bits {

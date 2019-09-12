@@ -922,9 +922,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g2, &taupowers[0..], None);
                 batch_exp::<E, _>(&mut accumulator.alpha_tau_powers_g1, &taupowers[0..], Some(&key.alpha));
                 batch_exp::<E, _>(&mut accumulator.beta_tau_powers_g1, &taupowers[0..], Some(&key.beta));
-                if start == 0 {
-                    accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                }
+                accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
                 assert!(!accumulator.beta_g2.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output_map)?;
                 println!("Done processing {} powers of tau", end);

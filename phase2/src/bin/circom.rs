@@ -14,7 +14,7 @@ use num_bigint::BigUint;
 use num_traits::Num;
 
 // For randomness (during paramgen and proof generation)
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, ChaChaRng, Rng};
 
 // For benchmarking
 use std::time::{Duration, Instant};
@@ -84,12 +84,12 @@ use bellman_ce::groth16::{
     verify_proof,
 };
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize)]
 struct CircuitJson {
-    pub constraints: Vec<Vec<HashMap<String, String>>>,
-    #[serde(rename = "nInputs")]
+    pub constraints: Vec<Vec<BTreeMap<String, String>>>,
+    #[serde(rename = "nPubInputs")]
     pub num_inputs: usize,
     #[serde(rename = "nOutputs")]
     pub num_outputs: usize,
@@ -99,6 +99,7 @@ struct CircuitJson {
 
 struct CircomCircuit<'a> {
     pub file_name: &'a str,
+    pub witness: Vec<String>,
 }
 
 /// Our demo circuit implements this `Circuit` trait which
@@ -113,15 +114,24 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
         let mmap = unsafe { memmap::Mmap::map(&File::open(self.file_name)?) }?;
         let content = str::from_utf8(&mmap).unwrap();
         let circuit_json: CircuitJson = serde_json::from_str(&content).unwrap();
-        let return_err = || Err(SynthesisError::AssignmentMissing);
         let num_public_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
-        for i in 0..circuit_json.num_variables {
+        println!("num public inputs: {}", num_public_inputs);
+        for i in 1..circuit_json.num_variables {
             if i < num_public_inputs {
-                cs.alloc_input(|| format!("variable {}", i), return_err);
+                println!("allocating public input {}", i);
+                cs.alloc_input(|| format!("variable {}", i), || {
+                    println!("variable {}: {}", i, &self.witness[i]);
+                    Ok(E::Fr::from_str(&self.witness[i]).unwrap())
+                });
             } else {
-                cs.alloc(|| format!("variable {}", i), return_err);
+                println!("allocating private input {}", i);
+                cs.alloc(|| format!("variable {}", i), || {
+                    println!("variable {}: {}", i, &self.witness[i]);
+                    Ok(E::Fr::from_str(&self.witness[i]).unwrap())
+                });
             }
         }
+        let mut constrained: BTreeMap<usize, bool> = BTreeMap::new();
         let mut constraint_num = 0;
         for (i, constraint) in circuit_json.constraints.iter().enumerate() {
             let mut lcs = vec![];
@@ -129,13 +139,14 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
                 let mut lc = LinearCombination::<E>::zero();
                 println!("lc_description: {:?}, i: {}, len: {}", lc_description, i, constraint.len());
                 for (var_index_str, coefficient_str) in lc_description {
-                    println!("var_index_str: {}, coefficient_str: {}", var_index_str, coefficient_str);
+                    //println!("var_index_str: {}, coefficient_str: {}", var_index_str, coefficient_str);
                     let var_index_num: usize = var_index_str.parse().unwrap();
                     let var_index = if var_index_num < num_public_inputs {
                         Index::Input(var_index_num)
                     } else {
                         Index::Aux(var_index_num - num_public_inputs)
                     };
+                    constrained.insert(var_index_num, true);
                     if i == 2 {
                         lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
                     } else {
@@ -147,6 +158,16 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
             cs.enforce(|| format!("constraint {}", constraint_num), |_| lcs[0].clone(), |_| lcs[1].clone(), |_| lcs[2].clone());
             constraint_num += 1;
         }
+        println!("contraints: {}", circuit_json.constraints.len());
+        let mut unconstrained: BTreeMap<usize, bool> = BTreeMap::new();
+        for i in 0..circuit_json.num_variables { 
+            if !constrained.contains_key(&i) {
+                unconstrained.insert(i, true);
+            }
+        }
+        for (i, _) in unconstrained {
+            println!("variable {} is unconstrained", i);
+        }
         Ok(())
     }
 }
@@ -154,18 +175,27 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
 fn main() {
     // This may not be cryptographically safe, use
     // `OsRng` (for example) in production software.
-    let rng = &mut thread_rng();
+    //let rng = &mut thread_rng();
+    let mut rng = ChaChaRng::new_unseeded();
+    rng.set_counter(0u64, 1234567890u64);
+    let rng = &mut rng;
 
 
     println!("Creating parameters...");
 
-    let should_filter_points_at_infinity = false;
+    let should_filter_points_at_infinity = true;
 
     let file_name = "circuit.json";
+
+    let mmap = unsafe { memmap::Mmap::map(&File::open("witness.json").unwrap()) }.unwrap();
+    let content = str::from_utf8(&mmap).unwrap();
+
+    let witness: Vec<String> = serde_json::from_str(&content).unwrap();
     // Create parameters for our circuit
     let mut params = {
         let c = CircomCircuit {
             file_name,
+            witness: witness.clone(),
         };
 
         phase2::MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
@@ -183,6 +213,7 @@ fn main() {
 
     let verification_result = params.verify(CircomCircuit {
         file_name,
+        witness: witness.clone(),
     }, should_filter_points_at_infinity).unwrap();
 
     assert!(phase2::contains_contribution(&verification_result, &first_contrib));
@@ -257,7 +288,7 @@ fn main() {
         proving_key.b2.push(p2_to_vec(e));
     }
     let c = params.l.clone();
-    for _ in 1..params.vk.ic.len() {
+    for _ in 0..params.vk.ic.len() {
         proving_key.c.push(None);
     }
     for e in c.iter() {
@@ -300,6 +331,8 @@ fn main() {
 
     verification_key.vk_alfa_1 = p1_to_vec(&vk_alfa_1);
     verification_key.vk_beta_2 = p2_to_vec(&vk_beta_2);
+    //let vk_alfabeta_12 = vk_alfa_1.pairing_with(&vk_beta_2);
+    //println!("vk_alfabeta_12: {}", vk_alfabeta_12);
     let vk_gamma_2 = params.vk.gamma_g2.clone();
     verification_key.vk_gamma_2 = p2_to_vec(&vk_gamma_2);
     verification_key.vk_delta_2 = p2_to_vec(&vk_delta_2);
@@ -316,8 +349,6 @@ fn main() {
     let mut mmap = unsafe { memmap::Mmap::map(&vk_file) }.unwrap().make_mut().unwrap();
     mmap.deref_mut().write_all(vk_json.as_bytes()).unwrap();
 
-
-
     /*
     // Prepare the verification key (for proof verification)
     let pvk = prepare_verifying_key(&params.vk);
@@ -325,7 +356,7 @@ fn main() {
     println!("Creating proofs...");
 
     // Let's benchmark stuff!
-    const SAMPLES: u32 = 50;
+    const SAMPLES: u32 = 1;
     let mut total_proving = Duration::new(0, 0);
     let mut total_verifying = Duration::new(0, 0);
 
@@ -342,10 +373,12 @@ fn main() {
             // witness)
             let c = CircomCircuit {
                 file_name,
+                witness: witness.clone(),
             };
 
             // Create a groth16 proof with our parameters.
             let proof = create_random_proof(c, params, rng).unwrap();
+            println!("proof: {:?}", proof);
 
             proof.write(&mut proof_vec).unwrap();
         }

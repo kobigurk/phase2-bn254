@@ -511,8 +511,8 @@ impl MPCParameters {
         let alpha_coeffs_g1 = Arc::new(alpha_coeffs_g1);
         let beta_coeffs_g1 = Arc::new(beta_coeffs_g1);
 
-        let mut h = Vec::with_capacity(m - 1);
-        for i in 0..(m - 1) {
+        let mut h = Vec::with_capacity(m-1);
+        for i in 0..(m-1) {
             h.push(read_g1(f)?);
         }
 

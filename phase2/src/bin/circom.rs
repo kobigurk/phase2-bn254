@@ -118,13 +118,13 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
         println!("num public inputs: {}", num_public_inputs);
         for i in 1..circuit_json.num_variables {
             if i < num_public_inputs {
-                println!("allocating public input {}", i);
+                //println!("allocating public input {}", i);
                 cs.alloc_input(|| format!("variable {}", i), || {
                     println!("variable {}: {}", i, &self.witness[i]);
                     Ok(E::Fr::from_str(&self.witness[i]).unwrap())
                 });
             } else {
-                println!("allocating private input {}", i);
+                //println!("allocating private input {}", i);
                 cs.alloc(|| format!("variable {}", i), || {
                     println!("variable {}: {}", i, &self.witness[i]);
                     Ok(E::Fr::from_str(&self.witness[i]).unwrap())
@@ -137,7 +137,7 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
             let mut lcs = vec![];
             for lc_description in constraint {
                 let mut lc = LinearCombination::<E>::zero();
-                println!("lc_description: {:?}, i: {}, len: {}", lc_description, i, constraint.len());
+                //println!("lc_description: {:?}, i: {}, len: {}", lc_description, i, constraint.len());
                 for (var_index_str, coefficient_str) in lc_description {
                     //println!("var_index_str: {}, coefficient_str: {}", var_index_str, coefficient_str);
                     let var_index_num: usize = var_index_str.parse().unwrap();
@@ -183,7 +183,7 @@ fn main() {
 
     println!("Creating parameters...");
 
-    let should_filter_points_at_infinity = true;
+    let should_filter_points_at_infinity = false;
 
     let file_name = "circuit.json";
 

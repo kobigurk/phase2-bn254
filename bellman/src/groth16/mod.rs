@@ -301,7 +301,7 @@ impl<E: Engine> Parameters<E> {
                 .into_affine_unchecked()
             }
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-            .and_then(|e| if e.is_zero() {
+            .and_then(|e| if /*e.is_zero()*/false {
                 Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
             } else {
                 Ok(e)
@@ -320,7 +320,7 @@ impl<E: Engine> Parameters<E> {
                 .into_affine_unchecked()
             }
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-            .and_then(|e| if e.is_zero() {
+            .and_then(|e| if /*e.is_zero()*/false {
                 Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
             } else {
                 Ok(e)

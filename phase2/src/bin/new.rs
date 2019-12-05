@@ -13,9 +13,10 @@ fn main() {
     let circuit_filename = &args[1];
     let params_filename = &args[2];
 
+    let should_filter_points_at_infinity = false;
+
     // Import the circuit and create the initial parameters using phase 1
     println!("Creating initial parameters for {}...", circuit_filename);
-    let should_filter_points_at_infinity = false;
     let params = {
         let c = phase2::CircomCircuit {
             file_name: &circuit_filename,

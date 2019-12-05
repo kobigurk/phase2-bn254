@@ -955,10 +955,11 @@ impl MPCParameters {
     /// checks.
     pub fn read<R: Read>(
         mut reader: R,
+        disallow_points_at_infinity: bool,
         checked: bool
     ) -> io::Result<MPCParameters>
     {
-        let params = Parameters::read(&mut reader, checked)?;
+        let params = Parameters::read(&mut reader, disallow_points_at_infinity, checked)?;
 
         let mut cs_hash = [0u8; 64];
         reader.read_exact(&mut cs_hash)?;

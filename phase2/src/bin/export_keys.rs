@@ -81,13 +81,15 @@ fn main() {
     let vk_filename = &args[2];
     let pk_filename = &args[3];
 
+    let disallow_points_at_infinity = false;
+
     println!("Exporting {}...", params_filename);
 
     let reader = OpenOptions::new()
                             .read(true)
                             .open(params_filename)
                             .expect("unable to open.");
-    let params = phase2::MPCParameters::read(reader, true).expect("unable to read params");
+    let params = phase2::MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
     let params = params.get_params();
 
     let mut proving_key = ProvingKeyJson {

@@ -286,6 +286,7 @@ impl<E: Engine> Parameters<E> {
 
     pub fn read<R: Read>(
         mut reader: R,
+        disallow_points_at_infinity: bool,
         checked: bool
     ) -> io::Result<Self>
     {
@@ -301,7 +302,7 @@ impl<E: Engine> Parameters<E> {
                 .into_affine_unchecked()
             }
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-            .and_then(|e| if /*e.is_zero()*/false {
+            .and_then(|e| if disallow_points_at_infinity && e.is_zero() {
                 Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
             } else {
                 Ok(e)
@@ -320,7 +321,7 @@ impl<E: Engine> Parameters<E> {
                 .into_affine_unchecked()
             }
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-            .and_then(|e| if /*e.is_zero()*/false {
+            .and_then(|e| if disallow_points_at_infinity && e.is_zero() {
                 Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
             } else {
                 Ok(e)

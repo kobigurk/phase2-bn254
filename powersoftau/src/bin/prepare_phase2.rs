@@ -29,7 +29,7 @@ fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
-    // Try to load `./transcript` from disk.
+    // Try to load `./response` from disk.
     let reader = OpenOptions::new()
                             .read(true)
                             .open("response")
@@ -47,7 +47,7 @@ fn main() {
 
     // Create the parameters for various 2^m circuit depths.
     let max_degree = log_2(current_accumulator.tau_powers_g2.len() as u64);
-    for m in 0..max_degree {
+    for m in 0..max_degree+1 {
         let paramname = format!("phase1radix2m{}", m);
         println!("Creating {}", paramname);
 

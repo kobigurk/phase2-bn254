@@ -25,6 +25,13 @@ use std::io::{self, Read, BufWriter, Write};
 
 use memmap::*;
 
+const fn num_bits<T>() -> usize { std::mem::size_of::<T>() * 8 }
+
+fn log_2(x: u64) -> u32 {
+    assert!(x > 0);
+    num_bits::<u64>() as u32 - x.leading_zeros() - 1
+}
+
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
 // response file hash.
@@ -268,7 +275,8 @@ fn main() {
     let worker = &Worker::new();
 
     // Create the parameters for various 2^m circuit depths.
-    for m in 0..22 {
+    let max_degree = log_2(current_accumulator.tau_powers_g2.len() as u64);
+    for m in 0..max_degree+1 {
         let paramname = format!("phase1radix2m{}", m);
         println!("Creating {}", paramname);
 

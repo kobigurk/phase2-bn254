@@ -1427,6 +1427,7 @@ pub struct CircomCircuit<'a> {
 /// Our demo circuit implements this `Circuit` trait which
 /// is used during paramgen and proving in order to
 /// synthesize the constraint system.
+#[allow(unused_must_use)]
 impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
     fn synthesize<CS: ConstraintSystem<E>>(
         self,

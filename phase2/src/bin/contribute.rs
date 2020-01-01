@@ -71,4 +71,5 @@ fn main() {
     println!("Writing parameters to {}.", out_params_filename);
     let mut f = File::create(out_params_filename).unwrap();
     params.write(&mut f).expect("failed to write updated parameters");
+    println!("wrote");
 }

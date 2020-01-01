@@ -17,6 +17,7 @@ fn main() {
 
     // Import the circuit and create the initial parameters using phase 1
     println!("Creating initial parameters for {}...", circuit_filename);
+    println!("creating");
     let params = {
         let c = phase2::CircomCircuit {
             file_name: &circuit_filename,
@@ -27,4 +28,5 @@ fn main() {
     println!("Writing initial parameters to {}.", params_filename);
     let mut f = File::create(params_filename).unwrap();
     params.write(&mut f).expect("unable to write params");
+    println!("wrote");
 }

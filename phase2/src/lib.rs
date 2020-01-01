@@ -1444,13 +1444,13 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
                 cs.alloc_input(|| format!("variable {}", i), || {
                     //println!("variable {}: {}", i, &self.witness[i]);
                     Ok(E::Fr::from_str("1").unwrap())
-                });
+                })?;
             } else {
                 //println!("allocating private input {}", i);
                 cs.alloc(|| format!("variable {}", i), || {
                     //println!("variable {}: {}", i, &self.witness[i]);
                     Ok(E::Fr::from_str("1").unwrap())
-                });
+                })?;
             }
         }
         let mut constrained: BTreeMap<usize, bool> = BTreeMap::new();

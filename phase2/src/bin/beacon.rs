@@ -85,7 +85,8 @@ fn main() {
     let mut params = phase2::MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
-    let hash = params.contribute(&mut rng);
+    let zero: u32 = 0;
+    let hash = params.contribute(&mut rng, &zero);
     println!("Contribution hash: 0x{:02x}", hash.iter().format(""));
 
     println!("Writing parameters to {}.", out_params_filename);

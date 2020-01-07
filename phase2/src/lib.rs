@@ -721,13 +721,14 @@ impl MPCParameters {
     /// `MPCParameters::verify`.
     pub fn contribute<R: Rng>(
         &mut self,
-        rng: &mut R
+        rng: &mut R,
+        progress_update_interval: &u32
     ) -> [u8; 64]
     {
         // Generate a keypair
         let (pubkey, privkey) = keypair(rng, self);
 
-        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar) {
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32) {
             let coeff = coeff.into_repr();
 
             let mut projective = vec![C::Projective::zero(); bases.len()];
@@ -746,10 +747,15 @@ impl MPCParameters {
                     scope.spawn(move || {
                         let mut wnaf = Wnaf::new();
 
+                        let mut count = 0;
                         for (base, projective) in bases.iter_mut()
                                                        .zip(projective.iter_mut())
                         {
                             *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
+                            count = count + 1;
+                            if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
+                                println!("progress {} {}", *progress_update_interval, *total_exps)
+                            }
                         }
                     });
                 }
@@ -774,8 +780,9 @@ impl MPCParameters {
         let delta_inv = privkey.delta.inverse().expect("nonzero");
         let mut l = (&self.params.l[..]).to_vec();
         let mut h = (&self.params.h[..]).to_vec();
-        batch_exp(&mut l, delta_inv);
-        batch_exp(&mut h, delta_inv);
+        let total_exps = (l.len() + h.len()) as u32;
+        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps);
+        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps);
         self.params.l = Arc::new(l);
         self.params.h = Arc::new(h);
 

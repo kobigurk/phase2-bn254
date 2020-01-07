@@ -15,7 +15,7 @@ use std::fs::OpenOptions;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
+    if args.len() != 4 && args.len() != 5 {
         println!("Usage: \n<in_params.params> <in_str_entropy> <out_params.params>");
         std::process::exit(exitcode::USAGE);
     }
@@ -65,7 +65,14 @@ fn main() {
     let mut params = phase2::MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
-    let hash = params.contribute(&mut rng);
+    let mut progress_update_interval: u32 = 0;
+    if args.len() == 5 {
+        let parsed = args[4].parse::<u32>();
+        if !parsed.is_err() {
+            progress_update_interval = parsed.unwrap();
+        }
+    }
+    let hash = params.contribute(&mut rng, &progress_update_interval);
     println!("Contribution hash: 0x{:02x}", hash.iter().format(""));
 
     println!("Writing parameters to {}.", out_params_filename);

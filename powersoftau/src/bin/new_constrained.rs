@@ -2,8 +2,7 @@ extern crate powersoftau;
 extern crate bellman_ce;
 extern crate memmap;
 
-// use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::{BachedAccumulator};
 use powersoftau::parameters::{UseCompression};
 use powersoftau::utils::{blank_hash};

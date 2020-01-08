@@ -5,8 +5,7 @@ extern crate rand;
 extern crate blake2;
 extern crate byteorder;
 
-// use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::{BachedAccumulator};
 use powersoftau::keypair::{PublicKey};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};

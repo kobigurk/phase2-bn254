@@ -7,7 +7,7 @@ extern crate bellman_ce;
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::*;
 use powersoftau::accumulator::HashWriter;
 use powersoftau::*;

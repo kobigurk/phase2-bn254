@@ -61,7 +61,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE).expect("generation of initial accumulator is successful");
@@ -81,7 +81,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     println!("Wrote a fresh accumulator to challenge file");

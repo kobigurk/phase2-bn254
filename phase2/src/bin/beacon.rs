@@ -64,7 +64,7 @@ fn main() {
         for b in cur_hash.iter() {
             print!("{:02x}", b);
         }
-        println!("");
+        println!();
 
         let mut digest = &cur_hash[..];
 

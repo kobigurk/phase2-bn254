@@ -36,7 +36,7 @@ fn main() {
     
     // Try to load challenge file from disk.
     let challenge_reader = OpenOptions::new()
-                            .read(true)
+        .read(true)
         .open(challenge_filename)
         .expect("unable open challenge file in this directory");
 
@@ -59,7 +59,7 @@ fn main() {
 
     // Try to load response file from disk.
     let response_reader = OpenOptions::new()
-                            .read(true)
+        .read(true)
         .open(response_filename)
         .expect("unable open response file in this directory");
 
@@ -95,7 +95,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     // Check the hash chain - a new response must be based on the previous challenge!
@@ -113,7 +113,7 @@ fn main() {
                 }
                 print!(" ");
             }
-            println!("");
+            println!();
         }
 
         if &response_challenge_hash[..] != current_accumulator_hash.as_slice() {
@@ -132,7 +132,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     // get the contributor's public key
@@ -169,9 +169,9 @@ fn main() {
 
         // Create new challenge file in this directory
         let writer = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create_new(true)
+            .read(true)
+            .write(true)
+            .create_new(true)
             .open(new_challenge_filename)
             .expect("unable to create new challenge file in this directory");
 
@@ -209,7 +209,7 @@ fn main() {
                 }
                 print!(" ");
             }
-            println!("");
+            println!();
         }
 
         println!("Done! new challenge file contains the new challenge file. The other files");

@@ -155,9 +155,9 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
         }
 
         let file = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create_new(true)
+            .read(true)
+            .write(true)
+            .create_new(true)
             .open(file_name)
             .expect("unable to create `./tmp_initial_challenge`");
 
@@ -170,8 +170,8 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
     }
 
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(file_name)
+        .read(true)
+        .open(file_name)
         .expect("unable open transcript file in this directory");
 
     let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
@@ -194,7 +194,7 @@ fn main() {
 
     // Try to load transcript file from disk.
     let reader = OpenOptions::new()
-                            .read(true)
+        .read(true)
         .open(transcript_filename)
         .expect("unable open transcript file in this directory");
 
@@ -274,7 +274,7 @@ fn main() {
             println!(" ... FAILED");
             panic!("INVALID RESPONSE FILE!");
         } else {
-            println!("");
+            println!();
         }
 
         current_accumulator = response_file_accumulator;
@@ -376,11 +376,11 @@ fn main() {
 
         // Create the parameter file
         let writer = OpenOptions::new()
-                            .read(false)
-                            .write(true)
-                            .create_new(true)
-                            .open(paramname)
-                            .expect("unable to create parameter file in this directory");
+            .read(false)
+            .write(true)
+            .create_new(true)
+            .open(paramname)
+            .expect("unable to create parameter file in this directory");
 
         let mut writer = BufWriter::new(writer);
 

@@ -132,7 +132,7 @@ fn main() {
                 }
                 print!(" ");
             }
-            println!("");
+            println!();
         }
 
         (&mut writable_map[0..]).write(current_accumulator_hash.as_slice()).expect("unable to write a challenge hash to mmap");
@@ -197,7 +197,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     println!("Thank you for your participation, much appreciated! :)");

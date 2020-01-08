@@ -51,7 +51,7 @@ fn main() {
         let mut cur_hash: [u8; 32] = hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
 
         // Performs 2^n hash iterations over it
-        const N: usize = 10;
+        const N: u64 = 10;
 
         for i in 0..(1u64<<N) {
             // Print 1024 of the interstitial states
@@ -63,7 +63,7 @@ fn main() {
                 for b in cur_hash.iter() {
                     print!("{:02x}", b);
                 }
-                println!("");
+                println!();
             }
 
             let mut h = Sha256::new();
@@ -75,7 +75,7 @@ fn main() {
         for b in cur_hash.iter() {
             print!("{:02x}", b);
         }
-        println!("");
+        println!();
 
         let mut digest = &cur_hash[..];
 
@@ -91,7 +91,7 @@ fn main() {
 
     // Try to load challenge file from disk.
     let reader = OpenOptions::new()
-                            .read(true)
+        .read(true)
         .open(challenge_filename)
         .expect("unable open challenge file in this directory");
 
@@ -115,9 +115,9 @@ fn main() {
 
     // Create response file in this directory
     let writer = OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .create_new(true)
+        .read(true)
+        .write(true)
+        .create_new(true)
         .open(response_filename)
         .expect("unable to create response file in this directory");
 
@@ -148,7 +148,7 @@ fn main() {
                 }
                 print!(" ");
             }
-            println!("");
+            println!();
         }
 
         (&mut writable_map[0..]).write(current_accumulator_hash.as_slice()).expect("unable to write a challenge hash to mmap");
@@ -192,7 +192,7 @@ fn main() {
             }
             print!(" ");
         }
-        println!("");
+        println!();
     }
 
     println!("Thank you for your participation, much appreciated! :)");

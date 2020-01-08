@@ -23,15 +23,25 @@ const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 4 {
+        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let challenge_filename = &args[1];
+    let response_filename = &args[2];
+    let new_challenge_filename = &args[3];
+
     println!("Will verify and decompress a contribution to accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
     
-    // Try to load `./challenge` from disk.
+    // Try to load challenge file from disk.
     let challenge_reader = OpenOptions::new()
                             .read(true)
-                            .open("challenge").expect("unable open `./challenge` in this directory");
+        .open(challenge_filename)
+        .expect("unable open challenge file in this directory");
 
     {
-        let metadata = challenge_reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
+        let metadata = challenge_reader.metadata().expect("unable to get filesystem metadata for challenge file");
         let expected_challenge_length = match PREVIOUS_CHALLENGE_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
@@ -41,19 +51,20 @@ fn main() {
             }
         };
         if metadata.len() != (expected_challenge_length as u64) {
-            panic!("The size of `./challenge` should be {}, but it's {}, so something isn't right.", expected_challenge_length, metadata.len());
+            panic!("The size of challenge file should be {}, but it's {}, so something isn't right.", expected_challenge_length, metadata.len());
         }
     }
 
     let challenge_readable_map = unsafe { MmapOptions::new().map(&challenge_reader).expect("unable to create a memory map for input") };
 
-    // Try to load `./response` from disk.
+    // Try to load response file from disk.
     let response_reader = OpenOptions::new()
                             .read(true)
-                            .open("response").expect("unable open `./response` in this directory");
+        .open(response_filename)
+        .expect("unable open response file in this directory");
 
     {
-        let metadata = response_reader.metadata().expect("unable to get filesystem metadata for `./response`");
+        let metadata = response_reader.metadata().expect("unable to get filesystem metadata for response file");
         let expected_response_length = match CONTRIBUTION_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE 
@@ -63,7 +74,7 @@ fn main() {
             }
         };
         if metadata.len() != (expected_response_length as u64) {
-            panic!("The size of `./response` should be {}, but it's {}, so something isn't right.", expected_response_length, metadata.len());
+            panic!("The size of response file should be {}, but it's {}, so something isn't right.", expected_response_length, metadata.len());
         }
     }
 
@@ -112,7 +123,7 @@ fn main() {
 
     let response_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
 
-    println!("Hash of the `response` file for verification:");
+    println!("Hash of the response file for verification:");
     for line in response_hash.as_slice().chunks(16) {
         print!("\t");
         for section in line.chunks(4) {
@@ -152,20 +163,21 @@ fn main() {
     }
 
     if COMPRESS_NEW_CHALLENGE == UseCompression::Yes {
-        println!("Don't need to recompress the contribution, please copy `./response` as `./new_challenge`");
+        println!("Don't need to recompress the contribution, please copy response file as new challenge");
     } else {
-        println!("Verification succeeded! Writing to `./new_challenge`...");
+        println!("Verification succeeded! Writing to new challenge file...");
 
-        // Create `./new_challenge` in this directory
+        // Create new challenge file in this directory
         let writer = OpenOptions::new()
                                 .read(true)
                                 .write(true)
                                 .create_new(true)
-                                .open("new_challenge").expect("unable to create `./new_challenge` in this directory");
+            .open(new_challenge_filename)
+            .expect("unable to create new challenge file in this directory");
 
 
 
-        // Recomputation stips the public key and uses hashing to link with the previous contibution after decompression
+        // Recomputation strips the public key and uses hashing to link with the previous contribution after decompression
         writer.set_len(Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE as u64).expect("must make output file large enough");
 
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
@@ -173,7 +185,7 @@ fn main() {
         {
             (&mut writable_map[0..]).write(response_hash.as_slice()).expect("unable to write a default hash to mmap");
 
-            writable_map.flush().expect("unable to write hash to `./new_challenge`");
+            writable_map.flush().expect("unable to write hash to new challenge file");
         }
 
         BachedAccumulator::<Bn256, Bn256CeremonyParameters>::decompress(
@@ -187,7 +199,7 @@ fn main() {
 
         let recompressed_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&new_challenge_readable_map);
 
-        println!("Here's the BLAKE2b hash of the decompressed participant's response as `new_challenge` file:");
+        println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
 
         for line in recompressed_hash.as_slice().chunks(16) {
             print!("\t");
@@ -200,7 +212,7 @@ fn main() {
             println!("");
         }
 
-        println!("Done! `./new_challenge` contains the new challenge file. The other files");
+        println!("Done! new challenge file contains the new challenge file. The other files");
         println!("were left alone.");
     }
 }

@@ -4,6 +4,7 @@ extern crate memmap;
 extern crate rand;
 extern crate blake2;
 extern crate byteorder;
+extern crate exitcode;
 
 use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::{BachedAccumulator};
@@ -23,6 +24,14 @@ const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 3 {
+        println!("Usage: \n<challenge_file> <response_file>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let challenge_filename = &args[1];
+    let response_filename = &args[2];
+
     println!("Will contribute to accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
     println!("In total will generate up to {} powers", Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH);
     
@@ -64,13 +73,13 @@ fn main() {
         ChaChaRng::from_seed(&seed)
     };
 
-    // Try to load `./challenge` from disk.
+    // Try to load challenge file from disk.
     let reader = OpenOptions::new()
                             .read(true)
-                            .open("challenge").expect("unable open `./challenge` in this directory");
-
+                            .open(challenge_filename)
+                            .expect("unable open challenge file");
     {
-        let metadata = reader.metadata().expect("unable to get filesystem metadata for `./challenge`");
+        let metadata = reader.metadata().expect("unable to get filesystem metadata for challenge file");
         let expected_challenge_length = match INPUT_IS_COMPRESSED {
             UseCompression::Yes => {
                 Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
@@ -81,18 +90,19 @@ fn main() {
         };
 
         if metadata.len() != (expected_challenge_length as u64) {
-            panic!("The size of `./challenge` should be {}, but it's {}, so something isn't right.", expected_challenge_length, metadata.len());
+            panic!("The size of challenge file should be {}, but it's {}, so something isn't right.", expected_challenge_length, metadata.len());
         }
     }
 
     let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
-    // Create `./response` in this directory
+    // Create response file in this directory
     let writer = OpenOptions::new()
                             .read(true)
                             .write(true)
                             .create_new(true)
-                            .open("response").expect("unable to create `./response` in this directory");
+                            .open(response_filename)
+                            .expect("unable to create response file");
 
     let required_output_length = match COMPRESS_THE_OUTPUT {
         UseCompression::Yes => {
@@ -127,7 +137,7 @@ fn main() {
 
         (&mut writable_map[0..]).write(current_accumulator_hash.as_slice()).expect("unable to write a challenge hash to mmap");
 
-        writable_map.flush().expect("unable to write hash to `./response`");
+        writable_map.flush().expect("unable to write hash to response file");
     }
 
     {
@@ -164,7 +174,7 @@ fn main() {
         &privkey
     ).expect("must transform with the key");
 
-    println!("Finihsing writing your contribution to `./response`...");
+    println!("Finishing writing your contribution to response file...");
 
     // Write the public key
     pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, COMPRESS_THE_OUTPUT).expect("unable to write public key");
@@ -176,8 +186,8 @@ fn main() {
     let contribution_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
 
     print!("Done!\n\n\
-              Your contribution has been written to `./response`\n\n\
-              The BLAKE2b hash of `./response` is:\n");
+              Your contribution has been written to response file\n\n\
+              The BLAKE2b hash of response file is:\n");
 
     for line in contribution_hash.as_slice().chunks(16) {
         print!("\t");

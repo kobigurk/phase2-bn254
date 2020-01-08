@@ -17,14 +17,22 @@ use powersoftau::parameters::PowersOfTauParameters;
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: \n<challenge_file>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let challenge_filename = &args[1];
+
     println!("Will generate an empty accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
     println!("In total will generate up to {} powers", Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH);
-    
+
     let file = OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .create_new(true)
-                            .open("challenge").expect("unable to create `./challenge`");
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(challenge_filename)
+        .expect("unable to create challenge file");
             
     let expected_challenge_length = match COMPRESS_NEW_CHALLENGE {
         UseCompression::Yes => {
@@ -42,7 +50,7 @@ fn main() {
     // Write a blank BLAKE2b hash:
     let hash = blank_hash();
     (&mut writable_map[0..]).write(hash.as_slice()).expect("unable to write a default hash to mmap");
-    writable_map.flush().expect("unable to write blank hash to `./challenge`");
+    writable_map.flush().expect("unable to write blank hash to challenge file");
 
     println!("Blank hash for an empty challenge:");
     for line in hash.as_slice().chunks(16) {
@@ -76,5 +84,5 @@ fn main() {
         println!("");
     }
 
-    println!("Wrote a fresh accumulator to `./challenge`");
+    println!("Wrote a fresh accumulator to challenge file");
 }

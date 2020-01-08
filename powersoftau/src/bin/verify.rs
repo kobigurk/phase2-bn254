@@ -61,7 +61,7 @@ fn get_challenge_file_hash(
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
 
         (&mut writable_map[0..]).write(&last_response_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        writable_map.flush().expect("unable to write blank hash to challenge file");
 
         if is_initial {
             BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
@@ -119,7 +119,7 @@ fn get_response_file_hash(
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
 
         (&mut writable_map[0..]).write(&last_challenge_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        writable_map.flush().expect("unable to write blank hash to challenge file");
 
         acc.serialize(
             &mut writable_map,
@@ -158,7 +158,8 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
                                 .read(true)
                                 .write(true)
                                 .create_new(true)
-                                .open(file_name).expect("unable to create `./tmp_initial_challenge`");
+            .open(file_name)
+            .expect("unable to create `./tmp_initial_challenge`");
 
         let expected_challenge_length = Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE;
         file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
@@ -171,7 +172,8 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
     let reader = OpenOptions::new()
                             .read(true)
                             .open(file_name)
-                            .expect("unable open `./transcript` in this directory");
+        .expect("unable open transcript file in this directory");
+
     let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
     let initial_accumulator = BachedAccumulator::deserialize(
         &readable_map,
@@ -183,11 +185,19 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
 }
 
 fn main() {
-    // Try to load `./transcript` from disk.
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: \n<transcript_file>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let transcript_filename = &args[1];
+
+    // Try to load transcript file from disk.
     let reader = OpenOptions::new()
                             .read(true)
-                            .open("transcript")
-                            .expect("unable open `./transcript` in this directory");
+        .open(transcript_filename)
+        .expect("unable open transcript file in this directory");
+
     let transcript_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
     // Initialize the accumulator

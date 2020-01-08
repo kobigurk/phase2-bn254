@@ -3,3 +3,4 @@ phase1*
 **/*.rs.bk
 Cargo.lock
 node_modules
+phase1radix2m*

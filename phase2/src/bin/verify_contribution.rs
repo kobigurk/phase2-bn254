@@ -3,6 +3,9 @@ extern crate exitcode;
 
 use std::fs::OpenOptions;
 
+use phase2::parameters::*;
+use phase2::circom_circuit::CircomCircuit;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {
@@ -19,21 +22,21 @@ fn main() {
                                 .read(true)
                                 .open(old_params_filename)
                                 .expect("unable to open old params");
-    let old_params = phase2::MPCParameters::read(old_reader, disallow_points_at_infinity, true).expect("unable to read old params");
+    let old_params = MPCParameters::read(old_reader, disallow_points_at_infinity, true).expect("unable to read old params");
 
     let new_reader = OpenOptions::new()
                                 .read(true)
                                 .open(new_params_filename)
                                 .expect("unable to open new params");
-    let new_params = phase2::MPCParameters::read(new_reader, disallow_points_at_infinity, true).expect("unable to read new params");
+    let new_params = MPCParameters::read(new_reader, disallow_points_at_infinity, true).expect("unable to read new params");
 
     println!("Checking contribution {}...", new_params_filename);
-    let contribution = phase2::verify_contribution(&old_params, &new_params).expect("should verify");
+    let contribution = verify_contribution(&old_params, &new_params).expect("should verify");
 
     let should_filter_points_at_infinity = false;
-    let verification_result = new_params.verify(phase2::CircomCircuit {
+    let verification_result = new_params.verify(CircomCircuit {
         file_name: &circuit_filename,
     }, should_filter_points_at_infinity).unwrap();
-    assert!(phase2::contains_contribution(&verification_result, &contribution));
+    assert!(contains_contribution(&verification_result, &contribution));
     println!("Contribution {} verified.", new_params_filename);
 }

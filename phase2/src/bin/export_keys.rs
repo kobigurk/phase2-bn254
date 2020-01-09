@@ -1,7 +1,6 @@
 extern crate bellman_ce;
 extern crate rand;
 extern crate phase2;
-extern crate memmap;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate exitcode;
@@ -13,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use num_bigint::BigUint;
 use num_traits::Num;
 
+use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
-use std::ops::DerefMut;
+
+use phase2::parameters::MPCParameters;
 
 #[derive(Serialize, Deserialize)]
 struct ProvingKeyJson {
@@ -89,7 +89,7 @@ fn main() {
                             .read(true)
                             .open(params_filename)
                             .expect("unable to open.");
-    let params = phase2::MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
+    let params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
     let params = params.get_params();
 
     let mut proving_key = ProvingKeyJson {
@@ -203,17 +203,11 @@ fn main() {
     verification_key.vk_gamma_2 = p2_to_vec(&vk_gamma_2);
     verification_key.vk_delta_2 = p2_to_vec(&vk_delta_2);
 
-    let pk_file = OpenOptions::new().read(true).write(true).create_new(true).open(pk_filename).unwrap();
     let pk_json = serde_json::to_string(&proving_key).unwrap();
-    pk_file.set_len(pk_json.len() as u64).expect("unable to write pk file");
-    let mut mmap = unsafe { memmap::Mmap::map(&pk_file) }.unwrap().make_mut().unwrap();
-    mmap.deref_mut().write_all(pk_json.as_bytes()).unwrap();
+    fs::write(pk_filename, pk_json.as_bytes()).unwrap();
 
-    let vk_file = OpenOptions::new().read(true).write(true).create_new(true).open(vk_filename).unwrap();
     let vk_json = serde_json::to_string(&verification_key).unwrap();
-    vk_file.set_len(vk_json.len() as u64).expect("unable to write vk file");
-    let mut mmap = unsafe { memmap::Mmap::map(&vk_file) }.unwrap().make_mut().unwrap();
-    mmap.deref_mut().write_all(vk_json.as_bytes()).unwrap();
+    fs::write(vk_filename, vk_json.as_bytes()).unwrap();
 
     println!("Created {} and {}.", pk_filename, vk_filename);
 }

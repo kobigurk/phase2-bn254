@@ -4,3 +4,7 @@ phase1*
 Cargo.lock
 node_modules
 phase1radix2m*
+/*.json
+/*.bin
+/*.params
+/*.circom

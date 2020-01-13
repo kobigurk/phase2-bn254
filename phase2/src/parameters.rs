@@ -4,6 +4,11 @@ extern crate byteorder;
 extern crate num_cpus;
 extern crate crossbeam;
 
+#[cfg(feature = "wasm")]
+use bellman_ce::singlecore::Worker;
+#[cfg(not(feature = "wasm"))]
+use bellman_ce::multicore::Worker;
+
 use byteorder::{
     BigEndian,
     ReadBytesExt,
@@ -45,8 +50,6 @@ use bellman_ce::pairing::{
         G2Uncompressed
     }
 };
-
-pub use bellman_ce::multicore::*;
 
 use bellman_ce::{
     Circuit,
@@ -415,6 +418,7 @@ impl MPCParameters {
         // Generate a keypair
         let (pubkey, privkey) = keypair(rng, self);
 
+        #[cfg(not(feature = "wasm"))]
         fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar) {
             let coeff = coeff.into_repr();
 
@@ -452,6 +456,27 @@ impl MPCParameters {
                         });
                     }
             });
+
+            // Turn it all back into affine points
+            for (projective, affine) in projective.iter().zip(bases.iter_mut()) {
+                *affine = projective.into_affine();
+            }
+        }
+
+        #[cfg(feature = "wasm")]
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar) {
+            let coeff = coeff.into_repr();
+
+            let mut projective = vec![C::Projective::zero(); bases.len()];
+
+            // Perform wNAF, placing results into `projective`.
+            let mut wnaf = Wnaf::new();
+            for (base, projective) in bases.iter_mut().zip(projective.iter_mut()) {
+                *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
+            }
+
+            // Perform batch normalization
+            C::Projective::batch_normalization(&mut projective);
 
             // Turn it all back into affine points
             for (projective, affine) in projective.iter().zip(bases.iter_mut()) {

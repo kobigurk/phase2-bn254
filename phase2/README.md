@@ -2,6 +2,28 @@
 
 This library is still under development.
 
+## WebAssembly how-to
+
+Build wasm package using `wasm-pack build --release -- --no-default-features --features wasm`
+
+this will generate `./pkg` directory with wasm file and js bindings. After that you 
+can use this package in your browser application like so:
+
+```js
+async function main() {
+    const phase2 = await import("./pkg/phase2.js")
+    let data = await fetch('params')
+    data = await data.arrayBuffer()
+    data = new Uint8Array(data)
+    console.log('Source params', data)
+    const result = phase2.contribute(data)
+    console.log('Updated params', result)
+    // upload updated params
+}
+
+main().catch(console.error)
+``` 
+
 ## [Documentation](https://docs.rs/phase2/)
 
 ## Security Warnings

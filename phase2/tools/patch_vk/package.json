@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "snarkjs": "^0.1.20"
+    "snarkjs": "^0.1.20",
+    "websnark": "git+https://github.com/kobigurk/websnark.git"
   }
 }

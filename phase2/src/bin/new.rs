@@ -22,6 +22,8 @@ fn main() {
     let params = {
         let c = CircomCircuit {
             file_name: &circuit_filename,
+            witness: "",
+            has_witness: false,
         };
         MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
     };

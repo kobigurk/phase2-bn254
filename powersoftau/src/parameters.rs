@@ -55,7 +55,7 @@ pub trait PowersOfTauParameters: Clone {
     // Blake2b hash size
     const HASH_SIZE: usize = 64;
 
-    const EMPIRICAL_BATCH_SIZE: usize = 1 << 21;
+    const EMPIRICAL_BATCH_SIZE: usize = 1 << 10;
 }
 
 

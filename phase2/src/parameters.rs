@@ -398,6 +398,12 @@ impl MPCParameters {
         &self.params
     }
 
+    pub fn get_params_mut(&mut self) -> &mut Parameters<Bn256> {
+        &mut self.params
+    }
+
+
+
     /// Contributes some randomness to the parameters. Only one
     /// contributor needs to be honest for the parameters to be
     /// secure.

@@ -36,6 +36,8 @@ fn main() {
     let should_filter_points_at_infinity = false;
     let verification_result = new_params.verify(CircomCircuit {
         file_name: &circuit_filename,
+        witness: "",
+        has_witness: false,
     }, should_filter_points_at_infinity).unwrap();
     assert!(contains_contribution(&verification_result, &contribution));
     println!("Contribution {} verified.", new_params_filename);

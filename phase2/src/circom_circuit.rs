@@ -36,6 +36,25 @@ struct CircuitJson {
 
 pub struct CircomCircuit<'a> {
     pub file_name: &'a str,
+    pub has_witness: bool,
+    pub witness_file_name: &'a str,
+}
+
+impl CircomCircuit<'_> {
+    pub fn parse_witness<E: Engine>(&self) -> (Vec<E::Fr>, Vec<E::Fr>) {
+        if self.has_witness {
+            let content = fs::read_to_string(self.file_name).unwrap();
+            let circuit_json: CircuitJson = serde_json::from_str(&content).unwrap();
+
+            let witness_content = fs::read_to_string(self.witness_file_name).unwrap();
+            let witness: Vec<String> = serde_json::from_str(&witness_content).unwrap();
+            let witness = witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
+            let num_public_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
+            (witness[..num_public_inputs].to_vec(), witness[num_public_inputs..].to_vec())
+        } else {
+            (vec![], vec![])
+        }
+    }
 }
 
 /// Our demo circuit implements this `Circuit` trait which
@@ -49,15 +68,30 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
     {
         let content = fs::read_to_string(self.file_name)?;
         let circuit_json: CircuitJson = serde_json::from_str(&content).unwrap();
+        let witness_tup = self.parse_witness::<E>();
+        let mut witness = witness_tup.0.clone();
+        witness.extend_from_slice(&witness_tup.1);
+
         let num_public_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
+        println!("witness: {:?}", witness);
+        println!("num public inputs: {}", num_public_inputs);
         for i in 1..circuit_json.num_variables {
             if i < num_public_inputs {
                 cs.alloc_input(|| format!("variable {}", i), || {
-                    Ok(E::Fr::from_str("1").unwrap())
+                        println!("index: {}", i);
+                    if self.has_witness {
+                        Ok(witness[i])
+                    } else {
+                        Ok(E::Fr::from_str("1").unwrap())
+                    }
                 })?;
             } else {
                 cs.alloc(|| format!("variable {}", i), || {
-                    Ok(E::Fr::from_str("1").unwrap())
+                    if self.has_witness {
+                        Ok(witness[i])
+                    } else {
+                        Ok(E::Fr::from_str("1").unwrap())
+                    }
                 })?;
             }
         }

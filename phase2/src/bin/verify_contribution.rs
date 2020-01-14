@@ -5,13 +5,14 @@ use std::fs::OpenOptions;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<in_circuit.json> <in_old_params.params> <in_new_params.params>");
+    if args.len() != 5 {
+        println!("Usage: \n<in_circuit.json> <in_old_params.params> <in_new_params.params> <path/to/phase1radix>");
         std::process::exit(exitcode::USAGE);
     }
     let circuit_filename = &args[1];
     let old_params_filename = &args[2];
     let new_params_filename = &args[3];
+    let radix_directory = &args[4];
 
     let disallow_points_at_infinity = false;
 
@@ -33,7 +34,7 @@ fn main() {
     let should_filter_points_at_infinity = false;
     let verification_result = new_params.verify(phase2::CircomCircuit {
         file_name: &circuit_filename,
-    }, should_filter_points_at_infinity).unwrap();
+    }, should_filter_points_at_infinity, radix_directory).unwrap();
     assert!(phase2::contains_contribution(&verification_result, &contribution));
     println!("Contribution {} verified.", new_params_filename);
 }

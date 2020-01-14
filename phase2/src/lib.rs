@@ -408,6 +408,7 @@ impl MPCParameters {
     pub fn new<C>(
         circuit: C,
         should_filter_points_at_infinity: bool,
+        phase1_directory: &String,
     ) -> Result<MPCParameters, SynthesisError>
         where C: Circuit<Bn256>
     {
@@ -453,7 +454,7 @@ impl MPCParameters {
         }
 
         // Try to load "phase1radix2m{}"
-        let f = match File::open(format!("phase1radix2m{}", exp)) {
+        let f = match File::open(format!("{}/phase1radix2m{}", phase1_directory, exp)) {
             Ok(f) => f,
             Err(e) => {
                 panic!("Couldn't load phase1radix2m{}: {:?}", exp, e);
@@ -812,9 +813,10 @@ impl MPCParameters {
         &self,
         circuit: C,
         should_filter_points_at_infinity: bool,
+        radix_directory: &String,
     ) -> Result<Vec<[u8; 64]>, ()>
     {
-        let initial_params = MPCParameters::new(circuit, should_filter_points_at_infinity).map_err(|_| ())?;
+        let initial_params = MPCParameters::new(circuit, should_filter_points_at_infinity, radix_directory).map_err(|_| ())?;
 
         // H/L will change, but should have same length
         if initial_params.params.h.len() != self.params.h.len() {

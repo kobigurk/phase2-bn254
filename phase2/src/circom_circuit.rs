@@ -63,7 +63,7 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
         }
         let mut constrained: BTreeMap<usize, bool> = BTreeMap::new();
         let mut constraint_num = 0;
-        for (i, constraint) in circuit_json.constraints.iter().enumerate() {
+        for (_i, constraint) in circuit_json.constraints.iter().enumerate() {
             let mut lcs = vec![];
             for lc_description in constraint {
                 let mut lc = LinearCombination::<E>::zero();
@@ -75,11 +75,7 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<'a> {
                         Index::Aux(var_index_num - num_public_inputs)
                     };
                     constrained.insert(var_index_num, true);
-                    if i == 2 {
-                        lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
-                    } else {
-                        lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
-                    }
+                    lc = lc + (E::Fr::from_str(coefficient_str).unwrap(), Variable::new_unchecked(var_index));
                 }
                 lcs.push(lc);
             }

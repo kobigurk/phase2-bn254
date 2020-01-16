@@ -4,18 +4,23 @@ extern crate phase2;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate exitcode;
-
 extern crate serde;
 extern crate serde_json;
 
-use serde::{Deserialize, Serialize};
-use num_bigint::BigUint;
-use num_traits::Num;
-
 use std::fs;
 use std::fs::OpenOptions;
-
+use num_bigint::BigUint;
+use num_traits::Num;
+use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
+use bellman_ce::pairing::{
+    Engine,
+    CurveAffine,
+    ff::PrimeField,
+    bn256::{
+        Bn256,
+    }
+};
 
 #[derive(Serialize, Deserialize)]
 struct ProvingKeyJson {
@@ -44,31 +49,6 @@ struct VerifyingKeyJson {
     pub vk_beta_2: Vec<Vec<String>>,
     pub vk_gamma_2: Vec<Vec<String>>,
     pub vk_delta_2: Vec<Vec<String>>,
-}
-
-// Bring in some tools for using pairing-friendly curves
-use bellman_ce::pairing::{
-    Engine,
-    CurveAffine,
-    ff::PrimeField,
-};
-
-// We're going to use the BLS12-381 pairing-friendly elliptic curve.
-use bellman_ce::pairing::bn256::{
-    Bn256,
-};
-
-use std::collections::BTreeMap;
-
-#[derive(Serialize, Deserialize)]
-struct CircuitJson {
-    pub constraints: Vec<Vec<BTreeMap<String, String>>>,
-    #[serde(rename = "nPubInputs")]
-    pub num_inputs: usize,
-    #[serde(rename = "nOutputs")]
-    pub num_outputs: usize,
-    #[serde(rename = "nVars")]
-    pub num_variables: usize,
 }
 
 fn main() {

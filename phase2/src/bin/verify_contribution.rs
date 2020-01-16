@@ -34,9 +34,7 @@ fn main() {
     let contribution = verify_contribution(&old_params, &new_params).expect("should verify");
 
     let should_filter_points_at_infinity = false;
-    let verification_result = new_params.verify(CircomCircuit {
-        file_name: &circuit_filename,
-    }, should_filter_points_at_infinity).unwrap();
+    let verification_result = new_params.verify(CircomCircuit::from_json_file(&circuit_filename), should_filter_points_at_infinity).unwrap();
     assert!(contains_contribution(&verification_result, &contribution));
     println!("Contribution {} verified.", new_params_filename);
 }

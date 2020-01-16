@@ -29,13 +29,11 @@ cargo run --release --bin export_keys circom4.params vk.json pk.json
 # create dummy keys in circom format
 npx snarkjs setup --protocol groth
 # patch dummy keys with actual keys params
-node patch_vk.js
-# generate binary version of proving key
-node node_modules/websnark/tools/buildpkey.js -i transformed_pk.json -o transformed_pk.bin
+cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json
+cargo run --release --bin copy_json verification_key.json vk.json transformed_vk.json
+node ./tools/patch_vk/patch_vk.js
 
 # try to generate and verify proof
 snarkjs calculatewitness
-node node_modules/websnark/tools/buildwitness.js -i witness.json -o witness.bin
-snarkjs proof # to get public inputs json only
-./cli.js
-snarkjs verify --vk transformed_vk.json --proof proof.json
+cargo run --release --bin prove circuit.json witness.json circom4.params proof.json
+snarkjs verify --vk patched_transformed_vk.json --proof proof.json

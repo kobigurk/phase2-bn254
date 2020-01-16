@@ -49,14 +49,14 @@ pub struct CircomCircuit<E: Engine> {
 }
 
 impl<'a, E: Engine> CircomCircuit<E> {
-    pub fn load_witness_json(&mut self, filename: &str) {
+    pub fn load_witness_json_file(&mut self, filename: &str) {
         let witness: Vec<String> = serde_json::from_str(&fs::read_to_string(filename).unwrap()).unwrap();
         let witness = witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
         self.inputs = witness[..self.num_inputs].to_vec();
         self.aux = witness[self.num_inputs..].to_vec();
     }
 
-    pub fn from_json(filename: &str) -> CircomCircuit::<E> {
+    pub fn from_json_file(filename: &str) -> CircomCircuit::<E> {
         let circuit_json: CircuitJson = serde_json::from_str(&fs::read_to_string(filename).unwrap()).unwrap();
 
         let num_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;

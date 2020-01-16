@@ -20,9 +20,7 @@ fn main() {
     // Import the circuit and create the initial parameters using phase 1
     println!("Creating initial parameters for {}...", circuit_filename);
     let params = {
-        let c = CircomCircuit {
-            file_name: &circuit_filename,
-        };
+        let c = CircomCircuit::from_json_file(&circuit_filename);
         MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
     };
 

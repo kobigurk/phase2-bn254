@@ -62,7 +62,7 @@ pub struct BatchedAccumulator<E: Engine, P: PowersOfTauParameters> {
 }
 
 impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
-    /// Calcualte the contibution hash from the resulting file. Original powers of tau implementaiton
+    /// Calculate the contribution hash from the resulting file. Original powers of tau implementation
     /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
     /// implementation now writes without a particular order, so plain recalculation at the end
     /// of the procedure is more efficient
@@ -831,7 +831,7 @@ impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     /// Due to large amount of data in a previous accumulator even in the compressed form
     /// this function can now work on compressed input. Output can be made in any form
     /// WARNING: Contributor does not have to check that values from challenge file were serialized
-    /// corrently, but we may want to enforce it if a ceremony coordinator does not recompress the previous
+    /// correctly, but we may want to enforce it if a ceremony coordinator does not recompress the previous
     /// contribution into the new challenge file
     pub fn transform(
         input_map: &Mmap,
@@ -887,7 +887,7 @@ impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
             // Turn it all back into affine points
             for (projective, affine) in projective.iter().zip(bases.iter_mut()) {
                 *affine = projective.into_affine();
-                assert!(!affine.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
+                assert!(!affine.is_zero(), "your contribution happened to produce a point at infinity, please re-run");
             }
         }
 
@@ -923,7 +923,7 @@ impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
                 batch_exp::<E, _>(&mut accumulator.alpha_tau_powers_g1, &taupowers[0..], Some(&key.alpha));
                 batch_exp::<E, _>(&mut accumulator.beta_tau_powers_g1, &taupowers[0..], Some(&key.beta));
                 accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                assert!(!accumulator.beta_g2.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
+                assert!(!accumulator.beta_g2.is_zero(), "your contribution happened to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output_map)?;
                 println!("Done processing {} powers of tau", end);
             } else {
@@ -957,7 +957,7 @@ impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
 
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
                 //accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                //assert!(!accumulator.beta_g2.is_zero(), "your contribution happed to produce a point at infinity, please re-run");
+                //assert!(!accumulator.beta_g2.is_zero(), "your contribution happened to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output_map)?;
 
                 println!("Done processing {} powers of tau", end);

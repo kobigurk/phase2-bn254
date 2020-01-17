@@ -29,6 +29,7 @@ bellman_ce = { path = "../bellman", default-features = false } # active features
 # needed for native only but don't break wasm if present
 num_cpus = "1"
 crossbeam = "0.3"
+rust-crypto = { version = "0.2", optional = true }
 
 # needed for wasm only
 wasm-bindgen = { version = "0.2.58", optional = true }
@@ -37,5 +38,5 @@ web-sys = { version = "0.3.35", features = ["console"], optional = true }
 console_error_panic_hook = { version = "0.1.6", optional = true }
 
 [features]
-default = ["bellman_ce/multicore"]
+default = ["bellman_ce/multicore", "rust-crypto"]
 wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook", "bellman_ce/wasm"]

@@ -8,3 +8,4 @@ phase1radix2m*
 /*.bin
 /*.params
 /*.circom
+/verifier.sol

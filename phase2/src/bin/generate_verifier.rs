@@ -23,21 +23,17 @@ use bellman_ce::pairing::{
 };
 
 fn main() {
-//    let args: Vec<String> = std::env::args().collect();
-//    if args.len() != 3 {
-//        println!("Usage: \n<params> <out_contract.sol>");
-//        std::process::exit(exitcode::USAGE);
-//    }
-//    let params_filename = &args[1];
-//    let verifier_filename = &args[2];
-
-    let params_filename = "circom4.params";
-    let verifier_filename = "verifier.sol";
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 3 {
+        println!("Usage: \n<params> <out_contract.sol>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let params_filename = &args[1];
+    let verifier_filename = &args[2];
 
     let should_filter_points_at_infinity = false;
     let bytes = include_bytes!("../verifier_groth.sol");
     let template = String::from_utf8_lossy(bytes);
-    //print!("{}", String::from_utf8_lossy(bytes));
 
     let reader = OpenOptions::new()
         .read(true)

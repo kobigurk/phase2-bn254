@@ -36,7 +36,7 @@ fn log_2(x: u64) -> u32 {
 // given the current state of the accumulator and the last
 // response file hash.
 fn get_challenge_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    acc: &mut BatchedAccumulator::<Bn256, Bn256CeremonyParameters>,
     last_response_file_hash: &[u8; 64],
     is_initial: bool,
 ) -> [u8; 64]
@@ -64,7 +64,7 @@ fn get_challenge_file_hash(
         writable_map.flush().expect("unable to write blank hash to challenge file");
 
         if is_initial {
-            BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+            BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
         } else {
             acc.serialize(
                 &mut writable_map,
@@ -95,7 +95,7 @@ fn get_challenge_file_hash(
 // accumulator, the player's public key, and the challenge
 // file's hash.
 fn get_response_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    acc: &mut BatchedAccumulator::<Bn256, Bn256CeremonyParameters>,
     pubkey: &PublicKey::<Bn256>,
     last_challenge_file_hash: &[u8; 64]
 ) -> [u8; 64]
@@ -147,7 +147,7 @@ fn get_response_file_hash(
     tmp
 }
 
-fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParameters> {
+fn new_accumulator_for_verify() -> BatchedAccumulator<Bn256, Bn256CeremonyParameters> {
     let file_name = "tmp_initial_challenge";
     {
         if Path::new(file_name).exists() {
@@ -165,7 +165,7 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
         file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
 
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&file).expect("unable to create a memory map") };
-        BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
         writable_map.flush().expect("unable to flush memmap to disk");
     }
 
@@ -175,7 +175,7 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
         .expect("unable open transcript file in this directory");
 
     let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
-    let initial_accumulator = BachedAccumulator::deserialize(
+    let initial_accumulator = BatchedAccumulator::deserialize(
         &readable_map,
         CheckForCorrectness::Yes,
         UseCompression::No,
@@ -245,7 +245,7 @@ fn main() {
         // uncompressed form so that we can more efficiently
         // deserialize it.
 
-        let mut response_file_accumulator = BachedAccumulator::deserialize(
+        let mut response_file_accumulator = BatchedAccumulator::deserialize(
             &response_readable_map,
             CheckForCorrectness::Yes,
             UseCompression::Yes,

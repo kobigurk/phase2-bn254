@@ -43,7 +43,7 @@ fn main() {
                             .expect("unable open response file in this directory");
     let response_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
-    let current_accumulator = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
+    let current_accumulator = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
         &response_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::Yes,

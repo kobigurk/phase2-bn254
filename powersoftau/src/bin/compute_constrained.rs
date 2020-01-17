@@ -7,7 +7,7 @@ extern crate byteorder;
 extern crate exitcode;
 
 use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::batched_accumulator::{BachedAccumulator};
+use powersoftau::batched_accumulator::{BatchedAccumulator};
 use powersoftau::keypair::{keypair};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};
 
@@ -120,7 +120,7 @@ fn main() {
     println!("Calculating previous contribution hash...");
 
     assert!(UseCompression::No == INPUT_IS_COMPRESSED, "Hashing the compressed file in not yet defined");
-    let current_accumulator_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
+    let current_accumulator_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
 
     {
         println!("`challenge` file contains decompressed points and has a hash:");
@@ -165,7 +165,7 @@ fn main() {
     println!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
-    BachedAccumulator::<Bn256, Bn256CeremonyParameters>::transform(
+    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::transform(
         &readable_map, 
         &mut writable_map, 
         INPUT_IS_COMPRESSED, 
@@ -183,7 +183,7 @@ fn main() {
 
     // Get the hash of the contribution, so the user can compare later
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
-    let contribution_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let contribution_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
 
     print!("Done!\n\n\
               Your contribution has been written to response file\n\n\

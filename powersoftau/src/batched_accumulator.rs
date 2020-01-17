@@ -44,7 +44,7 @@ pub enum AccumulatorState{
 ///
 /// * (τ, τ<sup>2</sup>, ..., τ<sup>2<sup>22</sup> - 2</sup>, α, ατ, ατ<sup>2</sup>, ..., ατ<sup>2<sup>21</sup> - 1</sup>, β, βτ, βτ<sup>2</sup>, ..., βτ<sup>2<sup>21</sup> - 1</sup>)<sub>1</sub>
 /// * (β, τ, τ<sup>2</sup>, ..., τ<sup>2<sup>21</sup> - 1</sup>)<sub>2</sub>
-pub struct BachedAccumulator<E: Engine, P: PowersOfTauParameters> {
+pub struct BatchedAccumulator<E: Engine, P: PowersOfTauParameters> {
     /// tau^0, tau^1, tau^2, ..., tau^{TAU_POWERS_G1_LENGTH - 1}
     pub tau_powers_g1: Vec<E::G1Affine>,
     /// tau^0, tau^1, tau^2, ..., tau^{TAU_POWERS_LENGTH - 1}
@@ -61,7 +61,7 @@ pub struct BachedAccumulator<E: Engine, P: PowersOfTauParameters> {
     marker: std::marker::PhantomData<P>,
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     /// Calcualte the contibution hash from the resulting file. Original powers of tau implementaiton
     /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
     /// implementation now writes without a particular order, so plain recalculation at the end
@@ -78,7 +78,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
     }
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     pub fn empty() -> Self {
         Self {
             tau_powers_g1: vec![],
@@ -92,7 +92,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
     }
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     fn g1_size(compression: UseCompression) -> usize {
         match compression {
             UseCompression::Yes => {
@@ -189,7 +189,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 }
 
 /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
-pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &BachedAccumulator<E, P>, after: &BachedAccumulator<E, P>, key: &PublicKey<E>, digest: &[u8]) -> bool
+pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &BatchedAccumulator<E, P>, after: &BatchedAccumulator<E, P>, key: &PublicKey<E>, digest: &[u8]) -> bool
 {
     assert_eq!(digest.len(), 64);
 
@@ -253,7 +253,7 @@ pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &BachedAccu
     true
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
     pub fn verify_transformation(
         input_map: &Mmap,
@@ -449,7 +449,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
         input_map: &Mmap,
         check_input_for_correctness: CheckForCorrectness,
         compression: UseCompression,
-    ) -> io::Result<BachedAccumulator<E, P>>
+    ) -> io::Result<BatchedAccumulator<E, P>>
     {
         use itertools::MinMaxResult::{MinMax};
 
@@ -494,7 +494,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
             }
         }
 
-        Ok(BachedAccumulator {
+        Ok(BatchedAccumulator {
             tau_powers_g1: tau_powers_g1,
             tau_powers_g2: tau_powers_g2,
             alpha_tau_powers_g1: alpha_tau_powers_g1,
@@ -515,7 +515,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
         for chunk in &(0..P::TAU_POWERS_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
-                let mut tmp_acc = BachedAccumulator::<E,P> {
+                let mut tmp_acc = BatchedAccumulator::<E,P> {
                     tau_powers_g1: (&self.tau_powers_g1[start..end+1]).to_vec(),
                     tau_powers_g2: (&self.tau_powers_g2[start..end+1]).to_vec(),
                     alpha_tau_powers_g1: (&self.alpha_tau_powers_g1[start..end+1]).to_vec(),
@@ -532,7 +532,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
         for chunk in &(P::TAU_POWERS_LENGTH..P::TAU_POWERS_G1_LENGTH).into_iter().chunks(P::EMPIRICAL_BATCH_SIZE) {
             if let MinMax(start, end) = chunk.minmax() {
-                let mut tmp_acc = BachedAccumulator::<E,P> {
+                let mut tmp_acc = BatchedAccumulator::<E,P> {
                     tau_powers_g1: (&self.tau_powers_g1[start..end+1]).to_vec(),
                     tau_powers_g2: vec![],
                     alpha_tau_powers_g1: vec![],
@@ -552,7 +552,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
         pub fn read_chunk (
         &mut self,
         from: usize,
@@ -721,7 +721,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
     }
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     fn write_all(
         &mut self,
         chunk_start: usize,
@@ -826,7 +826,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     /// Transforms the accumulator with a private key.
     /// Due to large amount of data in a previous accumulator even in the compressed form
     /// this function can now work on compressed input. Output can be made in any form
@@ -970,7 +970,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
     }
 }
 
-impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
+impl<E:Engine, P: PowersOfTauParameters> BatchedAccumulator<E, P> {
     /// Transforms the accumulator with a private key.
     pub fn generate_initial(
         output_map: &mut MmapMut,

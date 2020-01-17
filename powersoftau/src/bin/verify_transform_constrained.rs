@@ -6,7 +6,7 @@ extern crate blake2;
 extern crate byteorder;
 
 use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::batched_accumulator::{BachedAccumulator};
+use powersoftau::batched_accumulator::{BatchedAccumulator};
 use powersoftau::keypair::{PublicKey};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};
 
@@ -84,7 +84,7 @@ fn main() {
 
     // Check that contribution is correct
 
-    let current_accumulator_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&challenge_readable_map);
+    let current_accumulator_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&challenge_readable_map);
 
     println!("Hash of the `challenge` file for verification:");
     for line in current_accumulator_hash.as_slice().chunks(16) {
@@ -121,7 +121,7 @@ fn main() {
         }
     }
 
-    let response_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
+    let response_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&response_readable_map);
 
     println!("Hash of the response file for verification:");
     for line in response_hash.as_slice().chunks(16) {
@@ -144,7 +144,7 @@ fn main() {
 
     println!("Verifying a contribution to contain proper powers and correspond to the public key...");
 
-    let valid = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::verify_transformation(
+    let valid = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
         &public_key, 
@@ -188,7 +188,7 @@ fn main() {
             writable_map.flush().expect("unable to write hash to new challenge file");
         }
 
-        BachedAccumulator::<Bn256, Bn256CeremonyParameters>::decompress(
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::decompress(
             &response_readable_map,
             &mut writable_map,
             CheckForCorrectness::No).expect("must decompress a response for a new challenge");
@@ -197,7 +197,7 @@ fn main() {
 
         let new_challenge_readable_map = writable_map.make_read_only().expect("must make a map readonly");
 
-        let recompressed_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&new_challenge_readable_map);
+        let recompressed_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&new_challenge_readable_map);
 
         println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
 

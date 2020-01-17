@@ -3,7 +3,7 @@ extern crate bellman_ce;
 extern crate memmap;
 
 use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::batched_accumulator::{BachedAccumulator};
+use powersoftau::batched_accumulator::{BatchedAccumulator};
 use powersoftau::parameters::{UseCompression};
 use powersoftau::utils::{blank_hash};
 
@@ -64,12 +64,12 @@ fn main() {
         println!();
     }
 
-    BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE).expect("generation of initial accumulator is successful");
+    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE).expect("generation of initial accumulator is successful");
     writable_map.flush().expect("unable to flush memmap to disk");
 
     // Get the hash of the contribution, so the user can compare later
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
-    let contribution_hash = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let contribution_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
 
     println!("Empty contribution is formed with a hash:");
 

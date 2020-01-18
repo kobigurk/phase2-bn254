@@ -21,10 +21,6 @@ fn main() {
         reference_json[key] = value.clone();
     }
 
-    if reference_json.contains_key("vk_alfabeta_12") {
-        reference_json.remove("vk_alfabeta_12").unwrap();
-    }
-
     fs::write(out_file, serde_json::to_string(&reference_json).unwrap().as_bytes()).unwrap();
     println!("Done");
 }

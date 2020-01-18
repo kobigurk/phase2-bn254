@@ -30,7 +30,6 @@ npx snarkjs setup --protocol groth
 # patch dummy keys with actual keys params
 cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json
 cargo run --release --bin copy_json verification_key.json vk.json transformed_vk.json
-node ./tools/patch_vk/patch_vk.js
 
 # generate solidity verifier
 cargo run --release --bin generate_verifier circom4.params verifier.sol
@@ -38,4 +37,4 @@ cargo run --release --bin generate_verifier circom4.params verifier.sol
 # try to generate and verify proof
 snarkjs calculatewitness
 cargo run --release --bin prove circuit.json witness.json circom4.params proof.json
-snarkjs verify --vk patched_transformed_vk.json --proof proof.json
+snarkjs verify --vk transformed_vk.json --proof proof.json

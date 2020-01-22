@@ -34,14 +34,15 @@ struct ProofJson {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: \n<circuit.json> <witness.json> <params> <proof.json>");
+    if args.len() != 6 {
+        println!("Usage: \n<circuit.json> <witness.json> <params> <proof.json> <public.json>");
         std::process::exit(exitcode::USAGE);
     }
     let circuit_filename = &args[1];
     let witness_filename = &args[2];
     let params_filename = &args[3];
     let proof_filename = &args[4];
+    let public_filename = &args[5];
 
     let should_filter_points_at_infinity = false;
     let rng = &mut rand::XorShiftRng::new_unseeded(); // TODO: change this unsafe unseeded random (!)
@@ -75,41 +76,32 @@ fn main() {
     let repr_to_big = |r| {
         BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
     };
+    let repr_to_big2 = |r| {
+        BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
+    };
     let p1_to_vec = |p : &<Bn256 as Engine>::G1Affine| {
-        let mut v = vec![];
-        //println!("test: {}", p.get_x().into_repr());
-        let x = repr_to_big(p.get_x().into_repr());
-        v.push(x);
-        let y = repr_to_big(p.get_y().into_repr());
-        v.push(y);
-        if p.is_zero() {
-            v.push("0".to_string());
-        } else {
-            v.push("1".to_string());
-        }
-        v
+        vec![
+            repr_to_big(p.get_x().into_repr()),
+            repr_to_big(p.get_y().into_repr()),
+            if p.is_zero() { "0".to_string() } else { "1".to_string() }
+        ]
     };
     let p2_to_vec = |p : &<Bn256 as Engine>::G2Affine| {
-        let mut v = vec![];
-        let x = p.get_x();
-        let mut x_v = vec![];
-        x_v.push(repr_to_big(x.c0.into_repr()));
-        x_v.push(repr_to_big(x.c1.into_repr()));
-        v.push(x_v);
-
-        let y = p.get_y();
-        let mut y_v = vec![];
-        y_v.push(repr_to_big(y.c0.into_repr()));
-        y_v.push(repr_to_big(y.c1.into_repr()));
-        v.push(y_v);
-
-        if p.is_zero() {
-            v.push(["0".to_string(), "0".to_string()].to_vec());
-        } else {
-            v.push(["1".to_string(), "0".to_string()].to_vec());
-        }
-
-        v
+        vec![
+            vec![
+                repr_to_big(p.get_x().c0.into_repr()),
+                repr_to_big(p.get_x().c1.into_repr()),
+            ],
+            vec![
+                repr_to_big(p.get_y().c0.into_repr()),
+                repr_to_big(p.get_y().c1.into_repr()),
+            ],
+            if p.is_zero() {
+                vec!["0".to_string(), "0".to_string()]
+            } else {
+                vec!["1".to_string(), "0".to_string()]
+            }
+        ]
     };
 
     let proof = ProofJson {
@@ -121,6 +113,13 @@ fn main() {
 
     let proof_json = serde_json::to_string(&proof).unwrap();
     fs::write(proof_filename, proof_json.as_bytes()).unwrap();
+
+    let mut public_inputs = vec![];
+    for x in input[1..].iter() {
+        public_inputs.push(repr_to_big2(x.into_repr()));
+    }
+    let public_json = serde_json::to_string(&public_inputs).unwrap();
+    fs::write(public_filename, public_json.as_bytes()).unwrap();
 
     println!("Done!")
 }

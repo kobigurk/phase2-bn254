@@ -1,8 +1,11 @@
 #!/bin/sh
 
-rm -f pk.json vk.json transformed_vk.json transformed_pk.* proof.json
-
 set -e
+
+if [ ! -f ../powersoftau/phase1radix2m0 ]; then
+    echo "Please run powers of tau test first to generate radix files"
+    exit 1
+fi
 
 # move results of powers of tau here
 cp ../powersoftau/phase1radix* .
@@ -26,6 +29,7 @@ cargo run --release --bin verify_contribution circuit.json circom3.params circom
 # generate resulting keys
 cargo run --release --bin export_keys circom4.params vk.json pk.json
 # create dummy keys in circom format
+echo "generating dummy key files..."
 npx snarkjs setup --protocol groth
 # patch dummy keys with actual keys params
 cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json
@@ -35,6 +39,6 @@ cargo run --release --bin copy_json verification_key.json vk.json transformed_vk
 cargo run --release --bin generate_verifier circom4.params verifier.sol
 
 # try to generate and verify proof
-snarkjs calculatewitness
-cargo run --release --bin prove circuit.json witness.json circom4.params proof.json
-snarkjs verify --vk transformed_vk.json --proof proof.json
+npx snarkjs calculatewitness
+cargo run --release --bin prove circuit.json witness.json circom4.params proof.json public.json
+npx snarkjs verify --vk transformed_vk.json --proof proof.json

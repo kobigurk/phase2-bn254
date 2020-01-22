@@ -7,5 +7,4 @@ phase1radix2m*
 /*.json
 /*.bin
 /*.params
-/*.circom
 /verifier.sol

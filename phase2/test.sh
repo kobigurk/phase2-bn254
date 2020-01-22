@@ -29,7 +29,7 @@ cargo run --release --bin verify_contribution circuit.json circom3.params circom
 # generate resulting keys
 cargo run --release --bin export_keys circom4.params vk.json pk.json
 # create dummy keys in circom format
-echo "generating dummy key files..."
+echo "Generating dummy key files..."
 npx snarkjs setup --protocol groth
 # patch dummy keys with actual keys params
 cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json

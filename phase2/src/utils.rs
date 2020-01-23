@@ -6,9 +6,9 @@ use byteorder::{
     BigEndian,
     ReadBytesExt,
 };
-
+use num_bigint::BigUint;
+use num_traits::Num;
 use std::sync::Arc;
-
 use bellman_ce::pairing::{
     ff::{
         PrimeField,
@@ -20,7 +20,6 @@ use bellman_ce::pairing::{
         G2,
     }
 };
-
 use rand::{
     Rng,
     Rand,
@@ -114,4 +113,8 @@ pub fn hash_to_g2(mut digest: &[u8]) -> G2
     }
 
     ChaChaRng::from_seed(&seed).gen()
+}
+
+pub fn repr_to_big<T: std::fmt::Display>(r: T) -> String {
+    BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
 }

@@ -28,4 +28,5 @@ itertools = "0.8.0"
 bellman_ce = { path = "../bellman" }
 
 [features]
+smalltest = []
 

@@ -8,6 +8,8 @@ extern crate byteorder;
 extern crate blake2_rfc;
 extern crate num_cpus;
 extern crate crossbeam;
+extern crate num_bigint;
+extern crate num_traits;
 extern crate cfg_if;
 use cfg_if::cfg_if;
 

@@ -1,17 +1,16 @@
 extern crate phase2;
 extern crate bellman_ce;
-extern crate num_bigint;
-extern crate num_traits;
 extern crate exitcode;
 extern crate serde;
+extern crate num_bigint;
+extern crate num_traits;
 
 use std::fs;
 use std::fs::OpenOptions;
-use num_bigint::BigUint;
-use num_traits::Num;
 use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
 use phase2::circom_circuit::CircomCircuit;
+use phase2::utils::repr_to_big;
 use bellman_ce::groth16::{prepare_verifying_key, create_random_proof, verify_proof};
 use bellman_ce::pairing::{
     Engine,
@@ -31,6 +30,7 @@ struct ProofJson {
     pub pi_b: Vec<Vec<String>>,
     pub pi_c: Vec<String>,
 }
+
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -73,12 +73,6 @@ fn main() {
     ).unwrap();
     assert!(result, "Proof is correct");
 
-    let repr_to_big = |r| {
-        BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
-    };
-    let repr_to_big2 = |r| {
-        BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
-    };
     let p1_to_vec = |p : &<Bn256 as Engine>::G1Affine| {
         vec![
             repr_to_big(p.get_x().into_repr()),
@@ -116,7 +110,7 @@ fn main() {
 
     let mut public_inputs = vec![];
     for x in input[1..].iter() {
-        public_inputs.push(repr_to_big2(x.into_repr()));
+        public_inputs.push(repr_to_big(x.into_repr()));
     }
     let public_json = serde_json::to_string(&public_inputs).unwrap();
     fs::write(public_filename, public_json.as_bytes()).unwrap();

@@ -7,6 +7,7 @@ extern crate byteorder;
 extern crate crypto;
 
 use powersoftau::bn256::{Bn256CeremonyParameters};
+
 use powersoftau::batched_accumulator::{BatchedAccumulator};
 use powersoftau::keypair::{keypair};
 use powersoftau::parameters::{UseCompression, CheckForCorrectness};

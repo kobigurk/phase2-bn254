@@ -1,18 +1,17 @@
 extern crate bellman_ce;
 extern crate rand;
 extern crate phase2;
-extern crate num_bigint;
-extern crate num_traits;
 extern crate exitcode;
 extern crate serde;
 extern crate serde_json;
+extern crate num_bigint;
+extern crate num_traits;
 
 use std::fs;
 use std::fs::OpenOptions;
-use num_bigint::BigUint;
-use num_traits::Num;
 use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
+use phase2::utils::repr_to_big;
 use bellman_ce::pairing::{
     Engine,
     CurveAffine,
@@ -84,9 +83,6 @@ fn main() {
         vk_beta_2: vec![],
         vk_delta_2: vec![],
         h: vec![],
-    };
-    let repr_to_big = |r| {
-        BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
     };
 
     let p1_to_vec = |p : &<Bn256 as Engine>::G1Affine| {

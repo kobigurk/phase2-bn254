@@ -24,15 +24,17 @@ use crate::parameters::*;
 use crate::keypair::*;
 use crate::utils::*;
 
-#[cfg(not(feature = "smalltest"))]
 #[derive(Clone)]
 pub struct Bn256CeremonyParameters {
 
 }
 
-#[cfg(not(feature = "smalltest"))]
 impl PowersOfTauParameters for Bn256CeremonyParameters {
-    const REQUIRED_POWER: usize = 28; // generate to have roughly 64 million constraints
+    #[cfg(not(feature = "smalltest"))]
+    const REQUIRED_POWER: usize = 28;
+
+    #[cfg(feature = "smalltest")]
+    const REQUIRED_POWER: usize = 10;
 
     // This ceremony is based on the BN256 elliptic curve construction.
     const G1_UNCOMPRESSED_BYTE_SIZE: usize = 64;
@@ -40,26 +42,6 @@ impl PowersOfTauParameters for Bn256CeremonyParameters {
     const G1_COMPRESSED_BYTE_SIZE: usize = 32;
     const G2_COMPRESSED_BYTE_SIZE: usize = 64;
 }
-
-#[cfg(feature = "smalltest")]
-#[derive(Clone)]
-pub struct Bn256CeremonyParameters {
-
-}
-
-#[cfg(feature = "smalltest")]
-impl PowersOfTauParameters for Bn256CeremonyParameters {
-    const REQUIRED_POWER: usize = 12;
-    const EMPIRICAL_BATCH_SIZE: usize = 1 << 10;
-
-    // This ceremony is based on the BN256 elliptic curve construction.
-    const G1_UNCOMPRESSED_BYTE_SIZE: usize = 64;
-    const G2_UNCOMPRESSED_BYTE_SIZE: usize = 128;
-    const G1_COMPRESSED_BYTE_SIZE: usize = 32;
-    const G2_COMPRESSED_BYTE_SIZE: usize = 64;
-}
-
-
 
 #[test]
 fn test_pubkey_serialization() {

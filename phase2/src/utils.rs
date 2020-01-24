@@ -16,8 +16,13 @@ use bellman_ce::pairing::{
     CurveAffine,
     CurveProjective,
     Wnaf,
+    Engine,
     bn256::{
+        Bn256,
         G2,
+        G1Affine,
+        G2Affine,
+        Fq12,
     }
 };
 use rand::{
@@ -117,4 +122,63 @@ pub fn hash_to_g2(mut digest: &[u8]) -> G2
 
 pub fn repr_to_big<T: std::fmt::Display>(r: T) -> String {
     BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
+}
+
+pub fn p1_to_vec(p: &G1Affine) -> Vec<String> {
+    return vec![
+        repr_to_big(p.get_x().into_repr()),
+        repr_to_big(p.get_y().into_repr()),
+        if p.is_zero() { "0".to_string() } else { "1".to_string() }
+    ]
+}
+
+pub fn p2_to_vec(p: &G2Affine) -> Vec<Vec<String>> {
+    return vec![
+        vec![
+            repr_to_big(p.get_x().c0.into_repr()),
+            repr_to_big(p.get_x().c1.into_repr()),
+        ],
+        vec![
+            repr_to_big(p.get_y().c0.into_repr()),
+            repr_to_big(p.get_y().c1.into_repr()),
+        ],
+        if p.is_zero() {
+            vec!["0".to_string(), "0".to_string()]
+        } else {
+            vec!["1".to_string(), "0".to_string()]
+        }
+    ]
+}
+
+pub fn pairing_to_vec(p: &Fq12) -> Vec<Vec<Vec<String>>> {
+    return vec![
+        vec![
+            vec![
+                repr_to_big(p.c0.c0.c0.into_repr()),
+                repr_to_big(p.c0.c0.c1.into_repr()),
+            ],
+            vec![
+                repr_to_big(p.c0.c1.c0.into_repr()),
+                repr_to_big(p.c0.c1.c1.into_repr()),
+            ],
+            vec![
+                repr_to_big(p.c0.c2.c0.into_repr()),
+                repr_to_big(p.c0.c2.c1.into_repr()),
+            ]
+        ],
+        vec![
+            vec![
+                repr_to_big(p.c1.c0.c0.into_repr()),
+                repr_to_big(p.c1.c0.c1.into_repr()),
+            ],
+            vec![
+                repr_to_big(p.c1.c1.c0.into_repr()),
+                repr_to_big(p.c1.c1.c1.into_repr()),
+            ],
+            vec![
+                repr_to_big(p.c1.c2.c0.into_repr()),
+                repr_to_big(p.c1.c2.c1.into_repr()),
+            ]
+        ],
+    ]
 }

@@ -11,11 +11,13 @@ use std::fs;
 use std::fs::OpenOptions;
 use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
-use phase2::utils::repr_to_big;
+use phase2::utils::{
+    p1_to_vec,
+    p2_to_vec,
+    pairing_to_vec,
+};
 use bellman_ce::pairing::{
     Engine,
-    CurveAffine,
-    ff::PrimeField,
     bn256::{
         Bn256,
     }
@@ -85,62 +87,6 @@ fn main() {
         h: vec![],
     };
 
-    let p1_to_vec = |p : &<Bn256 as Engine>::G1Affine| {
-        vec![
-            repr_to_big(p.get_x().into_repr()),
-            repr_to_big(p.get_y().into_repr()),
-            if p.is_zero() { "0".to_string() } else { "1".to_string() }
-        ]
-    };
-    let p2_to_vec = |p : &<Bn256 as Engine>::G2Affine| {
-        vec![
-            vec![
-                repr_to_big(p.get_x().c0.into_repr()),
-                repr_to_big(p.get_x().c1.into_repr()),
-            ],
-            vec![
-                repr_to_big(p.get_y().c0.into_repr()),
-                repr_to_big(p.get_y().c1.into_repr()),
-            ],
-            if p.is_zero() {
-                vec!["0".to_string(), "0".to_string()]
-            } else {
-                vec!["1".to_string(), "0".to_string()]
-            }
-        ]
-    };
-    let pairing_to_vec = |p : bellman_ce::pairing::bn256::Fq12| {
-        vec![
-            vec![
-                vec![
-                    repr_to_big(p.c0.c0.c0.into_repr()),
-                    repr_to_big(p.c0.c0.c1.into_repr()),
-                ],
-                vec![
-                    repr_to_big(p.c0.c1.c0.into_repr()),
-                    repr_to_big(p.c0.c1.c1.into_repr()),
-                ],
-                vec![
-                    repr_to_big(p.c0.c2.c0.into_repr()),
-                    repr_to_big(p.c0.c2.c1.into_repr()),
-                ]
-            ],
-            vec![
-                vec![
-                    repr_to_big(p.c1.c0.c0.into_repr()),
-                    repr_to_big(p.c1.c0.c1.into_repr()),
-                ],
-                vec![
-                    repr_to_big(p.c1.c1.c0.into_repr()),
-                    repr_to_big(p.c1.c1.c1.into_repr()),
-                ],
-                vec![
-                    repr_to_big(p.c1.c2.c0.into_repr()),
-                    repr_to_big(p.c1.c2.c1.into_repr()),
-                ]
-            ],
-        ]
-    };
     let a = params.a.clone();
     for e in a.iter() {
         proving_key.a.push(p1_to_vec(e));
@@ -200,7 +146,7 @@ fn main() {
     let vk_gamma_2 = params.vk.gamma_g2.clone();
     verification_key.vk_gamma_2 = p2_to_vec(&vk_gamma_2);
     verification_key.vk_delta_2 = p2_to_vec(&vk_delta_2);
-    verification_key.vk_alfabeta_12 = pairing_to_vec(Bn256::pairing(vk_alfa_1, vk_beta_2));
+    verification_key.vk_alfabeta_12 = pairing_to_vec(&Bn256::pairing(vk_alfa_1, vk_beta_2));
 
     let pk_json = serde_json::to_string(&proving_key).unwrap();
     fs::write(pk_filename, pk_json.as_bytes()).unwrap();

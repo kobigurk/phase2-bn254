@@ -10,18 +10,13 @@ use std::fs::OpenOptions;
 use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
 use phase2::circom_circuit::CircomCircuit;
-use phase2::utils::repr_to_big;
-use bellman_ce::groth16::{prepare_verifying_key, create_random_proof, verify_proof};
-use bellman_ce::pairing::{
-    Engine,
-    CurveAffine,
-    ff::{
-        PrimeField,
-    },
-    bn256::{
-        Bn256,
-    },
+use phase2::utils::{
+    repr_to_big,
+    p1_to_vec,
+    p2_to_vec,
 };
+use bellman_ce::groth16::{prepare_verifying_key, create_random_proof, verify_proof};
+use bellman_ce::pairing::ff::PrimeField;
 
 #[derive(Serialize, Deserialize)]
 struct ProofJson {
@@ -72,31 +67,6 @@ fn main() {
         &input[1..]
     ).unwrap();
     assert!(result, "Proof is correct");
-
-    let p1_to_vec = |p : &<Bn256 as Engine>::G1Affine| {
-        vec![
-            repr_to_big(p.get_x().into_repr()),
-            repr_to_big(p.get_y().into_repr()),
-            if p.is_zero() { "0".to_string() } else { "1".to_string() }
-        ]
-    };
-    let p2_to_vec = |p : &<Bn256 as Engine>::G2Affine| {
-        vec![
-            vec![
-                repr_to_big(p.get_x().c0.into_repr()),
-                repr_to_big(p.get_x().c1.into_repr()),
-            ],
-            vec![
-                repr_to_big(p.get_y().c0.into_repr()),
-                repr_to_big(p.get_y().c1.into_repr()),
-            ],
-            if p.is_zero() {
-                vec!["0".to_string(), "0".to_string()]
-            } else {
-                vec!["1".to_string(), "0".to_string()]
-            }
-        ]
-    };
 
     let proof = ProofJson {
         protocol: "groth".to_string(),

@@ -4,7 +4,12 @@ extern crate bellman_ce;
 
 use std::str;
 use std::fs;
+use std::fs::OpenOptions;
 use std::collections::BTreeMap;
+use std::io::{
+    Read,
+    Write,
+};
 
 use bellman_ce::pairing::{
     Engine,
@@ -50,14 +55,30 @@ pub struct CircomCircuit<E: Engine> {
 
 impl<'a, E: Engine> CircomCircuit<E> {
     pub fn load_witness_json_file(&mut self, filename: &str) {
-        let witness: Vec<String> = serde_json::from_str(&fs::read_to_string(filename).unwrap()).unwrap();
+        let reader = OpenOptions::new()
+            .read(true)
+            .open(filename)
+            .expect("unable to open.");
+        self.load_witness_json(reader);
+    }
+
+    pub fn load_witness_json<R: Read>(&mut self, reader: R) {
+        let witness: Vec<String> = serde_json::from_reader(reader).unwrap();
         let witness = witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
         self.inputs = witness[..self.num_inputs].to_vec();
         self.aux = witness[self.num_inputs..].to_vec();
     }
 
     pub fn from_json_file(filename: &str) -> CircomCircuit::<E> {
-        let circuit_json: CircuitJson = serde_json::from_str(&fs::read_to_string(filename).unwrap()).unwrap();
+        let reader = OpenOptions::new()
+            .read(true)
+            .open(filename)
+            .expect("unable to open.");
+        return CircomCircuit::from_json(reader);
+    }
+
+    pub fn from_json<R: Read>(reader: R) -> CircomCircuit::<E> {
+        let circuit_json: CircuitJson = serde_json::from_reader(reader).unwrap();
 
         let num_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
         let num_aux = circuit_json.num_variables - num_inputs;

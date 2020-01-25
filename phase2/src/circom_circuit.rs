@@ -6,6 +6,7 @@ use std::str;
 use std::fs;
 use std::fs::OpenOptions;
 use std::collections::BTreeMap;
+use itertools::Itertools;
 use std::io::{
     Read,
     Write,
@@ -83,18 +84,13 @@ impl<'a, E: Engine> CircomCircuit<E> {
         let num_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
         let num_aux = circuit_json.num_variables - num_inputs;
 
-        fn convert_constraint<EE: Engine>(lc: &BTreeMap<String, String>) -> Vec<(usize, EE::Fr)> {
-            let mut coeffs = vec![];
-            for (var_index_str, coefficient_str) in lc {
-                coeffs.push((var_index_str.parse().unwrap(), EE::Fr::from_str(coefficient_str).unwrap()));
-            }
-            return coeffs;
-        }
+        let convert_constraint = |lc: &BTreeMap<String, String>| {
+            lc.iter().map(|(index, coeff)| (index.parse().unwrap(), E::Fr::from_str(coeff).unwrap())).collect_vec()
+        };
 
-        let mut constraints = vec![];
-        for constraint in circuit_json.constraints.iter() {
-            constraints.push((convert_constraint::<E>(&constraint[0]), convert_constraint::<E>(&constraint[1]), convert_constraint::<E>(&constraint[2])));
-        }
+        let constraints = circuit_json.constraints.iter().map(
+            |c| (convert_constraint(&c[0]), convert_constraint(&c[1]), convert_constraint(&c[2]))
+        ).collect_vec();
 
         return CircomCircuit {
             num_inputs: num_inputs,
@@ -130,23 +126,22 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<E> {
             })?;
         }
 
-        fn make_lc<E: Engine>(lc_data: Vec<(usize, E::Fr)>, num_inputs: usize) -> LinearCombination<E> {
-            let mut lc = LinearCombination::<E>::zero();
-            for (index, coeff) in lc_data {
-                let var_index = if index < num_inputs {
-                    Index::Input(index)
-                } else {
-                    Index::Aux(index - num_inputs)
-                };
-                lc = lc + (coeff, Variable::new_unchecked(var_index))
-            }
-            return lc;
-        }
+        let make_index = |index|
+            if index < self.num_inputs {
+                Index::Input(index)
+            } else {
+                Index::Aux(index - self.num_inputs)
+            };
+        let make_lc = |lc_data: Vec<(usize, E::Fr)>|
+            lc_data.iter().fold(
+                LinearCombination::<E>::zero(),
+                |lc: LinearCombination<E>, (index, coeff)| lc + (*coeff, Variable::new_unchecked(make_index(*index)))
+            );
         for (i, constraint) in self.constraints.iter().enumerate() {
             cs.enforce(|| format!("constraint {}", i),
-                       |_| make_lc(constraint.0.clone(), self.num_inputs),
-                       |_| make_lc(constraint.1.clone(), self.num_inputs),
-                       |_| make_lc(constraint.2.clone(), self.num_inputs),
+                       |_| make_lc(constraint.0.clone()),
+                       |_| make_lc(constraint.1.clone()),
+                       |_| make_lc(constraint.2.clone()),
             );
         }
         Ok(())

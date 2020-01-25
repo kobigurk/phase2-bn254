@@ -12,6 +12,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use num_bigint::BigUint;
 use num_traits::Num;
+use phase2::utils::repr_to_big;
 use phase2::parameters::MPCParameters;
 use bellman_ce::pairing::{
     Engine,
@@ -43,9 +44,6 @@ fn main() {
     let params = MPCParameters::read(reader, should_filter_points_at_infinity, true).expect("unable to read params");
     let vk = &params.get_params().vk;
 
-    let repr_to_big = |r| {
-        BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
-    };
     let p1_to_str = |p: &<Bn256 as Engine>::G1Affine| {
         let x = repr_to_big(p.get_x().into_repr());
         let y = repr_to_big(p.get_y().into_repr());

@@ -6,9 +6,12 @@ extern crate serde;
 extern crate serde_json;
 extern crate num_bigint;
 extern crate num_traits;
+extern crate itertools;
 
 use std::fs;
 use std::fs::OpenOptions;
+use std::iter::repeat;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use phase2::parameters::MPCParameters;
 use phase2::utils::{
@@ -74,84 +77,31 @@ fn main() {
     let params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
     let params = params.get_params();
 
-    let mut proving_key = ProvingKeyJson {
-        a: vec![],
-        b1: vec![],
-        b2: vec![],
-        c: vec![],
-        vk_alfa_1: vec![],
-        vk_beta_1: vec![],
-        vk_delta_1: vec![],
-        vk_beta_2: vec![],
-        vk_delta_2: vec![],
-        h: vec![],
+    let proving_key = ProvingKeyJson {
+        a: params.a.iter().map(|e| p1_to_vec(e)).collect_vec(),
+        b1: params.b_g1.iter().map(|e| p1_to_vec(e)).collect_vec(),
+        b2: params.b_g2.iter().map(|e| p2_to_vec(e)).collect_vec(),
+        c: repeat(None).take(params.vk.ic.len()).chain(params.l.iter().map(|e| Some(p1_to_vec(e)))).collect_vec(),
+        vk_alfa_1: p1_to_vec(&params.vk.alpha_g1),
+        vk_beta_1: p1_to_vec(&params.vk.beta_g1),
+        vk_delta_1: p1_to_vec(&params.vk.delta_g1),
+        vk_beta_2: p2_to_vec(&params.vk.beta_g2),
+        vk_delta_2: p2_to_vec(&params.vk.delta_g2),
+        h: params.h.iter().map(|e| p1_to_vec(e)).collect_vec(),
     };
 
-    let a = params.a.clone();
-    for e in a.iter() {
-        proving_key.a.push(p1_to_vec(e));
-    }
-    let b1 = params.b_g1.clone();
-    for e in b1.iter() {
-        proving_key.b1.push(p1_to_vec(e));
-    }
-    let b2 = params.b_g2.clone();
-    for e in b2.iter() {
-        proving_key.b2.push(p2_to_vec(e));
-    }
-    let c = params.l.clone();
-    for _ in 0..params.vk.ic.len() {
-        proving_key.c.push(None);
-    }
-    for e in c.iter() {
-        proving_key.c.push(Some(p1_to_vec(e)));
-    }
-
-    let vk_alfa_1 = params.vk.alpha_g1.clone();
-    proving_key.vk_alfa_1 = p1_to_vec(&vk_alfa_1);
-
-    let vk_beta_1 = params.vk.beta_g1.clone();
-    proving_key.vk_beta_1 = p1_to_vec(&vk_beta_1);
-
-    let vk_delta_1 = params.vk.delta_g1.clone();
-    proving_key.vk_delta_1 = p1_to_vec(&vk_delta_1);
-
-    let vk_beta_2 = params.vk.beta_g2.clone();
-    proving_key.vk_beta_2 = p2_to_vec(&vk_beta_2);
-
-    let vk_delta_2 = params.vk.delta_g2.clone();
-    proving_key.vk_delta_2 = p2_to_vec(&vk_delta_2);
-
-    let h = params.h.clone();
-    for e in h.iter() {
-        proving_key.h.push(p1_to_vec(e));
-    }
-
-    let mut verification_key = VerifyingKeyJson {
-        ic: vec![],
-        vk_alfa_1: vec![],
-        vk_beta_2: vec![],
-        vk_gamma_2: vec![],
-        vk_delta_2: vec![],
-        vk_alfabeta_12: vec![],
+    let verification_key = VerifyingKeyJson {
+        ic: params.vk.ic.iter().map(|e| p1_to_vec(e)).collect_vec(),
+        vk_alfa_1: p1_to_vec(&params.vk.alpha_g1),
+        vk_beta_2: p2_to_vec(&params.vk.beta_g2),
+        vk_gamma_2: p2_to_vec(&params.vk.gamma_g2),
+        vk_delta_2: p2_to_vec(&params.vk.delta_g2),
+        vk_alfabeta_12: pairing_to_vec(&Bn256::pairing(params.vk.alpha_g1, params.vk.beta_g2)),
     };
-
-    let ic = params.vk.ic.clone();
-    for e in ic.iter() {
-        verification_key.ic.push(p1_to_vec(e));
-    }
-
-    verification_key.vk_alfa_1 = p1_to_vec(&vk_alfa_1);
-    verification_key.vk_beta_2 = p2_to_vec(&vk_beta_2);
-    let vk_gamma_2 = params.vk.gamma_g2.clone();
-    verification_key.vk_gamma_2 = p2_to_vec(&vk_gamma_2);
-    verification_key.vk_delta_2 = p2_to_vec(&vk_delta_2);
-    verification_key.vk_alfabeta_12 = pairing_to_vec(&Bn256::pairing(vk_alfa_1, vk_beta_2));
 
     let pk_json = serde_json::to_string(&proving_key).unwrap();
-    fs::write(pk_filename, pk_json.as_bytes()).unwrap();
-
     let vk_json = serde_json::to_string(&verification_key).unwrap();
+    fs::write(pk_filename, pk_json.as_bytes()).unwrap();
     fs::write(vk_filename, vk_json.as_bytes()).unwrap();
 
     println!("Created {} and {}.", pk_filename, vk_filename);

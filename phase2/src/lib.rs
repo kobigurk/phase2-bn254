@@ -11,6 +11,8 @@ extern crate crossbeam;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate cfg_if;
+extern crate itertools;
+
 use cfg_if::cfg_if;
 
 pub mod keypair;

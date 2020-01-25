@@ -4,10 +4,12 @@ extern crate exitcode;
 extern crate serde;
 extern crate num_bigint;
 extern crate num_traits;
+extern crate itertools;
 
 use std::fs;
 use std::fs::OpenOptions;
 use serde::{Deserialize, Serialize};
+use itertools::Itertools;
 use phase2::parameters::MPCParameters;
 use phase2::circom_circuit::CircomCircuit;
 use phase2::utils::{
@@ -78,10 +80,7 @@ fn main() {
     let proof_json = serde_json::to_string(&proof).unwrap();
     fs::write(proof_filename, proof_json.as_bytes()).unwrap();
 
-    let mut public_inputs = vec![];
-    for x in input[1..].iter() {
-        public_inputs.push(repr_to_big(x.into_repr()));
-    }
+    let public_inputs = input[1..].iter().map(|x| repr_to_big(x.into_repr())).collect_vec();
     let public_json = serde_json::to_string(&public_inputs).unwrap();
     fs::write(public_filename, public_json.as_bytes()).unwrap();
 

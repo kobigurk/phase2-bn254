@@ -140,6 +140,14 @@ pub fn blank_hash() -> GenericArray<u8, U64> {
     Blake2b::new().result()
 }
 
+pub fn reduced_hash(old_power: u8, new_power: u8) -> GenericArray<u8, U64> {
+    let mut hasher = Blake2b::new();
+    hasher.input(&[old_power, new_power]);
+    hasher.result()
+}
+
+
+
 /// Checks if pairs have the same ratio.
 /// Under the hood uses pairing to check
 /// x1/x2 = y1/y2 => x1*y2 = x2*y1

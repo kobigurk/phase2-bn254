@@ -7,7 +7,7 @@ extern crate bellman_ce;
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::*;
 use powersoftau::*;
 
@@ -29,14 +29,21 @@ fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
-    // Try to load `./response` from disk.
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: \n<response_filename>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let response_filename = &args[1];
+
+    // Try to load response file from disk.
     let reader = OpenOptions::new()
                             .read(true)
-                            .open("response")
-                            .expect("unable open `./response` in this directory");
+                            .open(response_filename)
+                            .expect("unable open response file in this directory");
     let response_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
-    let current_accumulator = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
+    let current_accumulator = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
         &response_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::Yes,

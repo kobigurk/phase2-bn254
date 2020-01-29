@@ -7,7 +7,7 @@ extern crate bellman_ce;
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::{Bn256CeremonyParameters};
 use powersoftau::batched_accumulator::*;
 use powersoftau::accumulator::HashWriter;
 use powersoftau::*;
@@ -36,7 +36,7 @@ fn log_2(x: u64) -> u32 {
 // given the current state of the accumulator and the last
 // response file hash.
 fn get_challenge_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    acc: &mut BatchedAccumulator::<Bn256, Bn256CeremonyParameters>,
     last_response_file_hash: &[u8; 64],
     is_initial: bool,
 ) -> [u8; 64]
@@ -61,10 +61,10 @@ fn get_challenge_file_hash(
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
 
         (&mut writable_map[0..]).write(&last_response_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        writable_map.flush().expect("unable to write blank hash to challenge file");
 
         if is_initial {
-            BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+            BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
         } else {
             acc.serialize(
                 &mut writable_map,
@@ -95,7 +95,7 @@ fn get_challenge_file_hash(
 // accumulator, the player's public key, and the challenge
 // file's hash.
 fn get_response_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+    acc: &mut BatchedAccumulator::<Bn256, Bn256CeremonyParameters>,
     pubkey: &PublicKey::<Bn256>,
     last_challenge_file_hash: &[u8; 64]
 ) -> [u8; 64]
@@ -119,7 +119,7 @@ fn get_response_file_hash(
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
 
         (&mut writable_map[0..]).write(&last_challenge_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        writable_map.flush().expect("unable to write blank hash to challenge file");
 
         acc.serialize(
             &mut writable_map,
@@ -147,7 +147,7 @@ fn get_response_file_hash(
     tmp
 }
 
-fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParameters> {
+fn new_accumulator_for_verify() -> BatchedAccumulator<Bn256, Bn256CeremonyParameters> {
     let file_name = "tmp_initial_challenge";
     {
         if Path::new(file_name).exists() {
@@ -155,25 +155,27 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
         }
 
         let file = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create_new(true)
-                                .open(file_name).expect("unable to create `./tmp_initial_challenge`");
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(file_name)
+            .expect("unable to create `./tmp_initial_challenge`");
 
         let expected_challenge_length = Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE;
         file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
 
         let mut writable_map = unsafe { MmapOptions::new().map_mut(&file).expect("unable to create a memory map") };
-        BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
         writable_map.flush().expect("unable to flush memmap to disk");
     }
 
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(file_name)
-                            .expect("unable open `./transcript` in this directory");
+        .read(true)
+        .open(file_name)
+        .expect("unable open transcript file in this directory");
+
     let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
-    let initial_accumulator = BachedAccumulator::deserialize(
+    let initial_accumulator = BatchedAccumulator::deserialize(
         &readable_map,
         CheckForCorrectness::Yes,
         UseCompression::No,
@@ -183,11 +185,19 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
 }
 
 fn main() {
-    // Try to load `./transcript` from disk.
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("Usage: \n<transcript_file>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let transcript_filename = &args[1];
+
+    // Try to load transcript file from disk.
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open("transcript")
-                            .expect("unable open `./transcript` in this directory");
+        .read(true)
+        .open(transcript_filename)
+        .expect("unable open transcript file in this directory");
+
     let transcript_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
     // Initialize the accumulator
@@ -235,7 +245,7 @@ fn main() {
         // uncompressed form so that we can more efficiently
         // deserialize it.
 
-        let mut response_file_accumulator = BachedAccumulator::deserialize(
+        let mut response_file_accumulator = BatchedAccumulator::deserialize(
             &response_readable_map,
             CheckForCorrectness::Yes,
             UseCompression::Yes,
@@ -264,7 +274,7 @@ fn main() {
             println!(" ... FAILED");
             panic!("INVALID RESPONSE FILE!");
         } else {
-            println!("");
+            println!();
         }
 
         current_accumulator = response_file_accumulator;
@@ -366,11 +376,11 @@ fn main() {
 
         // Create the parameter file
         let writer = OpenOptions::new()
-                            .read(false)
-                            .write(true)
-                            .create_new(true)
-                            .open(paramname)
-                            .expect("unable to create parameter file in this directory");
+            .read(false)
+            .write(true)
+            .create_new(true)
+            .open(paramname)
+            .expect("unable to create parameter file in this directory");
 
         let mut writer = BufWriter::new(writer);
 

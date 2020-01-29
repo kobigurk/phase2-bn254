@@ -8,20 +8,35 @@ homepage = "https://github.com/ebfull/phase2"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/ebfull/phase2"
 
+[lib]
+crate-type = ["cdylib", "lib"]
+
 [dependencies]
 rand = "0.4"
-bellman_ce = { path = "../bellman" }
 byteorder = "1"
 exitcode = "1.1.2"
-num_cpus = "1"
-crossbeam = "0.3"
 blake2-rfc = "0.2"
 blake2 = "0.6.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-memmap = "0.7"
 num-bigint = "0.2.3"
 num-traits = "0.2.8"
 itertools = "0.8.1"
-rust-crypto = "0.2"
 hex = "0.4.0"
+cfg-if = "0.1.10"
+bellman_ce = { path = "../bellman", default-features = false } # active features depend on build type
+
+# needed for native only but don't break wasm if present
+num_cpus = "1"
+crossbeam = "0.3"
+rust-crypto = { version = "0.2", optional = true }
+
+# needed for wasm only
+wasm-bindgen = { version = "0.2.58", optional = true }
+js-sys = { version = "0.3.35", optional = true }
+web-sys = { version = "0.3.35", features = ["console"], optional = true }
+console_error_panic_hook = { version = "0.1.6", optional = true }
+
+[features]
+default = ["bellman_ce/multicore", "rust-crypto"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook", "bellman_ce/wasm"]

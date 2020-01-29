@@ -70,9 +70,9 @@ pub fn keypair<R: Rng, E: Engine>(rng: &mut R, digest: &[u8]) -> (PublicKey<E>, 
 {
     assert_eq!(digest.len(), 64);
 
-    // tau is a conribution to the "powers of tau", in a set of points of the form "tau^i * G"
+    // tau is a contribution to the "powers of tau", in a set of points of the form "tau^i * G"
     let tau = E::Fr::rand(rng);
-    // alpha and beta are a set of conrtibuitons in a form "alpha * tau^i * G" and that are required
+    // alpha and beta are a set of contributions in a form "alpha * tau^i * G" and that are required
     // for construction of the polynomials
     let alpha = E::Fr::rand(rng);
     let beta = E::Fr::rand(rng);
@@ -99,7 +99,7 @@ pub fn keypair<R: Rng, E: Engine>(rng: &mut R, digest: &[u8]) -> (PublicKey<E>, 
         ((g1_s, g1_s_x), g2_s_x)
     };
 
-    // these "public keys" are requried for for next participants to check that points are in fact
+    // these "public keys" are required for for next participants to check that points are in fact
     // sequential powers
     let pk_tau = op(tau, 0);
     let pk_alpha = op(alpha, 1);

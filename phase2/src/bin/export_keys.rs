@@ -43,6 +43,7 @@ struct ProvingKeyJson {
     pub vk_delta_2: Vec<Vec<String>>,
     #[serde(rename = "hExps")]
     pub h: Vec<Vec<String>>,
+    // Todo: add json fields: nPublic, nVars, polsA, polsB, polsC, protocol: groth
 }
 
 #[derive(Serialize, Deserialize)]
@@ -54,6 +55,9 @@ struct VerifyingKeyJson {
     pub vk_gamma_2: Vec<Vec<String>>,
     pub vk_delta_2: Vec<Vec<String>>,
     pub vk_alfabeta_12: Vec<Vec<Vec<String>>>,
+    pub protocol: String,
+    #[serde(rename = "nPublic")]
+    pub inputs_count: usize,
 }
 
 fn main() {
@@ -97,6 +101,8 @@ fn main() {
         vk_gamma_2: p2_to_vec(&params.vk.gamma_g2),
         vk_delta_2: p2_to_vec(&params.vk.delta_g2),
         vk_alfabeta_12: pairing_to_vec(&Bn256::pairing(params.vk.alpha_g1, params.vk.beta_g2)),
+        inputs_count: params.vk.ic.len() - 1,
+        protocol: String::from("groth"),
     };
 
     let pk_json = serde_json::to_string(&proving_key).unwrap();

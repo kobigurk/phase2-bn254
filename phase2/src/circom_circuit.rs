@@ -3,7 +3,7 @@ extern crate rand;
 
 use std::str;
 use std::fs;
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, File};
 use std::io::{Read, Write};
 use std::collections::BTreeMap;
 use std::iter::repeat;
@@ -110,50 +110,6 @@ pub struct CircomCircuit<E: Engine> {
 }
 
 impl<'a, E: Engine> CircomCircuit<E> {
-    pub fn from_json_file(filename: &str) -> CircomCircuit::<E> {
-        let reader = OpenOptions::new()
-            .read(true)
-            .open(filename)
-            .expect("unable to open.");
-        return CircomCircuit::from_json(reader);
-    }
-
-    pub fn from_json<R: Read>(reader: R) -> CircomCircuit::<E> {
-        let circuit_json: CircuitJson = serde_json::from_reader(reader).unwrap();
-
-        let num_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
-        let num_aux = circuit_json.num_variables - num_inputs;
-
-        let convert_constraint = |lc: &BTreeMap<String, String>| {
-            lc.iter().map(|(index, coeff)| (index.parse().unwrap(), E::Fr::from_str(coeff).unwrap())).collect_vec()
-        };
-
-        let constraints = circuit_json.constraints.iter().map(
-            |c| (convert_constraint(&c[0]), convert_constraint(&c[1]), convert_constraint(&c[2]))
-        ).collect_vec();
-
-        return CircomCircuit {
-            num_inputs: num_inputs,
-            num_aux: num_aux,
-            num_constraints: circuit_json.num_variables,
-            witness: None,
-            constraints: constraints,
-        };
-    }
-
-    pub fn witness_from_json_file(filename: &str) -> Vec<E::Fr> {
-        let reader = OpenOptions::new()
-            .read(true)
-            .open(filename)
-            .expect("unable to open.");
-        return CircomCircuit::<E>::witness_from_json(reader);
-    }
-
-    pub fn witness_from_json<R: Read>(reader: R) -> Vec<E::Fr>{
-        let witness: Vec<String> = serde_json::from_reader(reader).unwrap();
-        return witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
-    }
-
     pub fn get_public_inputs(&self) -> Option<Vec<E::Fr>> {
         return match self.witness.clone() {
             None => None,
@@ -347,6 +303,50 @@ pub fn verification_key_json(params: &Parameters<Bn256>) -> Result<String, serde
 pub fn verification_key_json_file(params: &Parameters<Bn256>, filename: &str) -> std::io::Result<()> {
     let str = verification_key_json(params).unwrap(); // TODO: proper error handling
     return fs::write(filename, str.as_bytes());
+}
+
+pub fn witness_from_json_file<E: Engine>(filename: &str) -> Vec<E::Fr> {
+    let reader = OpenOptions::new()
+        .read(true)
+        .open(filename)
+        .expect("unable to open.");
+    return witness_from_json::<E, File>(reader);
+}
+
+pub fn witness_from_json<E: Engine, R: Read>(reader: R) -> Vec<E::Fr>{
+    let witness: Vec<String> = serde_json::from_reader(reader).unwrap();
+    return witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
+}
+
+pub fn circuit_from_json_file<E: Engine>(filename: &str) -> CircomCircuit::<E> {
+    let reader = OpenOptions::new()
+        .read(true)
+        .open(filename)
+        .expect("unable to open.");
+    return circuit_from_json(reader);
+}
+
+pub fn circuit_from_json<E: Engine, R: Read>(reader: R) -> CircomCircuit::<E> {
+    let circuit_json: CircuitJson = serde_json::from_reader(reader).unwrap();
+
+    let num_inputs = circuit_json.num_inputs + circuit_json.num_outputs + 1;
+    let num_aux = circuit_json.num_variables - num_inputs;
+
+    let convert_constraint = |lc: &BTreeMap<String, String>| {
+        lc.iter().map(|(index, coeff)| (index.parse().unwrap(), E::Fr::from_str(coeff).unwrap())).collect_vec()
+    };
+
+    let constraints = circuit_json.constraints.iter().map(
+        |c| (convert_constraint(&c[0]), convert_constraint(&c[1]), convert_constraint(&c[2]))
+    ).collect_vec();
+
+    return CircomCircuit {
+        num_inputs: num_inputs,
+        num_aux: num_aux,
+        num_constraints: circuit_json.num_variables,
+        witness: None,
+        constraints: constraints,
+    };
 }
 
 pub fn create_rng() -> Box<dyn Rng> {

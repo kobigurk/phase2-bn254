@@ -9,12 +9,13 @@ extern crate itertools;
 use std::fs;
 use bellman_ce::pairing::bn256::Bn256;
 use phase2::circom_circuit::{
-    CircomCircuit,
     load_params_file,
     prove,
     verify,
     create_rng,
-    proof_to_json_file
+    proof_to_json_file,
+    circuit_from_json_file,
+    witness_from_json_file
 };
 
 fn main() {
@@ -31,8 +32,8 @@ fn main() {
 
     let rng = create_rng();
     let params = load_params_file(params_filename);
-    let mut circuit = CircomCircuit::from_json_file(circuit_filename);
-    circuit.witness =  Some(CircomCircuit::<Bn256>::witness_from_json_file(witness_filename));
+    let mut circuit = circuit_from_json_file(circuit_filename);
+    circuit.witness =  Some(witness_from_json_file::<Bn256>(witness_filename));
 
     println!("Proving...");
     let proof = prove(circuit.clone(), &params, rng).unwrap();

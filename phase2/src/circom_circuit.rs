@@ -256,7 +256,7 @@ pub fn create_verifier_sol(params: &Parameters<Bn256>) -> String {
         let x_c1 = repr_to_big(x.c1.into_repr());
         let y_c0 = repr_to_big(y.c0.into_repr());
         let y_c1 = repr_to_big(y.c1.into_repr());
-        format!("[{}, {}], [{}, {}]", x_c0, x_c1, y_c0, y_c1)
+        format!("[{}, {}], [{}, {}]", x_c1, x_c0, y_c1, y_c0)
     };
 
     let template = template.replace("<%vk_alfa1%>", &*p1_to_str(&params.vk.alpha_g1));

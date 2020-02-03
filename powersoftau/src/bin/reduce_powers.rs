@@ -4,22 +4,17 @@ extern crate blake2;
 extern crate byteorder;
 extern crate bellman_ce;
 
-use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use bellman_ce::pairing::bn256::Bn256;
-use bellman_ce::pairing::bn256::{G1, G2};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use powersoftau::bn256::Bn256CeremonyParameters;
 use powersoftau::batched_accumulator::*;
-use powersoftau::parameters::{UseCompression};
-use powersoftau::utils::{reduced_hash};
+use powersoftau::parameters::UseCompression;
+use powersoftau::utils::reduced_hash;
 use powersoftau::*;
 
 use crate::parameters::*;
 
-use bellman_ce::multicore::Worker;
-use bellman_ce::domain::{EvaluationDomain, Point};
-
 use std::fs::OpenOptions;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 
 use memmap::*;
 
@@ -40,7 +35,7 @@ impl PowersOfTauParameters for Bn256ReducedCeremonyParameters {
 
 const fn num_bits<T>() -> usize { std::mem::size_of::<T>() * 8 }
 
-fn log_2(x: u64) -> u32 {
+pub fn log_2(x: u64) -> u32 {
     assert!(x > 0);
     num_bits::<u64>() as u32 - x.leading_zeros() - 1
 }
@@ -53,13 +48,13 @@ fn main() {
                             .expect("unable open `./challenge` in this directory");
     let challenge_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
 
-    let current_accumulator = BachedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
+    let current_accumulator = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
         &challenge_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::No,
     ).expect("unable to read compressed accumulator");
 
-    let mut reduced_accumulator = BachedAccumulator::<Bn256, Bn256ReducedCeremonyParameters>::empty();
+    let mut reduced_accumulator = BatchedAccumulator::<Bn256, Bn256ReducedCeremonyParameters>::empty();
     reduced_accumulator.tau_powers_g1 = current_accumulator.tau_powers_g1[..Bn256ReducedCeremonyParameters::TAU_POWERS_G1_LENGTH].to_vec();
     reduced_accumulator.tau_powers_g2 = current_accumulator.tau_powers_g2[..Bn256ReducedCeremonyParameters::TAU_POWERS_LENGTH].to_vec();
     reduced_accumulator.alpha_tau_powers_g1 = current_accumulator.alpha_tau_powers_g1[..Bn256ReducedCeremonyParameters::TAU_POWERS_LENGTH].to_vec();
@@ -95,11 +90,11 @@ fn main() {
         println!("");
     }
 
-    reduced_accumulator.serialize(&mut writable_map, UseCompression::No);
+    reduced_accumulator.serialize(&mut writable_map, UseCompression::No).unwrap();
 
     // Get the hash of the contribution, so the user can compare later
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
-    let contribution_hash = BachedAccumulator::<Bn256, Bn256ReducedCeremonyParameters>::calculate_hash(&output_readonly);
+    let contribution_hash = BatchedAccumulator::<Bn256, Bn256ReducedCeremonyParameters>::calculate_hash(&output_readonly);
 
     println!("Reduced contribution is formed with a hash:");
 

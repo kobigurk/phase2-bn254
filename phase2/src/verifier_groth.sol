@@ -17,7 +17,7 @@
 
 // 2019 OKIMS
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.6.0;
 
 library Pairing {
 
@@ -48,7 +48,7 @@ library Pairing {
     }
 
     /*
-     * @return The sum of two points of G1
+     * @return r the sum of two points of G1
      */
     function plus(
         G1Point memory p1,
@@ -64,7 +64,7 @@ library Pairing {
 
         // solium-disable-next-line security/no-inline-assembly
         assembly {
-            success := staticcall(sub(gas, 2000), 6, input, 0xc0, r, 0x60)
+            success := staticcall(sub(gas(), 2000), 6, input, 0xc0, r, 0x60)
             // Use "invalid" to make gas estimation work
             switch success case 0 { invalid() }
         }
@@ -73,7 +73,7 @@ library Pairing {
     }
 
     /*
-     * @return The product of a point on G1 and a scalar, i.e.
+     * @return r the product of a point on G1 and a scalar, i.e.
      *         p == p.scalar_mul(1) and p.plus(p) == p.scalar_mul(2) for all
      *         points p.
      */
@@ -86,7 +86,7 @@ library Pairing {
         bool success;
         // solium-disable-next-line security/no-inline-assembly
         assembly {
-            success := staticcall(sub(gas, 2000), 7, input, 0x80, r, 0x60)
+            success := staticcall(sub(gas(), 2000), 7, input, 0x80, r, 0x60)
             // Use "invalid" to make gas estimation work
             switch success case 0 { invalid() }
         }
@@ -130,7 +130,7 @@ library Pairing {
 
         // solium-disable-next-line security/no-inline-assembly
         assembly {
-            success := staticcall(sub(gas, 2000), 8, add(input, 0x20), mul(inputSize, 0x20), out, 0x20)
+            success := staticcall(sub(gas(), 2000), 8, add(input, 0x20), mul(inputSize, 0x20), out, 0x20)
             // Use "invalid" to make gas estimation work
             switch success case 0 { invalid() }
         }

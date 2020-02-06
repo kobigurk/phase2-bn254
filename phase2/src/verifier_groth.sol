@@ -135,7 +135,7 @@ library Pairing {
             switch success case 0 { invalid() }
         }
 
-        require(success,"pairing-opcode-failed");
+        require(success, "pairing-opcode-failed");
 
         return out[0] != 0;
     }
@@ -181,6 +181,11 @@ contract Verifier {
 
         uint256[8] memory p = abi.decode(proof, (uint256[8]));
 
+        // Make sure that each element in the proof is less than the prime q
+        for (uint8 i = 0; i < p.length; i++) {
+            require(p[i] < PRIME_Q, "verifier-proof-element-gte-prime-q");
+        }
+
         Proof memory _proof;
         _proof.A = Pairing.G1Point(p[0], p[1]);
         _proof.B = Pairing.G2Point([p[2], p[3]], [p[4], p[5]]);
@@ -188,23 +193,8 @@ contract Verifier {
 
         VerifyingKey memory vk = verifyingKey();
 
-        require(<%vk_ic_length%> == vk.IC.length, "verifier-invalid-input-length");
-
         // Compute the linear combination vk_x
         Pairing.G1Point memory vk_x = Pairing.G1Point(0, 0);
-
-        // Make sure that proof.A, B, and C are each less than the prime q
-        require(_proof.A.X < PRIME_Q, "verifier-aX-gte-prime-q");
-        require(_proof.A.Y < PRIME_Q, "verifier-aY-gte-prime-q");
-
-        require(_proof.B.X[0] < PRIME_Q, "verifier-cX0-gte-prime-q");
-        require(_proof.B.Y[0] < PRIME_Q, "verifier-cY0-gte-prime-q");
-
-        require(_proof.B.X[1] < PRIME_Q, "verifier-cX1-gte-prime-q");
-        require(_proof.B.Y[1] < PRIME_Q, "verifier-cY1-gte-prime-q");
-
-        require(_proof.C.X < PRIME_Q, "verifier-cX-gte-prime-q");
-        require(_proof.C.Y < PRIME_Q, "verifier-cY-gte-prime-q");
 
         // Make sure that every input is less than the snark scalar field
         for (uint256 i = 0; i < input.length; i++) {

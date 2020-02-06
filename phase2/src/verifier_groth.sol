@@ -175,16 +175,16 @@ contract Verifier {
      *          above and the public inputs
      */
     function verifyProof(
-        uint256[2] memory a,
-        uint256[2][2] memory b,
-        uint256[2] memory c,
+        bytes memory proof,
         uint256[<%vk_input_length%>] memory input
     ) public view returns (bool r) {
 
-        Proof memory proof;
-        proof.A = Pairing.G1Point(a[0], a[1]);
-        proof.B = Pairing.G2Point([b[0][0], b[0][1]], [b[1][0], b[1][1]]);
-        proof.C = Pairing.G1Point(c[0], c[1]);
+        uint256[8] memory p = abi.decode(proof, (uint256[8]));
+
+        Proof memory _proof;
+        _proof.A = Pairing.G1Point(p[0], p[1]);
+        _proof.B = Pairing.G2Point([p[2], p[3]], [p[4], p[5]]);
+        _proof.C = Pairing.G1Point(p[6], p[7]);
 
         VerifyingKey memory vk = verifyingKey();
 
@@ -194,17 +194,17 @@ contract Verifier {
         Pairing.G1Point memory vk_x = Pairing.G1Point(0, 0);
 
         // Make sure that proof.A, B, and C are each less than the prime q
-        require(proof.A.X < PRIME_Q, "verifier-aX-gte-prime-q");
-        require(proof.A.Y < PRIME_Q, "verifier-aY-gte-prime-q");
+        require(_proof.A.X < PRIME_Q, "verifier-aX-gte-prime-q");
+        require(_proof.A.Y < PRIME_Q, "verifier-aY-gte-prime-q");
 
-        require(proof.B.X[0] < PRIME_Q, "verifier-cX0-gte-prime-q");
-        require(proof.B.Y[0] < PRIME_Q, "verifier-cY0-gte-prime-q");
+        require(_proof.B.X[0] < PRIME_Q, "verifier-cX0-gte-prime-q");
+        require(_proof.B.Y[0] < PRIME_Q, "verifier-cY0-gte-prime-q");
 
-        require(proof.B.X[1] < PRIME_Q, "verifier-cX1-gte-prime-q");
-        require(proof.B.Y[1] < PRIME_Q, "verifier-cY1-gte-prime-q");
+        require(_proof.B.X[1] < PRIME_Q, "verifier-cX1-gte-prime-q");
+        require(_proof.B.Y[1] < PRIME_Q, "verifier-cY1-gte-prime-q");
 
-        require(proof.C.X < PRIME_Q, "verifier-cX-gte-prime-q");
-        require(proof.C.Y < PRIME_Q, "verifier-cY-gte-prime-q");
+        require(_proof.C.X < PRIME_Q, "verifier-cX-gte-prime-q");
+        require(_proof.C.Y < PRIME_Q, "verifier-cY-gte-prime-q");
 
         // Make sure that every input is less than the snark scalar field
         for (uint256 i = 0; i < input.length; i++) {
@@ -215,13 +215,13 @@ contract Verifier {
         vk_x = Pairing.plus(vk_x, vk.IC[0]);
 
         return Pairing.pairing(
-            Pairing.negate(proof.A),
-            proof.B,
+            Pairing.negate(_proof.A),
+            _proof.B,
             vk.alfa1,
             vk.beta2,
             vk_x,
             vk.gamma2,
-            proof.C,
+            _proof.C,
             vk.delta2
         );
     }

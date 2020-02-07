@@ -187,14 +187,13 @@ contract Verifier {
 
         // Compute the linear combination vk_x
         Pairing.G1Point memory vk_x = Pairing.G1Point(0, 0);
+        vk_x = Pairing.plus(vk_x, vk.IC[0]);
 
         // Make sure that every input is less than the snark scalar field
         for (uint256 i = 0; i < input.length; i++) {
             require(input[i] < SNARK_SCALAR_FIELD, "verifier-gte-snark-scalar-field");
             vk_x = Pairing.plus(vk_x, Pairing.scalar_mul(vk.IC[i + 1], input[i]));
         }
-
-        vk_x = Pairing.plus(vk_x, vk.IC[0]);
 
         return Pairing.pairing(
             Pairing.negate(_proof.A),

@@ -203,7 +203,7 @@ pub fn create_verifier_sol(params: &Parameters<Bn256>) -> String {
     let p1_to_str = |p: &<Bn256 as Engine>::G1Affine| {
         let x = repr_to_big(p.get_x().into_repr());
         let y = repr_to_big(p.get_y().into_repr());
-        return format!("{}, {}", x, y)
+        return format!("uint256({}), uint256({})", x, y)
     };
     let p2_to_str = |p: &<Bn256 as Engine>::G2Affine| {
         let x = p.get_x();
@@ -212,7 +212,7 @@ pub fn create_verifier_sol(params: &Parameters<Bn256>) -> String {
         let x_c1 = repr_to_big(x.c1.into_repr());
         let y_c0 = repr_to_big(y.c0.into_repr());
         let y_c1 = repr_to_big(y.c1.into_repr());
-        format!("[{}, {}], [{}, {}]", x_c1, x_c0, y_c1, y_c0)
+        format!("[uint256({}), uint256({})], [uint256({}), uint256({})]", x_c1, x_c0, y_c1, y_c0)
     };
 
     let template = template.replace("<%vk_alfa1%>", &*p1_to_str(&params.vk.alpha_g1));

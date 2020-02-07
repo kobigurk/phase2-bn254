@@ -25,6 +25,7 @@ fn main() {
 
     let disallow_points_at_infinity = false;
 
+    println!("starting");
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
         use byteorder::{ReadBytesExt, BigEndian};

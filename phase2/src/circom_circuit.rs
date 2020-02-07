@@ -7,6 +7,7 @@ use std::fs::{OpenOptions, File};
 use std::io::{Read, Write};
 use std::collections::BTreeMap;
 use std::iter::repeat;
+use std::sync::Arc;
 use itertools::Itertools;
 use rand::{Rng, OsRng};
 use parameters::MPCParameters;
@@ -27,6 +28,7 @@ use bellman_ce::{
     },
     pairing::{
         Engine,
+        CurveAffine,
         ff::{
             PrimeField,
         },
@@ -180,7 +182,9 @@ impl<'a, E: Engine> Circuit<E> for CircomCircuit<E> {
 }
 
 pub fn prove<E: Engine, R: Rng>(circuit: CircomCircuit<E>, params: &Parameters<E>, mut rng: R) -> Result<Proof<E>, SynthesisError> {
-    return create_random_proof(circuit, params, &mut rng);
+    let mut params2 = params.clone();
+    filter_params(&mut params2);
+    return create_random_proof(circuit, &params2, &mut rng);
 }
 
 pub fn verify<E: Engine>(circuit: &CircomCircuit<E>, params: &Parameters<E>, proof: &Proof<E>) -> Result<bool, SynthesisError> {
@@ -260,9 +264,16 @@ pub fn load_params_file(filename: &str) -> Parameters<Bn256> {
 
 pub fn load_params<R: Read>(reader: R) -> Parameters<Bn256> {
     let should_filter_points_at_infinity = false;
-    let mut params = MPCParameters::read(reader, should_filter_points_at_infinity, true).expect("unable to read params");
-    params.filter_params();
+    let params = MPCParameters::read(reader, should_filter_points_at_infinity, true).expect("unable to read params");
     return params.get_params().clone();
+}
+
+pub fn filter_params<E: Engine>(params: &mut Parameters<E>) {
+    params.vk.ic = params.vk.ic.clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>();
+    params.h = Arc::new((*params.h).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
+    params.a = Arc::new((*params.a).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
+    params.b_g1 = Arc::new((*params.b_g1).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
+    params.b_g2 = Arc::new((*params.b_g2).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
 }
 
 pub fn proving_key_json(params: &Parameters<Bn256>) -> Result<String, serde_json::error::Error> {

@@ -401,14 +401,6 @@ impl MPCParameters {
         &self.params
     }
 
-    pub fn filter_params(&mut self) {
-        self.params.vk.ic = self.params.vk.ic.clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>();
-        self.params.h = Arc::new((*self.params.h).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
-        self.params.a = Arc::new((*self.params.a).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
-        self.params.b_g1 = Arc::new((*self.params.b_g1).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
-        self.params.b_g2 = Arc::new((*self.params.b_g2).clone().into_iter().filter(|x| !x.is_zero()).collect::<Vec<_>>());
-    }
-
     /// Contributes some randomness to the parameters. Only one
     /// contributor needs to be honest for the parameters to be
     /// secure.

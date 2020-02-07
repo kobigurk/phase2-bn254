@@ -20,7 +20,6 @@
 pragma solidity ^0.6.0;
 
 library Pairing {
-
     uint256 constant PRIME_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
 
     struct G1Point {
@@ -35,10 +34,9 @@ library Pairing {
     }
 
     /*
-     * @return The negation of p, i.e. p.plus(p.negate()) should be zero. 
+     * @return The negation of p, i.e. p.plus(p.negate()) should be zero.
      */
     function negate(G1Point memory p) internal pure returns (G1Point memory) {
-
         // The prime q in the base field F_q for G1
         if (p.X == 0 && p.Y == 0) {
             return G1Point(0, 0);
@@ -54,7 +52,6 @@ library Pairing {
         G1Point memory p1,
         G1Point memory p2
     ) internal view returns (G1Point memory r) {
-
         uint256[4] memory input;
         input[0] = p1.X;
         input[1] = p1.Y;
@@ -69,7 +66,7 @@ library Pairing {
             switch success case 0 { invalid() }
         }
 
-        require(success,"pairing-add-failed");
+        require(success, "pairing-add-failed");
     }
 
     /*
@@ -78,7 +75,6 @@ library Pairing {
      *         points p.
      */
     function scalar_mul(G1Point memory p, uint256 s) internal view returns (G1Point memory r) {
-
         uint256[3] memory input;
         input[0] = p.X;
         input[1] = p.Y;
@@ -90,7 +86,7 @@ library Pairing {
             // Use "invalid" to make gas estimation work
             switch success case 0 { invalid() }
         }
-        require (success,"pairing-mul-failed");
+        require(success, "pairing-mul-failed");
     }
 
     /* @return The result of computing the pairing check
@@ -108,7 +104,6 @@ library Pairing {
         G1Point memory d1,
         G2Point memory d2
     ) internal view returns (bool) {
-
         G1Point[4] memory p1 = [a1, b1, c1, d1];
         G2Point[4] memory p2 = [a2, b2, c2, d2];
 
@@ -142,11 +137,9 @@ library Pairing {
 }
 
 contract Verifier {
-
-    using Pairing for *;
-
     uint256 constant SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
     uint256 constant PRIME_Q = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+    using Pairing for *;
 
     struct VerifyingKey {
         Pairing.G1Point alfa1;
@@ -169,7 +162,7 @@ contract Verifier {
         vk.delta2 = Pairing.G2Point(<%vk_delta2%>);
         <%vk_ic_pts%>
     }
-    
+
     /*
      * @returns Whether the proof is valid given the hardcoded verifying key
      *          above and the public inputs
@@ -178,7 +171,6 @@ contract Verifier {
         bytes memory proof,
         uint256[<%vk_input_length%>] memory input
     ) public view returns (bool r) {
-
         uint256[8] memory p = abi.decode(proof, (uint256[8]));
 
         // Make sure that each element in the proof is less than the prime q
@@ -198,7 +190,7 @@ contract Verifier {
 
         // Make sure that every input is less than the snark scalar field
         for (uint256 i = 0; i < input.length; i++) {
-            require(input[i] < SNARK_SCALAR_FIELD,"verifier-gte-snark-scalar-field");
+            require(input[i] < SNARK_SCALAR_FIELD, "verifier-gte-snark-scalar-field");
             vk_x = Pairing.plus(vk_x, Pairing.scalar_mul(vk.IC[i + 1], input[i]));
         }
 

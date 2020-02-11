@@ -1,19 +1,11 @@
-extern crate powersoftau;
-extern crate bellman_ce;
-extern crate memmap;
-extern crate rand;
-extern crate blake2;
-extern crate byteorder;
-extern crate exitcode;
+use powersoftau::batched_accumulator::BatchedAccumulator;
+use powersoftau::bn256::Bn256CeremonyParameters;
+use powersoftau::keypair::keypair;
+use powersoftau::parameters::{CheckForCorrectness, UseCompression};
 
-use powersoftau::bn256::{Bn256CeremonyParameters};
-use powersoftau::batched_accumulator::{BatchedAccumulator};
-use powersoftau::keypair::{keypair};
-use powersoftau::parameters::{UseCompression, CheckForCorrectness};
-
-use std::fs::OpenOptions;
 use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
+use std::fs::OpenOptions;
 
 use std::io::{Read, Write};
 
@@ -32,15 +24,21 @@ fn main() {
     let challenge_filename = &args[1];
     let response_filename = &args[2];
 
-    println!("Will contribute to accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
-    println!("In total will generate up to {} powers", Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH);
-    
+    println!(
+        "Will contribute to accumulator for 2^{} powers of tau",
+        Bn256CeremonyParameters::REQUIRED_POWER
+    );
+    println!(
+        "In total will generate up to {} powers",
+        Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH
+    );
+
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
-        use byteorder::{ReadBytesExt, BigEndian};
         use blake2::{Blake2b, Digest};
-        use rand::{SeedableRng, Rng, OsRng};
+        use byteorder::{BigEndian, ReadBytesExt};
         use rand::chacha::ChaChaRng;
+        use rand::{OsRng, Rng, SeedableRng};
 
         let h = {
             let mut system_rng = OsRng::new().unwrap();
@@ -55,7 +53,9 @@ fn main() {
             // Ask the user to provide some information for additional entropy
             let mut user_input = String::new();
             println!("Type some random text and press [ENTER] to provide additional entropy...");
-            std::io::stdin().read_line(&mut user_input).expect("expected to read some random text from the user");
+            std::io::stdin()
+                .read_line(&mut user_input)
+                .expect("expected to read some random text from the user");
 
             // Hash it all up to make a seed
             h.input(&user_input.as_bytes());
@@ -66,8 +66,10 @@ fn main() {
 
         // Interpret the first 32 bytes of the digest as 8 32-bit words
         let mut seed = [0u32; 8];
-        for i in 0..8 {
-            seed[i] = digest.read_u32::<BigEndian>().expect("digest is large enough for this to work");
+        for s in &mut seed {
+            *s = digest
+                .read_u32::<BigEndian>()
+                .expect("digest is large enough for this to work");
         }
 
         ChaChaRng::from_seed(&seed)
@@ -75,52 +77,67 @@ fn main() {
 
     // Try to load challenge file from disk.
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(challenge_filename)
-                            .expect("unable open challenge file");
+        .read(true)
+        .open(challenge_filename)
+        .expect("unable open challenge file");
     {
-        let metadata = reader.metadata().expect("unable to get filesystem metadata for challenge file");
+        let metadata = reader
+            .metadata()
+            .expect("unable to get filesystem metadata for challenge file");
         let expected_challenge_length = match INPUT_IS_COMPRESSED {
-            UseCompression::Yes => {
-                Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
-            },
-            UseCompression::No => {
-                Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE
-            }
+            UseCompression::Yes => Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE,
+            UseCompression::No => Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE,
         };
 
         if metadata.len() != (expected_challenge_length as u64) {
-            panic!("The size of challenge file should be {}, but it's {}, so something isn't right.", expected_challenge_length, metadata.len());
+            panic!(
+                "The size of challenge file should be {}, but it's {}, so something isn't right.",
+                expected_challenge_length,
+                metadata.len()
+            );
         }
     }
 
-    let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
+    let readable_map = unsafe {
+        MmapOptions::new()
+            .map(&reader)
+            .expect("unable to create a memory map for input")
+    };
 
     // Create response file in this directory
     let writer = OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .create_new(true)
-                            .open(response_filename)
-                            .expect("unable to create response file");
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(response_filename)
+        .expect("unable to create response file");
 
     let required_output_length = match COMPRESS_THE_OUTPUT {
-        UseCompression::Yes => {
-            Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
-        },
+        UseCompression::Yes => Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE,
         UseCompression::No => {
-            Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE + Bn256CeremonyParameters::PUBLIC_KEY_SIZE
+            Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE
+                + Bn256CeremonyParameters::PUBLIC_KEY_SIZE
         }
     };
 
-    writer.set_len(required_output_length as u64).expect("must make output file large enough");
+    writer
+        .set_len(required_output_length as u64)
+        .expect("must make output file large enough");
 
-    let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
-    
+    let mut writable_map = unsafe {
+        MmapOptions::new()
+            .map_mut(&writer)
+            .expect("unable to create a memory map for output")
+    };
+
     println!("Calculating previous contribution hash...");
 
-    assert!(UseCompression::No == INPUT_IS_COMPRESSED, "Hashing the compressed file in not yet defined");
-    let current_accumulator_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
+    assert!(
+        UseCompression::No == INPUT_IS_COMPRESSED,
+        "Hashing the compressed file in not yet defined"
+    );
+    let current_accumulator_hash =
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
 
     {
         println!("`challenge` file contains decompressed points and has a hash:");
@@ -135,15 +152,23 @@ fn main() {
             println!();
         }
 
-        (&mut writable_map[0..]).write(current_accumulator_hash.as_slice()).expect("unable to write a challenge hash to mmap");
+        (&mut writable_map[0..])
+            .write_all(current_accumulator_hash.as_slice())
+            .expect("unable to write a challenge hash to mmap");
 
-        writable_map.flush().expect("unable to write hash to response file");
+        writable_map
+            .flush()
+            .expect("unable to write hash to response file");
     }
 
     {
         let mut challenge_hash = [0; 64];
-        let memory_slice = readable_map.get(0..64).expect("must read point data from file");
-        memory_slice.clone().read_exact(&mut challenge_hash).expect("couldn't read hash of challenge file from response file");
+        let mut memory_slice = readable_map
+            .get(0..64)
+            .expect("must read point data from file");
+        memory_slice
+            .read_exact(&mut challenge_hash)
+            .expect("couldn't read hash of challenge file from response file");
 
         println!("`challenge` file claims (!!! Must not be blindly trusted) that it was based on the original contribution with a hash:");
         for line in challenge_hash.chunks(16) {
@@ -166,28 +191,36 @@ fn main() {
 
     // this computes a transformation and writes it
     BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::transform(
-        &readable_map, 
-        &mut writable_map, 
-        INPUT_IS_COMPRESSED, 
-        COMPRESS_THE_OUTPUT, 
-        CHECK_INPUT_CORRECTNESS, 
-        &privkey
-    ).expect("must transform with the key");
+        &readable_map,
+        &mut writable_map,
+        INPUT_IS_COMPRESSED,
+        COMPRESS_THE_OUTPUT,
+        CHECK_INPUT_CORRECTNESS,
+        &privkey,
+    )
+    .expect("must transform with the key");
 
     println!("Finishing writing your contribution to response file...");
 
     // Write the public key
-    pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, COMPRESS_THE_OUTPUT).expect("unable to write public key");
+    pubkey
+        .write::<Bn256CeremonyParameters>(&mut writable_map, COMPRESS_THE_OUTPUT)
+        .expect("unable to write public key");
 
     writable_map.flush().expect("must flush a memory map");
 
     // Get the hash of the contribution, so the user can compare later
-    let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
-    let contribution_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let output_readonly = writable_map
+        .make_read_only()
+        .expect("must make a map readonly");
+    let contribution_hash =
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
 
-    print!("Done!\n\n\
+    print!(
+        "Done!\n\n\
               Your contribution has been written to response file\n\n\
-              The BLAKE2b hash of response file is:\n");
+              The BLAKE2b hash of response file is:\n"
+    );
 
     for line in contribution_hash.as_slice().chunks(16) {
         print!("\t");

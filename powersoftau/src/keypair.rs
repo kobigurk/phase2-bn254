@@ -283,3 +283,35 @@ impl<E: Engine> PublicKey<E> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{thread_rng, Rng};
+
+    mod bn256 {
+        use super::*;
+        use crate::parameters::{CurveKind, CurveParams};
+        use bellman_ce::pairing::bn256::Bn256;
+
+        #[test]
+        fn test_pubkey_serialization() {
+            let curve = CurveParams::new(CurveKind::Bn256);
+            let public_key_size = 6 * curve.g1 + 3 * curve.g2;
+
+            // Generate a random public key
+            let rng = &mut thread_rng();
+            let digest = (0..64).map(|_| rng.gen()).collect::<Vec<_>>();
+            let (pk, _) = keypair::<_, Bn256>(rng, &digest);
+
+            // Serialize it
+            let mut v = vec![];
+            pk.serialize(&mut v).unwrap();
+            assert_eq!(v.len(), public_key_size);
+
+            // Deserialize it and check that it matchesj
+            let deserialized = PublicKey::<Bn256>::deserialize(&mut &v[..]).unwrap();
+            assert!(pk == deserialized);
+        }
+    }
+}

@@ -31,12 +31,13 @@ pub fn hash_to_g2<E: Engine>(mut digest: &[u8]) -> E::G2 {
 }
 
 #[cfg(test)]
-mod tests {
+mod bn256_tests {
     use super::*;
-    use bellman_ce::pairing::bn256::Bn256;
+    use bellman_ce::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
+    use rand::{thread_rng, Rand};
 
     #[test]
-    fn test_hash_to_g2() {
+    fn test_hash_to_g2_bn256() {
         assert!(
             hash_to_g2::<Bn256>(&[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
@@ -56,6 +57,41 @@ mod tests {
                 24, 25, 26, 27, 28, 29, 30, 31, 33
             ])
         );
+    }
+
+    #[test]
+    fn test_same_ratio_bn256() {
+        let rng = &mut thread_rng();
+
+        let s = Fr::rand(rng);
+        let g1 = G1Affine::one();
+        let g2 = G2Affine::one();
+        let g1_s = g1.mul(s).into_affine();
+        let g2_s = g2.mul(s).into_affine();
+
+        assert!(same_ratio((g1, g1_s), (g2, g2_s)));
+        assert!(!same_ratio((g1_s, g1), (g2, g2_s)));
+    }
+
+    #[test]
+    fn test_power_pairs() {
+        let rng = &mut thread_rng();
+
+        let mut v = vec![];
+        let x = Fr::rand(rng);
+        let mut acc = Fr::one();
+        for _ in 0..100 {
+            v.push(G1Affine::one().mul(acc).into_affine());
+            acc.mul_assign(&x);
+        }
+
+        let gx = G2Affine::one().mul(x).into_affine();
+
+        assert!(same_ratio(power_pairs(&v), (G2Affine::one(), gx)));
+
+        v[1] = v[1].mul(Fr::rand(rng)).into_affine();
+
+        assert!(!same_ratio(power_pairs(&v), (G2Affine::one(), gx)));
     }
 }
 

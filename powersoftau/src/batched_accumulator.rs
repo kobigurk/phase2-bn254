@@ -287,7 +287,7 @@ pub fn verify_transform<E: Engine>(
 
 impl<'a, E: Engine> BatchedAccumulator<'a, E> {
     /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
     pub fn verify_transformation(
         input_map: &Mmap,
         output_map: &Mmap,

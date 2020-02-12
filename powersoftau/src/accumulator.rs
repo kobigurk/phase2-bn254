@@ -499,3 +499,40 @@ impl<W: Write> Write for HashWriter<W> {
         self.writer.flush()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        keypair::keypair,
+        parameters::{CeremonyParams, CurveKind},
+    };
+    use bellman_ce::pairing::bn256::Bn256;
+    use rand::{thread_rng, Rng};
+
+    #[test]
+    fn test_accumulator_serialization() {
+        let rng = &mut thread_rng();
+        let mut digest = (0..64).map(|_| rng.gen()).collect::<Vec<_>>();
+        // make a very small ceremony for the test
+        let parameters = CeremonyParams::new(CurveKind::Bn256, 3, 2);
+        let mut acc = Accumulator::<Bn256>::new(&parameters);
+        let before = acc.clone();
+        let (pk, sk) = keypair::<_, Bn256>(rng, &digest);
+        acc.transform(&sk);
+        assert!(verify_transform(&before, &acc, &pk, &digest));
+        digest[0] = !digest[0];
+        assert!(!verify_transform(&before, &acc, &pk, &digest));
+        let mut v = Vec::with_capacity(parameters.accumulator_size - 64);
+        acc.serialize(&mut v, UseCompression::No).unwrap();
+        assert_eq!(v.len(), parameters.accumulator_size - 64);
+        let deserialized = Accumulator::deserialize(
+            &mut &v[..],
+            UseCompression::No,
+            CheckForCorrectness::No,
+            &parameters,
+        )
+        .unwrap();
+        assert!(acc == deserialized);
+    }
+}

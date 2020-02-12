@@ -1,9 +1,9 @@
-use powersoftau::accumulator::Accumulator;
-use powersoftau::bn256::Bn256CeremonyParameters;
-use powersoftau::parameters::UseCompression;
-use powersoftau::utils::blank_hash;
-
 use bellman_ce::pairing::bn256::Bn256;
+use powersoftau::{
+    accumulator::Accumulator,
+    parameters::{CeremonyParams, CurveKind, UseCompression},
+    utils::blank_hash,
+};
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 
@@ -29,9 +29,13 @@ fn main() {
         .write_all(&blank_hash().as_slice())
         .expect("unable to write blank hash to challenge file");
 
-    let parameters = Bn256CeremonyParameters {};
+    let parameters = CeremonyParams::new(
+        CurveKind::Bn256,
+        28, // turn this to 10 for the small test
+        21, // turn this to 8  for the small test
+    );
 
-    let acc: Accumulator<Bn256, _> = Accumulator::new(parameters);
+    let acc: Accumulator<Bn256> = Accumulator::new(&parameters);
     println!("Writing an empty accumulator to disk");
     acc.serialize(&mut writer, UseCompression::No)
         .expect("unable to write fresh accumulator to challenge file");

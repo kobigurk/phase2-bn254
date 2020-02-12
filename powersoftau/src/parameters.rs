@@ -1,27 +1,7 @@
-use bellman_ce::pairing::{bls12_381::Bls12, bn256::Bn256, Engine, GroupDecodingError};
+use bellman_ce::pairing::{CurveAffine, EncodedPoint, Engine, GroupDecodingError};
 use std::fmt;
 use std::io;
 use std::marker::PhantomData;
-
-/// Extension trait for Engine for specifying the sizes of the G1 and G2 elements.
-// @dev Implement this trait in order to add support for more curves
-pub trait EngineExt: Engine {
-    fn group_element_sizes() -> (usize, usize);
-}
-
-impl EngineExt for Bls12 {
-    /// Bls12_381: G1 -> 96, G2 -> 192
-    fn group_element_sizes() -> (usize, usize) {
-        (96, 192)
-    }
-}
-
-impl EngineExt for Bn256 {
-    /// Bn256: G1 -> 64, G2 -> 128
-    fn group_element_sizes() -> (usize, usize) {
-        (64, 128)
-    }
-}
 
 /// The sizes of the group elements of a curev
 #[derive(Clone, PartialEq, Eq, Default)]
@@ -37,15 +17,18 @@ pub struct CurveParams<E> {
     engine_type: PhantomData<E>,
 }
 
-impl<E: EngineExt> CurveParams<E> {
+impl<E: Engine> CurveParams<E> {
     pub fn new() -> CurveParams<E> {
-        let (g1, g2) = E::group_element_sizes();
+        let g1 = <<E as Engine>::G1Affine as CurveAffine>::Uncompressed::size();
+        let g2 = <<E as Engine>::G2Affine as CurveAffine>::Uncompressed::size();
+        let g1_compressed = <<E as Engine>::G1Affine as CurveAffine>::Compressed::size();
+        let g2_compressed = <<E as Engine>::G2Affine as CurveAffine>::Compressed::size();
 
         CurveParams {
             g1,
             g2,
-            g1_compressed: g1 / 2,
-            g2_compressed: g2 / 2,
+            g1_compressed,
+            g2_compressed,
             engine_type: PhantomData,
         }
     }
@@ -76,7 +59,7 @@ pub struct CeremonyParams<E> {
     pub hash_size: usize,
 }
 
-impl<E: EngineExt> CeremonyParams<E> {
+impl<E: Engine> CeremonyParams<E> {
     /// Constructs a new ceremony parameters object from the type of provided curve
     pub fn new(size: usize, batch_size: usize) -> Self {
         // create the curve

@@ -26,14 +26,13 @@ cargo run --release --bin verify_contribution circuit.json circom2.params circom
 cargo run --release --bin contribute circom3.params circom4.params askldfjklasdf
 cargo run --release --bin verify_contribution circuit.json circom3.params circom4.params
 
-# generate resulting keys
-cargo run --release --bin export_keys circom4.params vk.json pk.json
 # create dummy keys in circom format
 echo "Generating dummy key files..."
 npx snarkjs setup --protocol groth
+# generate resulting keys
+cargo run --release --bin export_keys circom4.params vk.json pk.json
 # patch dummy keys with actual keys params
 cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json
-cargo run --release --bin copy_json verification_key.json vk.json transformed_vk.json
 
 # generate solidity verifier
 cargo run --release --bin generate_verifier circom4.params verifier.sol
@@ -41,4 +40,4 @@ cargo run --release --bin generate_verifier circom4.params verifier.sol
 # try to generate and verify proof
 npx snarkjs calculatewitness
 cargo run --release --bin prove circuit.json witness.json circom4.params proof.json public.json
-npx snarkjs verify --vk transformed_vk.json --proof proof.json
+npx snarkjs verify --vk vk.json --proof proof.json

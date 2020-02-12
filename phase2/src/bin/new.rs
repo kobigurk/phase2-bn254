@@ -4,7 +4,7 @@ extern crate exitcode;
 
 use std::fs::File;
 use phase2::parameters::MPCParameters;
-use phase2::circom_circuit::CircomCircuit;
+use phase2::circom_circuit::circuit_from_json_file;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -20,7 +20,7 @@ fn main() {
     // Import the circuit and create the initial parameters using phase 1
     println!("Creating initial parameters for {}...", circuit_filename);
     let params = {
-        let c = CircomCircuit::from_json_file(&circuit_filename);
+        let c = circuit_from_json_file(&circuit_filename);
         MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
     };
 

@@ -1,17 +1,13 @@
-extern crate powersoftau;
-extern crate bellman_ce;
-extern crate memmap;
+use powersoftau::bn256::Bn256CeremonyParameters;
 
-use powersoftau::bn256::{Bn256CeremonyParameters};
+use powersoftau::batched_accumulator::BatchedAccumulator;
+use powersoftau::parameters::UseCompression;
+use powersoftau::utils::blank_hash;
 
-use powersoftau::batched_accumulator::{BatchedAccumulator};
-use powersoftau::parameters::{UseCompression};
-use powersoftau::utils::{blank_hash};
-
-use std::fs::OpenOptions;
-use std::io::{Write};
 use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
+use std::fs::OpenOptions;
+use std::io::Write;
 
 use powersoftau::parameters::PowersOfTauParameters;
 
@@ -25,8 +21,14 @@ fn main() {
     }
     let challenge_filename = &args[1];
 
-    println!("Will generate an empty accumulator for 2^{} powers of tau", Bn256CeremonyParameters::REQUIRED_POWER);
-    println!("In total will generate up to {} powers", Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH);
+    println!(
+        "Will generate an empty accumulator for 2^{} powers of tau",
+        Bn256CeremonyParameters::REQUIRED_POWER
+    );
+    println!(
+        "In total will generate up to {} powers",
+        Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH
+    );
 
     let file = OpenOptions::new()
         .read(true)
@@ -34,24 +36,32 @@ fn main() {
         .create_new(true)
         .open(challenge_filename)
         .expect("unable to create challenge file");
-            
+
     let expected_challenge_length = match COMPRESS_NEW_CHALLENGE {
         UseCompression::Yes => {
-            Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
-        },
-        UseCompression::No => {
-            Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE
+            Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
+                - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
         }
+        UseCompression::No => Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE,
     };
 
-    file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
+    file.set_len(expected_challenge_length as u64)
+        .expect("unable to allocate large enough file");
 
-    let mut writable_map = unsafe { MmapOptions::new().map_mut(&file).expect("unable to create a memory map") };
+    let mut writable_map = unsafe {
+        MmapOptions::new()
+            .map_mut(&file)
+            .expect("unable to create a memory map")
+    };
 
     // Write a blank BLAKE2b hash:
     let hash = blank_hash();
-    (&mut writable_map[0..]).write(hash.as_slice()).expect("unable to write a default hash to mmap");
-    writable_map.flush().expect("unable to write blank hash to challenge file");
+    (&mut writable_map[0..])
+        .write_all(hash.as_slice())
+        .expect("unable to write a default hash to mmap");
+    writable_map
+        .flush()
+        .expect("unable to write blank hash to challenge file");
 
     println!("Blank hash for an empty challenge:");
     for line in hash.as_slice().chunks(16) {
@@ -65,12 +75,21 @@ fn main() {
         println!();
     }
 
-    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE).expect("generation of initial accumulator is successful");
-    writable_map.flush().expect("unable to flush memmap to disk");
+    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(
+        &mut writable_map,
+        COMPRESS_NEW_CHALLENGE,
+    )
+    .expect("generation of initial accumulator is successful");
+    writable_map
+        .flush()
+        .expect("unable to flush memmap to disk");
 
     // Get the hash of the contribution, so the user can compare later
-    let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
-    let contribution_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let output_readonly = writable_map
+        .make_read_only()
+        .expect("must make a map readonly");
+    let contribution_hash =
+        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
 
     println!("Empty contribution is formed with a hash:");
 

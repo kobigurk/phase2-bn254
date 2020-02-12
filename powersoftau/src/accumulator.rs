@@ -25,33 +25,23 @@
 //! After some time has elapsed for participants to contribute to the ceremony, a participant is
 //! simulated with a randomness beacon. The resulting `Accumulator` contains partial zk-SNARK
 //! public parameters for all circuits within a bounded size.
-extern crate rand;
-extern crate crossbeam;
-extern crate num_cpus;
-extern crate blake2;
-extern crate generic_array;
-extern crate typenum;
-extern crate byteorder;
-extern crate bellman_ce;
-extern crate memmap;
+use bellman_ce::pairing::{
+    ff::{Field, PrimeField},
+    CurveAffine, CurveProjective, EncodedPoint, Engine, Wnaf,
+};
+use blake2::{Blake2b, Digest};
 
-use memmap::{Mmap, MmapMut};
-use bellman_ce::pairing::ff::{Field, PrimeField};
-use byteorder::{ReadBytesExt, BigEndian};
-use rand::{SeedableRng, Rng, Rand};
-use rand::chacha::ChaChaRng;
-use bellman_ce::pairing::bn256::{Bn256};
-use bellman_ce::pairing::*;
+use generic_array::GenericArray;
+
 use std::io::{self, Read, Write};
 use std::sync::{Arc, Mutex};
-use generic_array::GenericArray;
 use typenum::consts::U64;
-use blake2::{Blake2b, Digest};
-use std::fmt;
 
-use super::keypair::*;
-use super::utils::*;
-use super::parameters::*;
+use super::keypair::{PrivateKey, PublicKey};
+use super::parameters::{
+    CheckForCorrectness, DeserializationError, PowersOfTauParameters, UseCompression,
+};
+use super::utils::{hash_to_g2, power_pairs, same_ratio, write_point};
 
 /// The `Accumulator` is an object that participants of the ceremony contribute
 /// randomness to. This object contains powers of trapdoor `tau` in G1 and in G2 over
@@ -73,20 +63,20 @@ pub struct Accumulator<E: Engine, P: PowersOfTauParameters> {
     /// beta
     pub beta_g2: E::G2Affine,
     /// Keep parameters here
-    pub parameters: P
+    pub parameters: P,
 }
 
 impl<E: Engine, P: PowersOfTauParameters> PartialEq for Accumulator<E, P> {
     fn eq(&self, other: &Accumulator<E, P>) -> bool {
-        self.tau_powers_g1.eq(&other.tau_powers_g1) &&
-        self.tau_powers_g2.eq(&other.tau_powers_g2) &&
-        self.alpha_tau_powers_g1.eq(&other.alpha_tau_powers_g1) &&
-        self.beta_tau_powers_g1.eq(&other.beta_tau_powers_g1) && 
-        self.beta_g2 == other.beta_g2
+        self.tau_powers_g1.eq(&other.tau_powers_g1)
+            && self.tau_powers_g2.eq(&other.tau_powers_g2)
+            && self.alpha_tau_powers_g1.eq(&other.alpha_tau_powers_g1)
+            && self.beta_tau_powers_g1.eq(&other.beta_tau_powers_g1)
+            && self.beta_g2 == other.beta_g2
     }
 }
 
-impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
+impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
     /// Constructs an "initial" accumulator with τ = 1, α = 1, β = 1.
     pub fn new(parameters: P) -> Self {
         Accumulator {
@@ -95,7 +85,7 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
             alpha_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
             beta_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
             beta_g2: E::G2Affine::one(),
-            parameters: parameters
+            parameters,
         }
     }
 
@@ -103,15 +93,13 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
     pub fn serialize<W: Write>(
         &self,
         writer: &mut W,
-        compression: UseCompression
-    ) -> io::Result<()>
-    {
+        compression: UseCompression,
+    ) -> io::Result<()> {
         fn write_all<W: Write, C: CurveAffine>(
             writer: &mut W,
             c: &[C],
-            compression: UseCompression
-        ) -> io::Result<()>
-        {
+            compression: UseCompression,
+        ) -> io::Result<()> {
             for c in c {
                 write_point(writer, c, compression)?;
             }
@@ -135,22 +123,19 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
         reader: &mut R,
         compression: UseCompression,
         checked: CheckForCorrectness,
-        parameters: P
-    ) -> Result<Self, DeserializationError>
-    {
-        fn read_all<EE: Engine, R: Read, C: CurveAffine<Engine = EE, Scalar = EE::Fr> > (
+        parameters: P,
+    ) -> Result<Self, DeserializationError> {
+        fn read_all<EE: Engine, R: Read, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
             reader: &mut R,
             size: usize,
             compression: UseCompression,
-            checked: CheckForCorrectness
-        ) -> Result<Vec<C>, DeserializationError>
-        {
+            checked: CheckForCorrectness,
+        ) -> Result<Vec<C>, DeserializationError> {
             fn decompress_all<R: Read, ENC: EncodedPoint>(
                 reader: &mut R,
                 size: usize,
-                checked: CheckForCorrectness
-            ) -> Result<Vec<ENC::Affine>, DeserializationError>
-            {
+                checked: CheckForCorrectness,
+            ) -> Result<Vec<ENC::Affine>, DeserializationError> {
                 // Read the encoded elements
                 let mut res = vec![ENC::empty(); size];
 
@@ -171,7 +156,10 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
                 let decoding_error = Arc::new(Mutex::new(None));
 
                 crossbeam::scope(|scope| {
-                    for (source, target) in res.chunks(chunk_size).zip(res_affine.chunks_mut(chunk_size)) {
+                    for (source, target) in res
+                        .chunks(chunk_size)
+                        .zip(res_affine.chunks_mut(chunk_size))
+                    {
                         let decoding_error = decoding_error.clone();
 
                         scope.spawn(move || {
@@ -185,21 +173,24 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
                                     match checked {
                                         CheckForCorrectness::Yes => {
                                             // Points at infinity are never expected in the accumulator
-                                            source.into_affine().map_err(|e| e.into()).and_then(|source| {
-                                                if source.is_zero() {
-                                                    Err(DeserializationError::PointAtInfinity)
-                                                } else {
-                                                    Ok(source)
-                                                }
-                                            })
-                                        },
-                                        CheckForCorrectness::No => source.into_affine_unchecked().map_err(|e| e.into())
+                                            source.into_affine().map_err(|e| e.into()).and_then(
+                                                |source| {
+                                                    if source.is_zero() {
+                                                        Err(DeserializationError::PointAtInfinity)
+                                                    } else {
+                                                        Ok(source)
+                                                    }
+                                                },
+                                            )
+                                        }
+                                        CheckForCorrectness::No => {
+                                            source.into_affine_unchecked().map_err(|e| e.into())
+                                        }
                                     }
-                                }
-                                {
+                                } {
                                     Ok(source) => {
                                         *target = source;
-                                    },
+                                    }
                                     Err(e) => {
                                         *decoding_error.lock().unwrap() = Some(e);
                                     }
@@ -209,41 +200,44 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
                     }
                 });
 
-                match Arc::try_unwrap(decoding_error).unwrap().into_inner().unwrap() {
-                    Some(e) => {
-                        Err(e)
-                    },
-                    None => {
-                        Ok(res_affine)
-                    }
+                match Arc::try_unwrap(decoding_error)
+                    .unwrap()
+                    .into_inner()
+                    .unwrap()
+                {
+                    Some(e) => Err(e),
+                    None => Ok(res_affine),
                 }
             }
 
             match compression {
                 UseCompression::Yes => decompress_all::<_, C::Compressed>(reader, size, checked),
-                UseCompression::No => decompress_all::<_, C::Uncompressed>(reader, size, checked)
+                UseCompression::No => decompress_all::<_, C::Uncompressed>(reader, size, checked),
             }
         }
 
-        let tau_powers_g1 = read_all::<E, _, _>(reader, P::TAU_POWERS_G1_LENGTH, compression, checked)?;
-        let tau_powers_g2 = read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
-        let alpha_tau_powers_g1 = read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
-        let beta_tau_powers_g1 = read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+        let tau_powers_g1 =
+            read_all::<E, _, _>(reader, P::TAU_POWERS_G1_LENGTH, compression, checked)?;
+        let tau_powers_g2 =
+            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+        let alpha_tau_powers_g1 =
+            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+        let beta_tau_powers_g1 =
+            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
         let beta_g2 = read_all::<E, _, _>(reader, 1, compression, checked)?[0];
 
         Ok(Accumulator {
-            tau_powers_g1: tau_powers_g1,
-            tau_powers_g2: tau_powers_g2,
-            alpha_tau_powers_g1: alpha_tau_powers_g1,
-            beta_tau_powers_g1: beta_tau_powers_g1,
-            beta_g2: beta_g2,
-            parameters: parameters
+            tau_powers_g1,
+            tau_powers_g2,
+            alpha_tau_powers_g1,
+            beta_tau_powers_g1,
+            beta_g2,
+            parameters,
         })
     }
 
     /// Transforms the accumulator with a private key.
-    pub fn transform(&mut self, key: &PrivateKey<E>)
-    {
+    pub fn transform(&mut self, key: &PrivateKey<E>) {
         // Construct the powers of tau
         let mut taupowers = vec![E::Fr::zero(); P::TAU_POWERS_G1_LENGTH];
         let chunk_size = P::TAU_POWERS_G1_LENGTH / num_cpus::get();
@@ -264,30 +258,35 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
 
         /// Exponentiate a large number of points, with an optional coefficient to be applied to the
         /// exponent.
-        fn batch_exp<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr> >(bases: &mut [C], exp: &[C::Scalar], coeff: Option<&C::Scalar>) {
+        fn batch_exp<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
+            bases: &mut [C],
+            exp: &[C::Scalar],
+            coeff: Option<&C::Scalar>,
+        ) {
             assert_eq!(bases.len(), exp.len());
             let mut projective = vec![C::Projective::zero(); bases.len()];
             let chunk_size = bases.len() / num_cpus::get();
 
             // Perform wNAF over multiple cores, placing results into `projective`.
             crossbeam::scope(|scope| {
-                for ((bases, exp), projective) in bases.chunks_mut(chunk_size)
-                                                       .zip(exp.chunks(chunk_size))
-                                                       .zip(projective.chunks_mut(chunk_size))
+                for ((bases, exp), projective) in bases
+                    .chunks_mut(chunk_size)
+                    .zip(exp.chunks(chunk_size))
+                    .zip(projective.chunks_mut(chunk_size))
                 {
                     scope.spawn(move || {
                         let mut wnaf = Wnaf::new();
 
-                        for ((base, exp), projective) in bases.iter_mut()
-                                                              .zip(exp.iter())
-                                                              .zip(projective.iter_mut())
+                        for ((base, exp), projective) in
+                            bases.iter_mut().zip(exp.iter()).zip(projective.iter_mut())
                         {
                             let mut exp = *exp;
                             if let Some(coeff) = coeff {
                                 exp.mul_assign(coeff);
                             }
 
-                            *projective = wnaf.base(base.into_projective(), 1).scalar(exp.into_repr());
+                            *projective =
+                                wnaf.base(base.into_projective(), 1).scalar(exp.into_repr());
                         }
                     });
                 }
@@ -295,8 +294,7 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
 
             // Perform batch normalization
             crossbeam::scope(|scope| {
-                for projective in projective.chunks_mut(chunk_size)
-                {
+                for projective in projective.chunks_mut(chunk_size) {
                     scope.spawn(move || {
                         C::Projective::batch_normalization(projective);
                     });
@@ -310,16 +308,32 @@ impl<E:Engine, P: PowersOfTauParameters> Accumulator<E, P> {
         }
 
         batch_exp::<E, _>(&mut self.tau_powers_g1, &taupowers[0..], None);
-        batch_exp::<E, _>(&mut self.tau_powers_g2, &taupowers[0..P::TAU_POWERS_LENGTH], None);
-        batch_exp::<E, _>(&mut self.alpha_tau_powers_g1, &taupowers[0..P::TAU_POWERS_LENGTH], Some(&key.alpha));
-        batch_exp::<E, _>(&mut self.beta_tau_powers_g1, &taupowers[0..P::TAU_POWERS_LENGTH], Some(&key.beta));
+        batch_exp::<E, _>(
+            &mut self.tau_powers_g2,
+            &taupowers[0..P::TAU_POWERS_LENGTH],
+            None,
+        );
+        batch_exp::<E, _>(
+            &mut self.alpha_tau_powers_g1,
+            &taupowers[0..P::TAU_POWERS_LENGTH],
+            Some(&key.alpha),
+        );
+        batch_exp::<E, _>(
+            &mut self.beta_tau_powers_g1,
+            &taupowers[0..P::TAU_POWERS_LENGTH],
+            Some(&key.beta),
+        );
         self.beta_g2 = self.beta_g2.mul(key.beta).into_affine();
     }
 }
 
 /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
-pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &Accumulator<E, P>, after: &Accumulator<E, P>, key: &PublicKey<E>, digest: &[u8]) -> bool
-{
+pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(
+    before: &Accumulator<E, P>,
+    after: &Accumulator<E, P>,
+    key: &PublicKey<E>,
+    digest: &[u8],
+) -> bool {
     assert_eq!(digest.len(), 64);
 
     let compute_g2_s = |g1_s: E::G1Affine, g1_s_x: E::G1Affine, personalization: u8| {
@@ -336,7 +350,7 @@ pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &Accumulato
     let beta_g2_s = compute_g2_s(key.beta_g1.0, key.beta_g1.1, 2);
 
     // Check the proofs-of-knowledge for tau/alpha/beta
-    
+
     // g1^s / g1^(s*x) = g2^s / g2^(s*x)
     if !same_ratio(key.tau_g1, (tau_g2_s, key.tau_g2)) {
         return false;
@@ -357,54 +371,76 @@ pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(before: &Accumulato
     }
 
     // Did the participant multiply the previous tau by the new one?
-    if !same_ratio((before.tau_powers_g1[1], after.tau_powers_g1[1]), (tau_g2_s, key.tau_g2)) {
+    if !same_ratio(
+        (before.tau_powers_g1[1], after.tau_powers_g1[1]),
+        (tau_g2_s, key.tau_g2),
+    ) {
         return false;
     }
 
     // Did the participant multiply the previous alpha by the new one?
-    if !same_ratio((before.alpha_tau_powers_g1[0], after.alpha_tau_powers_g1[0]), (alpha_g2_s, key.alpha_g2)) {
+    if !same_ratio(
+        (before.alpha_tau_powers_g1[0], after.alpha_tau_powers_g1[0]),
+        (alpha_g2_s, key.alpha_g2),
+    ) {
         return false;
     }
 
     // Did the participant multiply the previous beta by the new one?
-    if !same_ratio((before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]), (beta_g2_s, key.beta_g2)) {
+    if !same_ratio(
+        (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
+        (beta_g2_s, key.beta_g2),
+    ) {
         return false;
     }
-    if !same_ratio((before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]), (before.beta_g2, after.beta_g2)) {
+    if !same_ratio(
+        (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
+        (before.beta_g2, after.beta_g2),
+    ) {
         return false;
     }
 
     // Are the powers of tau correct?
-    if !same_ratio(power_pairs(&after.tau_powers_g1), (after.tau_powers_g2[0], after.tau_powers_g2[1])) {
+    if !same_ratio(
+        power_pairs(&after.tau_powers_g1),
+        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
+    ) {
         return false;
     }
-    if !same_ratio(power_pairs(&after.tau_powers_g2), (after.tau_powers_g1[0], after.tau_powers_g1[1])) {
+    if !same_ratio(
+        power_pairs(&after.tau_powers_g2),
+        (after.tau_powers_g1[0], after.tau_powers_g1[1]),
+    ) {
         return false;
     }
-    if !same_ratio(power_pairs(&after.alpha_tau_powers_g1), (after.tau_powers_g2[0], after.tau_powers_g2[1])) {
+    if !same_ratio(
+        power_pairs(&after.alpha_tau_powers_g1),
+        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
+    ) {
         return false;
     }
-    if !same_ratio(power_pairs(&after.beta_tau_powers_g1), (after.tau_powers_g2[0], after.tau_powers_g2[1])) {
+    if !same_ratio(
+        power_pairs(&after.beta_tau_powers_g1),
+        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
+    ) {
         return false;
     }
 
     true
 }
 
-
-
 /// Abstraction over a reader which hashes the data being read.
 pub struct HashReader<R: Read> {
     reader: R,
-    hasher: Blake2b
+    hasher: Blake2b,
 }
 
 impl<R: Read> HashReader<R> {
     /// Construct a new `HashReader` given an existing `reader` by value.
     pub fn new(reader: R) -> Self {
         HashReader {
-            reader: reader,
-            hasher: Blake2b::default()
+            reader,
+            hasher: Blake2b::default(),
         }
     }
 
@@ -429,15 +465,15 @@ impl<R: Read> Read for HashReader<R> {
 /// Abstraction over a writer which hashes the data being written.
 pub struct HashWriter<W: Write> {
     writer: W,
-    hasher: Blake2b
+    hasher: Blake2b,
 }
 
 impl<W: Write> HashWriter<W> {
     /// Construct a new `HashWriter` given an existing `writer` by value.
     pub fn new(writer: W) -> Self {
         HashWriter {
-            writer: writer,
-            hasher: Blake2b::default()
+            writer,
+            hasher: Blake2b::default(),
         }
     }
 

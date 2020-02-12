@@ -77,8 +77,8 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
 
     fn g1_size(&self, compression: UseCompression) -> usize {
         match compression {
-            UseCompression::Yes => self.parameters.curve.g2_compressed,
-            UseCompression::No => self.parameters.curve.g2,
+            UseCompression::Yes => self.parameters.curve.g1_compressed,
+            UseCompression::No => self.parameters.curve.g1,
         }
     }
 

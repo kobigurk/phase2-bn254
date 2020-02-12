@@ -220,18 +220,16 @@ fn new_accumulator_for_verify(parameters: &CeremonyParams) -> BatchedAccumulator
 
 use powersoftau::parameters::{CeremonyParams, CurveKind};
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
-        28, // turn this to 10 for the small test
-        21, // turn this to 8  for the small test
-    );
-
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: \n<transcript_file>");
+    if args.len() != 4 {
+        println!("Usage: \n<transcript_file> <circuit_power> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let transcript_filename = &args[1];
+    let circuit_power = args[2].parse().expect("could not parse circuit power");
+    let batch_size = args[3].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     // Try to load transcript file from disk.
     let reader = OpenOptions::new()

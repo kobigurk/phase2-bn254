@@ -15,20 +15,18 @@ const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
-        28, // turn this to 10 for the small test
-        21, // turn this to 8  for the small test
-    );
-
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file>");
+    if args.len() != 6 {
+        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file> <circuit_power> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
     let response_filename = &args[2];
     let new_challenge_filename = &args[3];
+    let circuit_power = args[4].parse().expect("could not parse circuit power");
+    let batch_size = args[5].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",

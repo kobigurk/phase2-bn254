@@ -10,19 +10,6 @@ use std::io::Write;
 
 use memmap::MmapOptions;
 
-#[derive(Clone)]
-pub struct Bn256ReducedCeremonyParameters {}
-
-// impl PowersOfTauParameters for Bn256ReducedCeremonyParameters {
-//     const REQUIRED_POWER: usize = 10;
-
-//     // This ceremony is based on the BN256 elliptic curve construction.
-//     const G1_UNCOMPRESSED_BYTE_SIZE: usize = 64;
-//     const G2_UNCOMPRESSED_BYTE_SIZE: usize = 128;
-//     const G1_COMPRESSED_BYTE_SIZE: usize = 32;
-//     const G2_COMPRESSED_BYTE_SIZE: usize = 64;
-// }
-
 const fn num_bits<T>() -> usize {
     std::mem::size_of::<T>() * 8
 }
@@ -36,7 +23,7 @@ fn main() {
     let parameters = CeremonyParams::new(
         CurveKind::Bn256,
         10, // here we use 10 since it's the reduced ceremony
-        21, // turn this to 8  for the small test
+        21,
     );
 
     // Try to load `./challenge` from disk.
@@ -49,8 +36,6 @@ fn main() {
             .map(&reader)
             .expect("unable to create a memory map for input")
     };
-
-    // let parameters = CeremonyParams::new(CurveKind::Bn256, 10, 10);
 
     let current_accumulator = BatchedAccumulator::<Bn256>::deserialize(
         &challenge_readable_map,

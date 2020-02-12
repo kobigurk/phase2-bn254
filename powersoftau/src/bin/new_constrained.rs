@@ -12,18 +12,16 @@ use powersoftau::parameters::{CeremonyParams, CurveKind};
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
-        28, // turn this to 10 for the small test
-        21, // turn this to 8  for the small test
-    );
-
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: \n<challenge_file>");
+    if args.len() != 4 {
+        println!("Usage: \n<challenge_file> <ceremony_size> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
+    let circuit_power = args[2].parse().expect("could not parse circuit power");
+    let batch_size = args[3].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",

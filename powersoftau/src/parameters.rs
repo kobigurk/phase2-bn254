@@ -105,7 +105,6 @@ impl CeremonyParams {
             // The public key of the previous contributor
             public_key_size;
 
-        let batch_size = 1 << batch_size;
         Self {
             curve,
             size,

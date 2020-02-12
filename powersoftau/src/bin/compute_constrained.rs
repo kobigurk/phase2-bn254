@@ -15,19 +15,17 @@ const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
-        28, // turn this to 10 for the small test
-        21, // turn this to 8  for the small test
-    );
-
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        println!("Usage: \n<challenge_file> <response_file>");
+    if args.len() != 5 {
+        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
     let response_filename = &args[2];
+    let circuit_power = args[3].parse().expect("could not parse circuit power");
+    let batch_size = args[4].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will contribute to accumulator for 2^{} powers of tau",

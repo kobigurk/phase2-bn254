@@ -1,4 +1,3 @@
-pub mod accumulator;
 pub mod batched_accumulator;
 pub mod keypair;
 pub mod parameters;

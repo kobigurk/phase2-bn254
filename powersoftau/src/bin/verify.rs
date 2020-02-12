@@ -1,9 +1,9 @@
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
-use powersoftau::accumulator::HashWriter;
 use powersoftau::batched_accumulator::*;
 use powersoftau::*;
+use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 use crate::keypair::*;
 use crate::parameters::*;
@@ -16,6 +16,10 @@ use std::fs::{remove_file, OpenOptions};
 use std::io::{self, BufWriter, Read, Write};
 use std::path::Path;
 
+use blake2::{Blake2b, Digest};
+use generic_array::GenericArray;
+use typenum::U64;
+
 use memmap::*;
 
 const fn num_bits<T>() -> usize {
@@ -25,6 +29,43 @@ const fn num_bits<T>() -> usize {
 fn log_2(x: u64) -> u32 {
     assert!(x > 0);
     num_bits::<u64>() as u32 - x.leading_zeros() - 1
+}
+
+/// Abstraction over a writer which hashes the data being written.
+pub struct HashWriter<W: Write> {
+    writer: W,
+    hasher: Blake2b,
+}
+
+impl<W: Write> HashWriter<W> {
+    /// Construct a new `HashWriter` given an existing `writer` by value.
+    pub fn new(writer: W) -> Self {
+        HashWriter {
+            writer,
+            hasher: Blake2b::default(),
+        }
+    }
+
+    /// Destroy this writer and return the hash of what was written.
+    pub fn into_hash(self) -> GenericArray<u8, U64> {
+        self.hasher.result()
+    }
+}
+
+impl<W: Write> Write for HashWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes = self.writer.write(buf)?;
+
+        if bytes > 0 {
+            self.hasher.input(&buf[0..bytes]);
+        }
+
+        Ok(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
 }
 
 // Computes the hash of the challenge file for the player,
@@ -218,7 +259,6 @@ fn new_accumulator_for_verify(parameters: &CeremonyParams) -> BatchedAccumulator
     .expect("unable to read uncompressed accumulator")
 }
 
-use powersoftau::parameters::{CeremonyParams, CurveKind};
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 4 {

@@ -4,7 +4,7 @@ extern crate exitcode;
 use std::fs::OpenOptions;
 
 use phase2::parameters::*;
-use phase2::circom_circuit::CircomCircuit;
+use phase2::circom_circuit::circuit_from_json_file;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -34,7 +34,7 @@ fn main() {
     let contribution = verify_contribution(&old_params, &new_params).expect("should verify");
 
     let should_filter_points_at_infinity = false;
-    let verification_result = new_params.verify(CircomCircuit::from_json_file(&circuit_filename), should_filter_points_at_infinity).unwrap();
+    let verification_result = new_params.verify(circuit_from_json_file(&circuit_filename), should_filter_points_at_infinity).unwrap();
     assert!(contains_contribution(&verification_result, &contribution));
     println!("Contribution {} verified.", new_params_filename);
 }

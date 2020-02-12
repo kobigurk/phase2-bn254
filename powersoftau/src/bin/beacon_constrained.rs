@@ -2,6 +2,7 @@ use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
     parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    utils::calculate_hash,
 };
 
 use bellman_ce::pairing::bn256::Bn256;
@@ -148,7 +149,7 @@ fn main() {
 
     println!("Calculating previous contribution hash...");
 
-    let current_accumulator_hash = BatchedAccumulator::<Bn256>::calculate_hash(&readable_map);
+    let current_accumulator_hash = calculate_hash(&readable_map);
 
     {
         println!("Contributing on top of the hash:");
@@ -200,7 +201,7 @@ fn main() {
     let output_readonly = writable_map
         .make_read_only()
         .expect("must make a map readonly");
-    let contribution_hash = BatchedAccumulator::<Bn256>::calculate_hash(&output_readonly);
+    let contribution_hash = calculate_hash(&output_readonly);
 
     print!(
         "Done!\n\n\

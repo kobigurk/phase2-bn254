@@ -2,8 +2,8 @@ use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use powersoftau::batched_accumulator::*;
-use powersoftau::*;
 use powersoftau::parameters::{CeremonyParams, CurveKind};
+use powersoftau::*;
 
 use crate::keypair::*;
 use crate::parameters::*;

@@ -1,14 +1,15 @@
-use powersoftau::batched_accumulator::BatchedAccumulator;
-use powersoftau::keypair::PublicKey;
-use powersoftau::parameters::{CheckForCorrectness, UseCompression};
+use powersoftau::{
+    batched_accumulator::BatchedAccumulator,
+    keypair::PublicKey,
+    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    utils::calculate_hash,
+};
 
 use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
 use std::fs::OpenOptions;
 
 use std::io::{Read, Write};
-
-use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
@@ -95,8 +96,7 @@ fn main() {
 
     // Check that contribution is correct
 
-    let current_accumulator_hash =
-        BatchedAccumulator::<Bn256>::calculate_hash(&challenge_readable_map);
+    let current_accumulator_hash = calculate_hash(&challenge_readable_map);
 
     println!("Hash of the `challenge` file for verification:");
     for line in current_accumulator_hash.as_slice().chunks(16) {
@@ -137,7 +137,7 @@ fn main() {
         }
     }
 
-    let response_hash = BatchedAccumulator::<Bn256>::calculate_hash(&response_readable_map);
+    let response_hash = calculate_hash(&response_readable_map);
 
     println!("Hash of the response file for verification:");
     for line in response_hash.as_slice().chunks(16) {
@@ -234,8 +234,7 @@ fn main() {
             .make_read_only()
             .expect("must make a map readonly");
 
-        let recompressed_hash =
-            BatchedAccumulator::<Bn256>::calculate_hash(&new_challenge_readable_map);
+        let recompressed_hash = calculate_hash(&new_challenge_readable_map);
 
         println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
 

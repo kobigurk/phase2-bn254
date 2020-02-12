@@ -2,7 +2,6 @@
 /// and then contributes to entropy in parts as well
 use bellman_ce::pairing::ff::{Field, PrimeField};
 use bellman_ce::pairing::*;
-use blake2::{Blake2b, Digest};
 use log::{error, info};
 
 use generic_array::GenericArray;
@@ -50,19 +49,6 @@ pub struct BatchedAccumulator<'a, E: Engine> {
 }
 
 impl<'a, E: Engine> BatchedAccumulator<'a, E> {
-    /// Calculate the contribution hash from the resulting file. Original powers of tau implementation
-    /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
-    /// implementation now writes without a particular order, so plain recalculation at the end
-    /// of the procedure is more efficient
-    pub fn calculate_hash(input_map: &Mmap) -> GenericArray<u8, U64> {
-        let chunk_size = 1 << 30; // read by 1GB from map
-        let mut hasher = Blake2b::default();
-        for chunk in input_map.chunks(chunk_size) {
-            hasher.input(&chunk);
-        }
-        hasher.result()
-    }
-
     pub fn empty(parameters: &'a CeremonyParams) -> Self {
         Self {
             tau_powers_g1: vec![],

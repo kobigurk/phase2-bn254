@@ -1,6 +1,6 @@
 use powersoftau::batched_accumulator::BatchedAccumulator;
 use powersoftau::parameters::UseCompression;
-use powersoftau::utils::blank_hash;
+use powersoftau::utils::{blank_hash, calculate_hash};
 
 use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
@@ -88,7 +88,7 @@ fn main() {
     let output_readonly = writable_map
         .make_read_only()
         .expect("must make a map readonly");
-    let contribution_hash = BatchedAccumulator::<Bn256>::calculate_hash(&output_readonly);
+    let contribution_hash = calculate_hash(&output_readonly);
 
     println!("Empty contribution is formed with a hash:");
 

@@ -1,7 +1,7 @@
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::PublicKey,
-    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::calculate_hash,
 };
 
@@ -27,7 +27,7 @@ fn main() {
     let circuit_power = args[4].parse().expect("could not parse circuit power");
     let batch_size = args[5].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     println!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
@@ -152,7 +152,7 @@ fn main() {
     }
 
     // get the contributor's public key
-    let public_key = PublicKey::<Bn256>::read(
+    let public_key = PublicKey::read(
         &response_readable_map,
         CONTRIBUTION_IS_COMPRESSED,
         &parameters,
@@ -165,7 +165,7 @@ fn main() {
         "Verifying a contribution to contain proper powers and correspond to the public key..."
     );
 
-    let valid = BatchedAccumulator::<Bn256>::verify_transformation(
+    let valid = BatchedAccumulator::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
         &public_key,
@@ -220,7 +220,7 @@ fn main() {
                 .expect("unable to write hash to new challenge file");
         }
 
-        BatchedAccumulator::<Bn256>::decompress(
+        BatchedAccumulator::decompress(
             &response_readable_map,
             &mut writable_map,
             CheckForCorrectness::No,

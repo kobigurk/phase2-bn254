@@ -2,7 +2,7 @@ use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use powersoftau::batched_accumulator::*;
-use powersoftau::parameters::{CeremonyParams, CurveKind};
+use powersoftau::parameters::CeremonyParams;
 use powersoftau::*;
 
 use crate::parameters::*;
@@ -25,8 +25,7 @@ fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
+    let parameters = CeremonyParams::<Bn256>::new(
         28, // turn this to 10 for the small test
         21, // turn this to 8  for the small test
     );
@@ -49,7 +48,7 @@ fn main() {
             .expect("unable to create a memory map for input")
     };
 
-    let current_accumulator = BatchedAccumulator::<Bn256>::deserialize(
+    let current_accumulator = BatchedAccumulator::deserialize(
         &response_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::Yes,

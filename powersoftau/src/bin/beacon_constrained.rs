@@ -1,7 +1,7 @@
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
-    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::calculate_hash,
 };
 
@@ -30,7 +30,7 @@ fn main() {
     let circuit_power = args[3].parse().expect("could not parse circuit power");
     let batch_size = args[4].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     println!(
         "Will contribute a random beacon to accumulator for 2^{} powers of tau",
@@ -180,7 +180,7 @@ fn main() {
     println!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
-    BatchedAccumulator::<Bn256>::transform(
+    BatchedAccumulator::transform(
         &readable_map,
         &mut writable_map,
         INPUT_IS_COMPRESSED,

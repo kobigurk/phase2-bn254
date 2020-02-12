@@ -7,7 +7,7 @@ use memmap::*;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use powersoftau::parameters::{CeremonyParams, CurveKind};
+use powersoftau::parameters::CeremonyParams;
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
@@ -21,7 +21,7 @@ fn main() {
     let circuit_power = args[2].parse().expect("could not parse circuit power");
     let batch_size = args[3].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",
@@ -74,12 +74,8 @@ fn main() {
         println!();
     }
 
-    BatchedAccumulator::<Bn256>::generate_initial(
-        &mut writable_map,
-        COMPRESS_NEW_CHALLENGE,
-        &parameters,
-    )
-    .expect("generation of initial accumulator is successful");
+    BatchedAccumulator::generate_initial(&mut writable_map, COMPRESS_NEW_CHALLENGE, &parameters)
+        .expect("generation of initial accumulator is successful");
     writable_map
         .flush()
         .expect("unable to flush memmap to disk");

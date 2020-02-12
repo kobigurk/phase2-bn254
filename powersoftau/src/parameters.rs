@@ -1,43 +1,61 @@
-use bellman_ce::pairing::GroupDecodingError;
+use bellman_ce::pairing::{bls12_381::Bls12, bn256::Bn256, Engine, GroupDecodingError};
 use std::fmt;
 use std::io;
+use std::marker::PhantomData;
+
+/// Extension trait for Engine for specifying the sizes of the G1 and G2 elements.
+// @dev Implement this trait in order to add support for more curves
+pub trait EngineExt: Engine {
+    fn group_element_sizes() -> (usize, usize);
+}
+
+impl EngineExt for Bls12 {
+    /// Bls12_381: G1 -> 96, G2 -> 192
+    fn group_element_sizes() -> (usize, usize) {
+        (96, 192)
+    }
+}
+
+impl EngineExt for Bn256 {
+    /// Bn256: G1 -> 64, G2 -> 128
+    fn group_element_sizes() -> (usize, usize) {
+        (64, 128)
+    }
+}
 
 /// The sizes of the group elements of a curev
-#[derive(Clone, PartialEq, Eq)]
-pub struct CurveParams {
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct CurveParams<E> {
+    /// Size of a G1 Element
     pub g1: usize,
+    /// Size of a G2 Element
     pub g2: usize,
+    /// Size of a compressed G1 Element
     pub g1_compressed: usize,
+    /// Size of a compressed G2 Element
     pub g2_compressed: usize,
+    engine_type: PhantomData<E>,
 }
 
-/// The types of curves we support
-#[derive(Clone, PartialEq, Eq)]
-pub enum CurveKind {
-    Bn256,
-}
-
-impl CurveParams {
-    /// Creates a new curve based on the provided CurveKind
-    pub fn new(kind: CurveKind) -> Self {
-        let (g1, g2) = match kind {
-            CurveKind::Bn256 => (64, 128),
-        };
+impl<E: EngineExt> CurveParams<E> {
+    pub fn new() -> CurveParams<E> {
+        let (g1, g2) = E::group_element_sizes();
 
         CurveParams {
             g1,
             g2,
             g1_compressed: g1 / 2,
             g2_compressed: g2 / 2,
+            engine_type: PhantomData,
         }
     }
 }
 
 #[derive(Clone, PartialEq, Eq)]
 /// The parameters used for the trusted setup ceremony
-pub struct CeremonyParams {
+pub struct CeremonyParams<E> {
     /// The type of the curve being used (currently only supports BN256)
-    pub curve: CurveParams,
+    pub curve: CurveParams<E>,
     /// The number of Powers of Tau G1 elements which will be accumulated
     pub powers_g1_length: usize,
     /// The number of Powers of Tau Alpha/Beta/G2 elements which will be accumulated
@@ -58,18 +76,18 @@ pub struct CeremonyParams {
     pub hash_size: usize,
 }
 
-impl CeremonyParams {
+impl<E: EngineExt> CeremonyParams<E> {
     /// Constructs a new ceremony parameters object from the type of provided curve
-    pub fn new(kind: CurveKind, size: usize, batch_size: usize) -> Self {
+    pub fn new(size: usize, batch_size: usize) -> Self {
         // create the curve
-        let curve = CurveParams::new(kind);
+        let curve = CurveParams::<E>::new();
         Self::new_with_curve(curve, size, batch_size)
     }
 
     /// Constructs a new ceremony parameters object from the directly provided curve with parameters
     /// Consider using the `new` method if you want to use one of the pre-implemented curves
-    pub fn new_with_curve(curve: CurveParams, size: usize, batch_size: usize) -> Self {
-        // asume we're using a 64 byte long hash function such as Blake
+    pub fn new_with_curve(curve: CurveParams<E>, size: usize, batch_size: usize) -> Self {
+        // assume we're using a 64 byte long hash function such as Blake
         let hash_size = 64;
 
         // 2^{size}

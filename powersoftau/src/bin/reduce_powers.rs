@@ -1,7 +1,7 @@
 use bellman_ce::pairing::bn256::Bn256;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
-    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::{calculate_hash, reduced_hash},
 };
 
@@ -20,8 +20,7 @@ pub fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
-    let parameters = CeremonyParams::new(
-        CurveKind::Bn256,
+    let parameters = CeremonyParams::<Bn256>::new(
         10, // here we use 10 since it's the reduced ceremony
         21,
     );
@@ -37,7 +36,7 @@ fn main() {
             .expect("unable to create a memory map for input")
     };
 
-    let current_accumulator = BatchedAccumulator::<Bn256>::deserialize(
+    let current_accumulator = BatchedAccumulator::deserialize(
         &challenge_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::No,
@@ -45,7 +44,7 @@ fn main() {
     )
     .expect("unable to read compressed accumulator");
 
-    let mut reduced_accumulator = BatchedAccumulator::<Bn256>::empty(&parameters);
+    let mut reduced_accumulator = BatchedAccumulator::empty(&parameters);
     reduced_accumulator.tau_powers_g1 =
         current_accumulator.tau_powers_g1[..parameters.powers_g1_length].to_vec();
     reduced_accumulator.tau_powers_g2 =

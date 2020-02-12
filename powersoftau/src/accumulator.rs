@@ -39,7 +39,7 @@ use typenum::consts::U64;
 
 use super::keypair::{PrivateKey, PublicKey};
 use super::parameters::{
-    CheckForCorrectness, DeserializationError, PowersOfTauParameters, UseCompression,
+    CeremonyParams, CheckForCorrectness, DeserializationError, UseCompression,
 };
 use super::utils::{hash_to_g2, power_pairs, same_ratio, write_point};
 
@@ -51,7 +51,7 @@ use super::utils::{hash_to_g2, power_pairs, same_ratio, write_point};
 /// * (τ, τ<sup>2</sup>, ..., τ<sup>2<sup>22</sup> - 2</sup>, α, ατ, ατ<sup>2</sup>, ..., ατ<sup>2<sup>21</sup> - 1</sup>, β, βτ, βτ<sup>2</sup>, ..., βτ<sup>2<sup>21</sup> - 1</sup>)<sub>1</sub>
 /// * (β, τ, τ<sup>2</sup>, ..., τ<sup>2<sup>21</sup> - 1</sup>)<sub>2</sub>
 #[derive(Eq, Clone)]
-pub struct Accumulator<E: Engine, P: PowersOfTauParameters> {
+pub struct Accumulator<'a, E: Engine> {
     /// tau^0, tau^1, tau^2, ..., tau^{TAU_POWERS_G1_LENGTH - 1}
     pub tau_powers_g1: Vec<E::G1Affine>,
     /// tau^0, tau^1, tau^2, ..., tau^{TAU_POWERS_LENGTH - 1}
@@ -63,11 +63,11 @@ pub struct Accumulator<E: Engine, P: PowersOfTauParameters> {
     /// beta
     pub beta_g2: E::G2Affine,
     /// Keep parameters here
-    pub parameters: P,
+    pub parameters: &'a CeremonyParams,
 }
 
-impl<E: Engine, P: PowersOfTauParameters> PartialEq for Accumulator<E, P> {
-    fn eq(&self, other: &Accumulator<E, P>) -> bool {
+impl<E: Engine> PartialEq for Accumulator<'_, E> {
+    fn eq(&self, other: &Accumulator<E>) -> bool {
         self.tau_powers_g1.eq(&other.tau_powers_g1)
             && self.tau_powers_g2.eq(&other.tau_powers_g2)
             && self.alpha_tau_powers_g1.eq(&other.alpha_tau_powers_g1)
@@ -76,14 +76,14 @@ impl<E: Engine, P: PowersOfTauParameters> PartialEq for Accumulator<E, P> {
     }
 }
 
-impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
+impl<'a, E: Engine> Accumulator<'a, E> {
     /// Constructs an "initial" accumulator with τ = 1, α = 1, β = 1.
-    pub fn new(parameters: P) -> Self {
+    pub fn new(parameters: &'a CeremonyParams) -> Self {
         Accumulator {
-            tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_G1_LENGTH],
-            tau_powers_g2: vec![E::G2Affine::one(); P::TAU_POWERS_LENGTH],
-            alpha_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
-            beta_tau_powers_g1: vec![E::G1Affine::one(); P::TAU_POWERS_LENGTH],
+            tau_powers_g1: vec![E::G1Affine::one(); parameters.powers_g1_length],
+            tau_powers_g2: vec![E::G2Affine::one(); parameters.powers_length],
+            alpha_tau_powers_g1: vec![E::G1Affine::one(); parameters.powers_length],
+            beta_tau_powers_g1: vec![E::G1Affine::one(); parameters.powers_length],
             beta_g2: E::G2Affine::one(),
             parameters,
         }
@@ -123,7 +123,7 @@ impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
         reader: &mut R,
         compression: UseCompression,
         checked: CheckForCorrectness,
-        parameters: P,
+        parameters: &'a CeremonyParams,
     ) -> Result<Self, DeserializationError> {
         fn read_all<EE: Engine, R: Read, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
             reader: &mut R,
@@ -217,13 +217,13 @@ impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
         }
 
         let tau_powers_g1 =
-            read_all::<E, _, _>(reader, P::TAU_POWERS_G1_LENGTH, compression, checked)?;
+            read_all::<E, _, _>(reader, parameters.powers_g1_length, compression, checked)?;
         let tau_powers_g2 =
-            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+            read_all::<E, _, _>(reader, parameters.powers_length, compression, checked)?;
         let alpha_tau_powers_g1 =
-            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+            read_all::<E, _, _>(reader, parameters.powers_length, compression, checked)?;
         let beta_tau_powers_g1 =
-            read_all::<E, _, _>(reader, P::TAU_POWERS_LENGTH, compression, checked)?;
+            read_all::<E, _, _>(reader, parameters.powers_length, compression, checked)?;
         let beta_g2 = read_all::<E, _, _>(reader, 1, compression, checked)?[0];
 
         Ok(Accumulator {
@@ -239,8 +239,8 @@ impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
     /// Transforms the accumulator with a private key.
     pub fn transform(&mut self, key: &PrivateKey<E>) {
         // Construct the powers of tau
-        let mut taupowers = vec![E::Fr::zero(); P::TAU_POWERS_G1_LENGTH];
-        let chunk_size = P::TAU_POWERS_G1_LENGTH / num_cpus::get();
+        let mut taupowers = vec![E::Fr::zero(); self.parameters.powers_g1_length];
+        let chunk_size = self.parameters.powers_g1_length / num_cpus::get();
 
         // Construct exponents in parallel
         crossbeam::scope(|scope| {
@@ -307,20 +307,21 @@ impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
             }
         }
 
+        let tau_powers_length = self.parameters.powers_length;
         batch_exp::<E, _>(&mut self.tau_powers_g1, &taupowers[0..], None);
         batch_exp::<E, _>(
             &mut self.tau_powers_g2,
-            &taupowers[0..P::TAU_POWERS_LENGTH],
+            &taupowers[0..tau_powers_length],
             None,
         );
         batch_exp::<E, _>(
             &mut self.alpha_tau_powers_g1,
-            &taupowers[0..P::TAU_POWERS_LENGTH],
+            &taupowers[0..tau_powers_length],
             Some(&key.alpha),
         );
         batch_exp::<E, _>(
             &mut self.beta_tau_powers_g1,
-            &taupowers[0..P::TAU_POWERS_LENGTH],
+            &taupowers[0..tau_powers_length],
             Some(&key.beta),
         );
         self.beta_g2 = self.beta_g2.mul(key.beta).into_affine();
@@ -328,9 +329,9 @@ impl<E: Engine, P: PowersOfTauParameters> Accumulator<E, P> {
 }
 
 /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
-pub fn verify_transform<E: Engine, P: PowersOfTauParameters>(
-    before: &Accumulator<E, P>,
-    after: &Accumulator<E, P>,
+pub fn verify_transform<E: Engine>(
+    before: &Accumulator<E>,
+    after: &Accumulator<E>,
     key: &PublicKey<E>,
     digest: &[u8],
 ) -> bool {

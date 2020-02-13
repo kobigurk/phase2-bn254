@@ -1,11 +1,10 @@
-use powersoftau::{
+use crate::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::calculate_hash,
 };
-
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::Engine;
 use memmap::*;
 use std::fs::OpenOptions;
 
@@ -15,28 +14,11 @@ const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
 const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let response_filename = &args[2];
-    let circuit_power = args[3].parse().expect("could not parse circuit power");
-    let batch_size = args[4].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
-    println!(
-        "Will contribute to accumulator for 2^{} powers of tau",
-        parameters.size
-    );
-    println!(
-        "In total will generate up to {} powers",
-        parameters.powers_g1_length
-    );
-
+pub fn compute_constrained<T: Engine>(
+    challenge_filename: &str,
+    response_filename: &str,
+    parameters: &CeremonyParams<T>,
+) {
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
         use blake2::{Blake2b, Digest};

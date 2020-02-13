@@ -1,7 +1,8 @@
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
-    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
+    utils::calculate_hash,
 };
 
 use bellman_ce::pairing::bn256::Bn256;
@@ -29,7 +30,7 @@ fn main() {
     let circuit_power = args[3].parse().expect("could not parse circuit power");
     let batch_size = args[4].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     println!(
         "Will contribute a random beacon to accumulator for 2^{} powers of tau",
@@ -148,7 +149,7 @@ fn main() {
 
     println!("Calculating previous contribution hash...");
 
-    let current_accumulator_hash = BatchedAccumulator::<Bn256>::calculate_hash(&readable_map);
+    let current_accumulator_hash = calculate_hash(&readable_map);
 
     {
         println!("Contributing on top of the hash:");
@@ -179,7 +180,7 @@ fn main() {
     println!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
-    BatchedAccumulator::<Bn256>::transform(
+    BatchedAccumulator::transform(
         &readable_map,
         &mut writable_map,
         INPUT_IS_COMPRESSED,
@@ -200,7 +201,7 @@ fn main() {
     let output_readonly = writable_map
         .make_read_only()
         .expect("must make a map readonly");
-    let contribution_hash = BatchedAccumulator::<Bn256>::calculate_hash(&output_readonly);
+    let contribution_hash = calculate_hash(&output_readonly);
 
     print!(
         "Done!\n\n\

@@ -2,8 +2,8 @@ use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use powersoftau::batched_accumulator::*;
+use powersoftau::parameters::CeremonyParams;
 use powersoftau::*;
-use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 use crate::keypair::*;
 use crate::parameters::*;
@@ -71,14 +71,14 @@ impl<W: Write> Write for HashWriter<W> {
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
 // response file hash.
-fn get_challenge_file_hash(
-    acc: &mut BatchedAccumulator<Bn256>,
+fn get_challenge_file_hash<E: Engine>(
+    acc: &mut BatchedAccumulator<E>,
     last_response_file_hash: &[u8; 64],
     is_initial: bool,
-    parameters: &CeremonyParams,
 ) -> [u8; 64] {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
+    let parameters = acc.parameters;
 
     let file_name = "tmp_challenge_file_hash";
 
@@ -110,12 +110,8 @@ fn get_challenge_file_hash(
             .expect("unable to write blank hash to challenge file");
 
         if is_initial {
-            BatchedAccumulator::<Bn256>::generate_initial(
-                &mut writable_map,
-                UseCompression::No,
-                parameters,
-            )
-            .expect("generation of initial accumulator is successful");
+            BatchedAccumulator::generate_initial(&mut writable_map, UseCompression::No, parameters)
+                .expect("generation of initial accumulator is successful");
         } else {
             acc.serialize(&mut writable_map, UseCompression::No, parameters)
                 .unwrap();
@@ -140,17 +136,19 @@ fn get_challenge_file_hash(
     tmp
 }
 
+use bellman_ce::pairing::Engine;
+
 // Computes the hash of the response file, given the new
 // accumulator, the player's public key, and the challenge
 // file's hash.
-fn get_response_file_hash(
-    acc: &mut BatchedAccumulator<Bn256>,
-    pubkey: &PublicKey<Bn256>,
+fn get_response_file_hash<E: Engine>(
+    acc: &mut BatchedAccumulator<E>,
+    pubkey: &PublicKey<E>,
     last_challenge_file_hash: &[u8; 64],
-    parameters: &CeremonyParams,
 ) -> [u8; 64] {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
+    let parameters = acc.parameters;
 
     let file_name = "tmp_response_file_hash";
     if Path::new(file_name).exists() {
@@ -205,7 +203,7 @@ fn get_response_file_hash(
     tmp
 }
 
-fn new_accumulator_for_verify(parameters: &CeremonyParams) -> BatchedAccumulator<Bn256> {
+fn new_accumulator_for_verify(parameters: &CeremonyParams<Bn256>) -> BatchedAccumulator<Bn256> {
     let file_name = "tmp_initial_challenge";
     {
         if Path::new(file_name).exists() {
@@ -228,12 +226,8 @@ fn new_accumulator_for_verify(parameters: &CeremonyParams) -> BatchedAccumulator
                 .map_mut(&file)
                 .expect("unable to create a memory map")
         };
-        BatchedAccumulator::<Bn256>::generate_initial(
-            &mut writable_map,
-            UseCompression::No,
-            &parameters,
-        )
-        .expect("generation of initial accumulator is successful");
+        BatchedAccumulator::generate_initial(&mut writable_map, UseCompression::No, &parameters)
+            .expect("generation of initial accumulator is successful");
         writable_map
             .flush()
             .expect("unable to flush memmap to disk");
@@ -269,7 +263,7 @@ fn main() {
     let circuit_power = args[2].parse().expect("could not parse circuit power");
     let batch_size = args[3].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     // Try to load transcript file from disk.
     let reader = OpenOptions::new()
@@ -329,12 +323,8 @@ fn main() {
             .make_read_only()
             .expect("must make a map readonly");
 
-        let last_challenge_file_hash = get_challenge_file_hash(
-            &mut current_accumulator,
-            &last_response_file_hash,
-            i == 0,
-            &parameters,
-        );
+        let last_challenge_file_hash =
+            get_challenge_file_hash(&mut current_accumulator, &last_response_file_hash, i == 0);
 
         // Deserialize the accumulator provided by the player in
         // their response file. It's stored in the transcript in
@@ -350,8 +340,7 @@ fn main() {
         .expect("unable to read uncompressed accumulator");
 
         let response_file_pubkey =
-            PublicKey::<Bn256>::read(&response_readable_map, UseCompression::Yes, &parameters)
-                .unwrap();
+            PublicKey::read(&response_readable_map, UseCompression::Yes, &parameters).unwrap();
         // Compute the hash of the response file. (we had it in uncompressed
         // form in the transcript, but the response file is compressed to save
         // participants bandwidth.)
@@ -359,7 +348,6 @@ fn main() {
             &mut response_file_accumulator,
             &response_file_pubkey,
             &last_challenge_file_hash,
-            &parameters,
         );
 
         // Verify the transformation from the previous accumulator to the new

@@ -1,14 +1,15 @@
-use powersoftau::batched_accumulator::BatchedAccumulator;
-use powersoftau::keypair::PublicKey;
-use powersoftau::parameters::{CheckForCorrectness, UseCompression};
+use powersoftau::{
+    batched_accumulator::BatchedAccumulator,
+    keypair::PublicKey,
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
+    utils::calculate_hash,
+};
 
 use bellman_ce::pairing::bn256::Bn256;
 use memmap::*;
 use std::fs::OpenOptions;
 
 use std::io::{Read, Write};
-
-use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
@@ -26,7 +27,7 @@ fn main() {
     let circuit_power = args[4].parse().expect("could not parse circuit power");
     let batch_size = args[5].parse().expect("could not parse batch size");
 
-    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
     println!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
@@ -95,8 +96,7 @@ fn main() {
 
     // Check that contribution is correct
 
-    let current_accumulator_hash =
-        BatchedAccumulator::<Bn256>::calculate_hash(&challenge_readable_map);
+    let current_accumulator_hash = calculate_hash(&challenge_readable_map);
 
     println!("Hash of the `challenge` file for verification:");
     for line in current_accumulator_hash.as_slice().chunks(16) {
@@ -137,7 +137,7 @@ fn main() {
         }
     }
 
-    let response_hash = BatchedAccumulator::<Bn256>::calculate_hash(&response_readable_map);
+    let response_hash = calculate_hash(&response_readable_map);
 
     println!("Hash of the response file for verification:");
     for line in response_hash.as_slice().chunks(16) {
@@ -152,7 +152,7 @@ fn main() {
     }
 
     // get the contributor's public key
-    let public_key = PublicKey::<Bn256>::read(
+    let public_key = PublicKey::read(
         &response_readable_map,
         CONTRIBUTION_IS_COMPRESSED,
         &parameters,
@@ -165,7 +165,7 @@ fn main() {
         "Verifying a contribution to contain proper powers and correspond to the public key..."
     );
 
-    let valid = BatchedAccumulator::<Bn256>::verify_transformation(
+    let valid = BatchedAccumulator::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
         &public_key,
@@ -220,7 +220,7 @@ fn main() {
                 .expect("unable to write hash to new challenge file");
         }
 
-        BatchedAccumulator::<Bn256>::decompress(
+        BatchedAccumulator::decompress(
             &response_readable_map,
             &mut writable_map,
             CheckForCorrectness::No,
@@ -234,8 +234,7 @@ fn main() {
             .make_read_only()
             .expect("must make a map readonly");
 
-        let recompressed_hash =
-            BatchedAccumulator::<Bn256>::calculate_hash(&new_challenge_readable_map);
+        let recompressed_hash = calculate_hash(&new_challenge_readable_map);
 
         println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
 

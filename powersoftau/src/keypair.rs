@@ -171,7 +171,7 @@ impl<E: Engine> PublicKey<E> {
         &self,
         output_map: &mut MmapMut,
         accumulator_was_compressed: UseCompression,
-        parameters: &CeremonyParams,
+        parameters: &CeremonyParams<E>,
     ) -> io::Result<()> {
         let mut position = match accumulator_was_compressed {
             UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
@@ -218,7 +218,7 @@ impl<E: Engine> PublicKey<E> {
     pub fn read(
         input_map: &Mmap,
         accumulator_was_compressed: UseCompression,
-        parameters: &CeremonyParams,
+        parameters: &CeremonyParams<E>,
     ) -> Result<Self, DeserializationError> {
         fn read_uncompressed<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
             input_map: &Mmap,
@@ -291,12 +291,12 @@ mod tests {
 
     mod bn256 {
         use super::*;
-        use crate::parameters::{CurveKind, CurveParams};
+        use crate::parameters::CurveParams;
         use bellman_ce::pairing::bn256::Bn256;
 
         #[test]
         fn test_pubkey_serialization() {
-            let curve = CurveParams::new(CurveKind::Bn256);
+            let curve = CurveParams::<Bn256>::new();
             let public_key_size = 6 * curve.g1 + 3 * curve.g2;
 
             // Generate a random public key

@@ -2,7 +2,6 @@
 /// and then contributes to entropy in parts as well
 use bellman_ce::pairing::ff::{Field, PrimeField};
 use bellman_ce::pairing::*;
-use blake2::{Blake2b, Digest};
 use log::{error, info};
 
 use generic_array::GenericArray;
@@ -46,24 +45,11 @@ pub struct BatchedAccumulator<'a, E: Engine> {
     /// Hash chain hash
     pub hash: GenericArray<u8, U64>,
     /// The parameters used for the setup of this accumulator
-    pub parameters: &'a CeremonyParams,
+    pub parameters: &'a CeremonyParams<E>,
 }
 
 impl<'a, E: Engine> BatchedAccumulator<'a, E> {
-    /// Calculate the contribution hash from the resulting file. Original powers of tau implementation
-    /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
-    /// implementation now writes without a particular order, so plain recalculation at the end
-    /// of the procedure is more efficient
-    pub fn calculate_hash(input_map: &Mmap) -> GenericArray<u8, U64> {
-        let chunk_size = 1 << 30; // read by 1GB from map
-        let mut hasher = Blake2b::default();
-        for chunk in input_map.chunks(chunk_size) {
-            hasher.input(&chunk);
-        }
-        hasher.result()
-    }
-
-    pub fn empty(parameters: &'a CeremonyParams) -> Self {
+    pub fn empty(parameters: &'a CeremonyParams<E>) -> Self {
         Self {
             tau_powers_g1: vec![],
             tau_powers_g2: vec![],
@@ -297,7 +283,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         output_is_compressed: UseCompression,
         check_input_for_correctness: CheckForCorrectness,
         check_output_for_correctness: CheckForCorrectness,
-        parameters: &'a CeremonyParams,
+        parameters: &'a CeremonyParams<E>,
     ) -> bool {
         use itertools::MinMaxResult::MinMax;
         assert_eq!(digest.len(), 64);
@@ -557,7 +543,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         input_map: &Mmap,
         output_map: &mut MmapMut,
         check_input_for_correctness: CheckForCorrectness,
-        parameters: &'a CeremonyParams,
+        parameters: &'a CeremonyParams<E>,
     ) -> io::Result<()> {
         use itertools::MinMaxResult::MinMax;
 
@@ -634,7 +620,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         input_map: &Mmap,
         check_input_for_correctness: CheckForCorrectness,
         compression: UseCompression,
-        parameters: &'a CeremonyParams,
+        parameters: &'a CeremonyParams<E>,
     ) -> io::Result<BatchedAccumulator<'a, E>> {
         use itertools::MinMaxResult::MinMax;
 
@@ -734,7 +720,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         &mut self,
         output_map: &mut MmapMut,
         compression: UseCompression,
-        parameters: &CeremonyParams,
+        parameters: &CeremonyParams<E>,
     ) -> io::Result<()> {
         use itertools::MinMaxResult::MinMax;
 
@@ -1136,7 +1122,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         compress_the_output: UseCompression,
         check_input_for_correctness: CheckForCorrectness,
         key: &PrivateKey<E>,
-        parameters: &'a CeremonyParams,
+        parameters: &'a CeremonyParams<E>,
     ) -> io::Result<()> {
         /// Exponentiate a large number of points, with an optional coefficient to be applied to the
         /// exponent.
@@ -1308,7 +1294,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
     pub fn generate_initial(
         output_map: &mut MmapMut,
         compress_the_output: UseCompression,
-        parameters: &'a CeremonyParams,
+        parameters: &'a CeremonyParams<E>,
     ) -> io::Result<()> {
         use itertools::MinMaxResult::MinMax;
 

@@ -7,7 +7,7 @@ use crate::parameters::*;
 use crate::utils::*;
 
 use bellman_ce::domain::{EvaluationDomain, Point};
-use bellman_ce::multicore::Worker;
+use bellman_ce::worker::Worker;
 
 use std::fs::{remove_file, OpenOptions};
 use std::io::{self, BufWriter, Read, Write};

@@ -1,27 +1,14 @@
-extern crate bellman_ce;
-
-use std::io::{
-    self,
-    Read,
-    Write,
-};
+use std::io::{self, Read, Write};
 
 use bellman_ce::pairing::{
-    EncodedPoint,
-    CurveAffine,
-    bn256::{
-        Fr,
-        G1Affine,
-        G1Uncompressed,
-        G2Affine,
-        G2Uncompressed
-    }
+    bn256::{Fr, G1Affine, G1Uncompressed, G2Affine, G2Uncompressed},
+    CurveAffine, EncodedPoint,
 };
 
 /// This needs to be destroyed by at least one participant
 /// for the final parameters to be secure.
 pub struct PrivateKey {
-    pub delta: Fr
+    pub delta: Fr,
 }
 
 /// This allows others to verify that you contributed. The hash produced
@@ -47,11 +34,7 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
-    pub fn write<W: Write>(
-        &self,
-        mut writer: W
-    ) -> io::Result<()>
-    {
+    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
         writer.write_all(self.delta_after.into_uncompressed().as_ref())?;
         writer.write_all(self.s.into_uncompressed().as_ref())?;
         writer.write_all(self.s_delta.into_uncompressed().as_ref())?;
@@ -61,56 +44,77 @@ impl PublicKey {
         Ok(())
     }
 
-    pub fn read<R: Read>(
-        mut reader: R
-    ) -> io::Result<PublicKey>
-    {
+    pub fn read<R: Read>(mut reader: R) -> io::Result<PublicKey> {
         let mut g1_repr = G1Uncompressed::empty();
         let mut g2_repr = G2Uncompressed::empty();
 
         reader.read_exact(g1_repr.as_mut())?;
-        let delta_after = g1_repr.into_affine().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let delta_after = g1_repr
+            .into_affine()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         if delta_after.is_zero() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "point at infinity",
+            ));
         }
 
         reader.read_exact(g1_repr.as_mut())?;
-        let s = g1_repr.into_affine().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let s = g1_repr
+            .into_affine()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         if s.is_zero() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "point at infinity",
+            ));
         }
 
         reader.read_exact(g1_repr.as_mut())?;
-        let s_delta = g1_repr.into_affine().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let s_delta = g1_repr
+            .into_affine()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         if s_delta.is_zero() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "point at infinity",
+            ));
         }
 
         reader.read_exact(g2_repr.as_mut())?;
-        let r_delta = g2_repr.into_affine().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let r_delta = g2_repr
+            .into_affine()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         if r_delta.is_zero() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "point at infinity",
+            ));
         }
 
         let mut transcript = [0u8; 64];
         reader.read_exact(&mut transcript)?;
 
         Ok(PublicKey {
-            delta_after, s, s_delta, r_delta, transcript
+            delta_after,
+            s,
+            s_delta,
+            r_delta,
+            transcript,
         })
     }
 }
 
 impl PartialEq for PublicKey {
     fn eq(&self, other: &PublicKey) -> bool {
-        self.delta_after == other.delta_after &&
-            self.s == other.s &&
-            self.s_delta == other.s_delta &&
-            self.r_delta == other.r_delta &&
-            &self.transcript[..] == &other.transcript[..]
+        self.delta_after == other.delta_after
+            && self.s == other.s
+            && self.s_delta == other.s_delta
+            && self.r_delta == other.r_delta
+            && &self.transcript[..] == &other.transcript[..]
     }
 }

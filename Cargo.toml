@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "./powersoftau",
+    "./phase2"
+]
+
+[patch.crates-io]
+bellman_ce = { git = "https://github.com/matter-labs/bellman", branch = "master"  }

@@ -1,12 +1,3 @@
-extern crate rand;
-extern crate phase2;
-extern crate num_bigint;
-extern crate num_traits;
-extern crate blake2;
-extern crate byteorder;
-extern crate exitcode;
-extern crate itertools;
-
 use itertools::Itertools;
 
 use std::fs::File;
@@ -24,14 +15,12 @@ fn main() {
     let out_params_filename = &args[2];
     let entropy = &args[3];
 
-    let disallow_points_at_infinity = false;
-
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
-        use byteorder::{ReadBytesExt, BigEndian};
         use blake2::{Blake2b, Digest};
-        use rand::{SeedableRng, Rng, OsRng};
+        use byteorder::{BigEndian, ReadBytesExt};
         use rand::chacha::ChaChaRng;
+        use rand::{OsRng, Rng, SeedableRng};
 
         let h = {
             let mut system_rng = OsRng::new().unwrap();
@@ -53,17 +42,19 @@ fn main() {
         // Interpret the first 32 bytes of the digest as 8 32-bit words
         let mut seed = [0u32; 8];
         for i in 0..8 {
-            seed[i] = digest.read_u32::<BigEndian>().expect("digest is large enough for this to work");
+            seed[i] = digest
+                .read_u32::<BigEndian>()
+                .expect("digest is large enough for this to work");
         }
 
         ChaChaRng::from_seed(&seed)
     };
 
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(in_params_filename)
-                            .expect("unable to open.");
-    let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
+        .read(true)
+        .open(in_params_filename)
+        .expect("unable to open.");
+    let mut params = MPCParameters::read(reader, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
     let hash = params.contribute(&mut rng);
@@ -71,5 +62,7 @@ fn main() {
 
     println!("Writing parameters to {}.", out_params_filename);
     let mut f = File::create(out_params_filename).unwrap();
-    params.write(&mut f).expect("failed to write updated parameters");
+    params
+        .write(&mut f)
+        .expect("failed to write updated parameters");
 }

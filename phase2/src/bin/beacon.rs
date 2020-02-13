@@ -1,14 +1,3 @@
-extern crate rand;
-extern crate phase2;
-extern crate num_bigint;
-extern crate num_traits;
-extern crate blake2;
-extern crate byteorder;
-extern crate exitcode;
-extern crate itertools;
-extern crate crypto;
-extern crate hex;
-
 use itertools::Itertools;
 
 use std::fs::File;
@@ -27,27 +16,25 @@ fn main() {
     let num_iterations_exp = &args[3].parse::<usize>().unwrap();
     let out_params_filename = &args[4];
 
-    let disallow_points_at_infinity = false;
-
     // Create an RNG based on the outcome of the random beacon
     let mut rng = {
-        use byteorder::{ReadBytesExt, BigEndian};
-        use rand::{SeedableRng};
-        use rand::chacha::ChaChaRng;
-        use crypto::sha2::Sha256;
+        use byteorder::{BigEndian, ReadBytesExt};
         use crypto::digest::Digest;
+        use crypto::sha2::Sha256;
+        use rand::chacha::ChaChaRng;
+        use rand::SeedableRng;
 
         // The hash used for the beacon
         let mut cur_hash = hex::decode(beacon_hash).unwrap();
         // Performs 2^n hash iterations over it
         let n: usize = *num_iterations_exp;
 
-        for i in 0..(1u64<<n) {
+        for i in 0..(1u64 << n) {
             // Print 1024 of the interstitial states
             // so that verification can be
             // parallelized
 
-            if i % (1u64<<(n-10)) == 0 {
+            if i % (1u64 << (n - 10)) == 0 {
                 print!("{}: ", i);
                 for b in cur_hash.iter() {
                     print!("{:02x}", b);
@@ -70,7 +57,9 @@ fn main() {
 
         let mut seed = [0u32; 8];
         for i in 0..8 {
-            seed[i] = digest.read_u32::<BigEndian>().expect("digest is large enough for this to work");
+            seed[i] = digest
+                .read_u32::<BigEndian>()
+                .expect("digest is large enough for this to work");
         }
 
         ChaChaRng::from_seed(&seed)
@@ -79,10 +68,10 @@ fn main() {
     println!("Done creating a beacon RNG");
 
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(in_params_filename)
-                            .expect("unable to open.");
-    let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
+        .read(true)
+        .open(in_params_filename)
+        .expect("unable to open.");
+    let mut params = MPCParameters::read(reader, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
     let hash = params.contribute(&mut rng);
@@ -90,5 +79,7 @@ fn main() {
 
     println!("Writing parameters to {}.", out_params_filename);
     let mut f = File::create(out_params_filename).unwrap();
-    params.write(&mut f).expect("failed to write updated parameters");
+    params
+        .write(&mut f)
+        .expect("failed to write updated parameters");
 }

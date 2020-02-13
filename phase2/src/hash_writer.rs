@@ -1,20 +1,18 @@
-extern crate blake2_rfc;
-
+use blake2_rfc::blake2b::Blake2b;
 use std::io;
 use std::io::Write;
-use blake2_rfc::blake2b::Blake2b;
 
 /// Abstraction over a writer which hashes the data being written.
 pub struct HashWriter<W: Write> {
     writer: W,
-    hasher: Blake2b
+    hasher: Blake2b,
 }
 
 impl Clone for HashWriter<io::Sink> {
     fn clone(&self) -> HashWriter<io::Sink> {
         HashWriter {
             writer: io::sink(),
-            hasher: self.hasher.clone()
+            hasher: self.hasher.clone(),
         }
     }
 }
@@ -24,7 +22,7 @@ impl<W: Write> HashWriter<W> {
     pub fn new(writer: W) -> Self {
         HashWriter {
             writer: writer,
-            hasher: Blake2b::new(64)
+            hasher: Blake2b::new(64),
         }
     }
 

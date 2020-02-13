@@ -1,78 +1,27 @@
-extern crate bellman_ce;
-extern crate rand;
-extern crate byteorder;
-extern crate num_cpus;
-extern crate crossbeam;
-
-#[cfg(feature = "wasm")]
-use bellman_ce::singlecore::Worker;
-#[cfg(not(feature = "wasm"))]
-use bellman_ce::multicore::Worker;
-
-use byteorder::{
-    BigEndian,
-    ReadBytesExt,
-    WriteBytesExt
-};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 
 use std::{
-    io::{
-        self,
-        Read,
-        Write,
-        BufReader
-    },
-    fs::{
-        File
-    },
-    sync::{
-        Arc
-    }
-};
-
-use bellman_ce::pairing::{
-    ff::{
-        PrimeField,
-        Field,
-    },
-    EncodedPoint,
-    CurveAffine,
-    CurveProjective,
-    Wnaf,
-    bn256::{
-        Bn256,
-        Fr,
-        G1,
-        G2,
-        G1Affine,
-        G1Uncompressed,
-        G2Affine,
-        G2Uncompressed
-    }
+    fs::File,
+    io::{self, BufReader, Read, Write},
+    sync::Arc,
 };
 
 use bellman_ce::{
-    Circuit,
-    SynthesisError,
-    Variable,
-    Index,
-    ConstraintSystem,
-    groth16::{
-        Parameters,
-        VerifyingKey
+    groth16::{Parameters, VerifyingKey},
+    pairing::{
+        bn256::{Bn256, Fr, G1Affine, G1Uncompressed, G2Affine, G2Uncompressed, G1, G2},
+        ff::{Field, PrimeField},
+        CurveAffine, CurveProjective, EncodedPoint, Wnaf,
     },
+    worker::Worker,
+    Circuit, ConstraintSystem, Index, SynthesisError, Variable,
 };
 
-use rand::{
-    Rng,
-    Rand,
-    ChaChaRng,
-    SeedableRng
-};
+use rand::{Rand, Rng};
 
 use super::hash_writer::*;
-use super::keypair_assembly::*;
 use super::keypair::*;
+use super::keypair_assembly::*;
 use super::utils::*;
 
 /// MPC parameters are just like bellman `Parameters` except, when serialized,
@@ -81,14 +30,14 @@ use super::utils::*;
 pub struct MPCParameters {
     params: Parameters<Bn256>,
     cs_hash: [u8; 64],
-    contributions: Vec<PublicKey>
+    contributions: Vec<PublicKey>,
 }
 
 impl PartialEq for MPCParameters {
     fn eq(&self, other: &MPCParameters) -> bool {
-        self.params == other.params &&
-            &self.cs_hash[..] == &other.cs_hash[..] &&
-            self.contributions == other.contributions
+        self.params == other.params
+            && &self.cs_hash[..] == &other.cs_hash[..]
+            && self.contributions == other.contributions
     }
 }
 
@@ -100,7 +49,8 @@ impl MPCParameters {
         circuit: C,
         should_filter_points_at_infinity: bool,
     ) -> Result<MPCParameters, SynthesisError>
-        where C: Circuit<Bn256>
+    where
+        C: Circuit<Bn256>,
     {
         let mut assembly = KeypairAssembly {
             num_inputs: 0,
@@ -111,7 +61,7 @@ impl MPCParameters {
             ct_inputs: vec![],
             at_aux: vec![],
             bt_aux: vec![],
-            ct_aux: vec![]
+            ct_aux: vec![],
         };
 
         // Allocate the "one" input variable
@@ -123,10 +73,11 @@ impl MPCParameters {
         // Input constraints to ensure full density of IC query
         // x * 0 = 0
         for i in 0..assembly.num_inputs {
-            assembly.enforce(|| "",
-                             |lc| lc + Variable::new_unchecked(Index::Input(i)),
-                             |lc| lc,
-                             |lc| lc,
+            assembly.enforce(
+                || "",
+                |lc| lc + Variable::new_unchecked(Index::Input(i)),
+                |lc| lc,
+                |lc| lc,
             );
         }
 
@@ -139,7 +90,7 @@ impl MPCParameters {
 
             // Powers of Tau ceremony can't support more than 2^28
             if exp > 28 {
-                return Err(SynthesisError::PolynomialDegreeTooLarge)
+                return Err(SynthesisError::PolynomialDegreeTooLarge);
             }
         }
 
@@ -158,10 +109,15 @@ impl MPCParameters {
 
             repr.into_affine_unchecked()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                .and_then(|e| if e.is_zero() {
-                    Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
-                } else {
-                    Ok(e)
+                .and_then(|e| {
+                    if e.is_zero() {
+                        Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "point at infinity",
+                        ))
+                    } else {
+                        Ok(e)
+                    }
                 })
         };
 
@@ -171,10 +127,15 @@ impl MPCParameters {
 
             repr.into_affine_unchecked()
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                .and_then(|e| if e.is_zero() {
-                    Err(io::Error::new(io::ErrorKind::InvalidData, "point at infinity"))
-                } else {
-                    Ok(e)
+                .and_then(|e| {
+                    if e.is_zero() {
+                        Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "point at infinity",
+                        ))
+                    } else {
+                        Ok(e)
+                    }
                 })
         };
 
@@ -210,8 +171,8 @@ impl MPCParameters {
         let alpha_coeffs_g1 = Arc::new(alpha_coeffs_g1);
         let beta_coeffs_g1 = Arc::new(beta_coeffs_g1);
 
-        let mut h = Vec::with_capacity(m-1);
-        for _ in 0..m-1 {
+        let mut h = Vec::with_capacity(m - 1);
+        for _ in 0..m - 1 {
             h.push(read_g1(f)?);
         }
 
@@ -240,9 +201,8 @@ impl MPCParameters {
             ext: &mut [G1],
 
             // Worker
-            worker: &Worker
-        )
-        {
+            worker: &Worker,
+        ) {
             // Sanity check
             assert_eq!(a_g1.len(), at.len());
             assert_eq!(a_g1.len(), bt.len());
@@ -253,53 +213,53 @@ impl MPCParameters {
 
             // Evaluate polynomials in multiple threads
             worker.scope(a_g1.len(), |scope, chunk| {
-                for ((((((a_g1, b_g1), b_g2), ext), at), bt), ct) in
-                    a_g1.chunks_mut(chunk)
-                        .zip(b_g1.chunks_mut(chunk))
-                        .zip(b_g2.chunks_mut(chunk))
-                        .zip(ext.chunks_mut(chunk))
-                        .zip(at.chunks(chunk))
-                        .zip(bt.chunks(chunk))
-                        .zip(ct.chunks(chunk))
-                    {
-                        let coeffs_g1 = coeffs_g1.clone();
-                        let coeffs_g2 = coeffs_g2.clone();
-                        let alpha_coeffs_g1 = alpha_coeffs_g1.clone();
-                        let beta_coeffs_g1 = beta_coeffs_g1.clone();
+                for ((((((a_g1, b_g1), b_g2), ext), at), bt), ct) in a_g1
+                    .chunks_mut(chunk)
+                    .zip(b_g1.chunks_mut(chunk))
+                    .zip(b_g2.chunks_mut(chunk))
+                    .zip(ext.chunks_mut(chunk))
+                    .zip(at.chunks(chunk))
+                    .zip(bt.chunks(chunk))
+                    .zip(ct.chunks(chunk))
+                {
+                    let coeffs_g1 = coeffs_g1.clone();
+                    let coeffs_g2 = coeffs_g2.clone();
+                    let alpha_coeffs_g1 = alpha_coeffs_g1.clone();
+                    let beta_coeffs_g1 = beta_coeffs_g1.clone();
 
-                        scope.spawn(move |_| {
-                            for ((((((a_g1, b_g1), b_g2), ext), at), bt), ct) in
-                                a_g1.iter_mut()
-                                    .zip(b_g1.iter_mut())
-                                    .zip(b_g2.iter_mut())
-                                    .zip(ext.iter_mut())
-                                    .zip(at.iter())
-                                    .zip(bt.iter())
-                                    .zip(ct.iter())
-                                {
-                                    for &(coeff, lag) in at {
-                                        a_g1.add_assign(&coeffs_g1[lag].mul(coeff));
-                                        ext.add_assign(&beta_coeffs_g1[lag].mul(coeff));
-                                    }
+                    scope.spawn(move |_| {
+                        for ((((((a_g1, b_g1), b_g2), ext), at), bt), ct) in a_g1
+                            .iter_mut()
+                            .zip(b_g1.iter_mut())
+                            .zip(b_g2.iter_mut())
+                            .zip(ext.iter_mut())
+                            .zip(at.iter())
+                            .zip(bt.iter())
+                            .zip(ct.iter())
+                        {
+                            for &(coeff, lag) in at {
+                                a_g1.add_assign(&coeffs_g1[lag].mul(coeff));
+                                ext.add_assign(&beta_coeffs_g1[lag].mul(coeff));
+                            }
 
-                                    for &(coeff, lag) in bt {
-                                        b_g1.add_assign(&coeffs_g1[lag].mul(coeff));
-                                        b_g2.add_assign(&coeffs_g2[lag].mul(coeff));
-                                        ext.add_assign(&alpha_coeffs_g1[lag].mul(coeff));
-                                    }
+                            for &(coeff, lag) in bt {
+                                b_g1.add_assign(&coeffs_g1[lag].mul(coeff));
+                                b_g2.add_assign(&coeffs_g2[lag].mul(coeff));
+                                ext.add_assign(&alpha_coeffs_g1[lag].mul(coeff));
+                            }
 
-                                    for &(coeff, lag) in ct {
-                                        ext.add_assign(&coeffs_g1[lag].mul(coeff));
-                                    }
-                                }
+                            for &(coeff, lag) in ct {
+                                ext.add_assign(&coeffs_g1[lag].mul(coeff));
+                            }
+                        }
 
-                            // Batch normalize
-                            G1::batch_normalization(a_g1);
-                            G1::batch_normalization(b_g1);
-                            G2::batch_normalization(b_g2);
-                            G1::batch_normalization(ext);
-                        });
-                    }
+                        // Batch normalize
+                        G1::batch_normalization(a_g1);
+                        G1::batch_normalization(b_g1);
+                        G2::batch_normalization(b_g2);
+                        G1::batch_normalization(ext);
+                    });
+                }
             });
         }
 
@@ -318,7 +278,7 @@ impl MPCParameters {
             &mut b_g1[0..assembly.num_inputs],
             &mut b_g2[0..assembly.num_inputs],
             &mut ic,
-            &worker
+            &worker,
         );
 
         // Evaluate for auxillary variables.
@@ -334,7 +294,7 @@ impl MPCParameters {
             &mut b_g1[assembly.num_inputs..],
             &mut b_g2[assembly.num_inputs..],
             &mut l,
-            &worker
+            &worker,
         );
 
         // Don't allow any elements be unconstrained, so that
@@ -352,7 +312,7 @@ impl MPCParameters {
             gamma_g2: G2Affine::one(),
             delta_g1: G1Affine::one(),
             delta_g2: G2Affine::one(),
-            ic: ic.into_iter().map(|e| e.into_affine()).collect()
+            ic: ic.into_iter().map(|e| e.into_affine()).collect(),
         };
 
         let params = if should_filter_points_at_infinity {
@@ -362,9 +322,24 @@ impl MPCParameters {
                 l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
 
                 // Filter points at infinity away from A/B queries
-                a: Arc::new(a_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-                b_g1: Arc::new(b_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-                b_g2: Arc::new(b_g2.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect())
+                a: Arc::new(
+                    a_g1.into_iter()
+                        .filter(|e| !e.is_zero())
+                        .map(|e| e.into_affine())
+                        .collect(),
+                ),
+                b_g1: Arc::new(
+                    b_g1.into_iter()
+                        .filter(|e| !e.is_zero())
+                        .map(|e| e.into_affine())
+                        .collect(),
+                ),
+                b_g2: Arc::new(
+                    b_g2.into_iter()
+                        .filter(|e| !e.is_zero())
+                        .map(|e| e.into_affine())
+                        .collect(),
+                ),
             }
         } else {
             Parameters {
@@ -373,7 +348,7 @@ impl MPCParameters {
                 l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
                 a: Arc::new(a_g1.into_iter().map(|e| e.into_affine()).collect()),
                 b_g1: Arc::new(b_g1.into_iter().map(|e| e.into_affine()).collect()),
-                b_g2: Arc::new(b_g2.into_iter().map(|e| e.into_affine()).collect())
+                b_g2: Arc::new(b_g2.into_iter().map(|e| e.into_affine()).collect()),
             }
         };
 
@@ -392,7 +367,7 @@ impl MPCParameters {
         Ok(MPCParameters {
             params: params,
             cs_hash: cs_hash,
-            contributions: vec![]
+            contributions: vec![],
         })
     }
 
@@ -410,11 +385,7 @@ impl MPCParameters {
     /// sure their contribution is in the final parameters, by
     /// checking to see if it appears in the output of
     /// `MPCParameters::verify`.
-    pub fn contribute<R: Rng>(
-        &mut self,
-        rng: &mut R
-    ) -> [u8; 64]
-    {
+    pub fn contribute<R: Rng>(&mut self, rng: &mut R) -> [u8; 64] {
         // Generate a keypair
         let (pubkey, privkey) = keypair(rng, self);
 
@@ -432,29 +403,27 @@ impl MPCParameters {
 
             // Perform wNAF over multiple cores, placing results into `projective`.
             crossbeam::scope(|scope| {
-                for (bases, projective) in bases.chunks_mut(chunk_size)
+                for (bases, projective) in bases
+                    .chunks_mut(chunk_size)
                     .zip(projective.chunks_mut(chunk_size))
-                    {
-                        scope.spawn(move || {
-                            let mut wnaf = Wnaf::new();
+                {
+                    scope.spawn(move || {
+                        let mut wnaf = Wnaf::new();
 
-                            for (base, projective) in bases.iter_mut()
-                                .zip(projective.iter_mut())
-                                {
-                                    *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
-                                }
-                        });
-                    }
+                        for (base, projective) in bases.iter_mut().zip(projective.iter_mut()) {
+                            *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
+                        }
+                    });
+                }
             });
 
             // Perform batch normalization
             crossbeam::scope(|scope| {
-                for projective in projective.chunks_mut(chunk_size)
-                    {
-                        scope.spawn(move || {
-                            C::Projective::batch_normalization(projective);
-                        });
-                    }
+                for projective in projective.chunks_mut(chunk_size) {
+                    scope.spawn(move || {
+                        C::Projective::batch_normalization(projective);
+                    });
+                }
             });
 
             // Turn it all back into affine points
@@ -518,9 +487,9 @@ impl MPCParameters {
         &self,
         circuit: C,
         should_filter_points_at_infinity: bool,
-    ) -> Result<Vec<[u8; 64]>, ()>
-    {
-        let initial_params = MPCParameters::new(circuit, should_filter_points_at_infinity).map_err(|_| ())?;
+    ) -> Result<Vec<[u8; 64]>, ()> {
+        let initial_params =
+            MPCParameters::new(circuit, should_filter_points_at_infinity).map_err(|_| ())?;
 
         // H/L will change, but should have same length
         if initial_params.params.h.len() != self.params.h.len() {
@@ -574,8 +543,12 @@ impl MPCParameters {
 
         for pubkey in &self.contributions {
             let mut our_sink = sink.clone();
-            our_sink.write_all(pubkey.s.into_uncompressed().as_ref()).unwrap();
-            our_sink.write_all(pubkey.s_delta.into_uncompressed().as_ref()).unwrap();
+            our_sink
+                .write_all(pubkey.s.into_uncompressed().as_ref())
+                .unwrap();
+            our_sink
+                .write_all(pubkey.s_delta.into_uncompressed().as_ref())
+                .unwrap();
 
             pubkey.write(&mut sink).unwrap();
 
@@ -594,10 +567,7 @@ impl MPCParameters {
             }
 
             // Check the change from the old delta is consistent
-            if !same_ratio(
-                (current_delta, pubkey.delta_after),
-                (r, pubkey.r_delta)
-            ) {
+            if !same_ratio((current_delta, pubkey.delta_after), (r, pubkey.r_delta)) {
                 return Err(());
             }
 
@@ -622,7 +592,7 @@ impl MPCParameters {
         // Current parameters should have consistent delta in G2
         if !same_ratio(
             (G1Affine::one(), current_delta),
-            (G2Affine::one(), self.params.vk.delta_g2)
+            (G2Affine::one(), self.params.vk.delta_g2),
         ) {
             return Err(());
         }
@@ -630,14 +600,14 @@ impl MPCParameters {
         // H and L queries should be updated with delta^-1
         if !same_ratio(
             merge_pairs(&initial_params.params.h, &self.params.h),
-            (self.params.vk.delta_g2, G2Affine::one()) // reversed for inverse
+            (self.params.vk.delta_g2, G2Affine::one()), // reversed for inverse
         ) {
             return Err(());
         }
 
         if !same_ratio(
             merge_pairs(&initial_params.params.l, &self.params.l),
-            (self.params.vk.delta_g2, G2Affine::one()) // reversed for inverse
+            (self.params.vk.delta_g2, G2Affine::one()), // reversed for inverse
         ) {
             return Err(());
         }
@@ -647,11 +617,7 @@ impl MPCParameters {
 
     /// Serialize these parameters. The serialized parameters
     /// can be read by bellman as Groth16 `Parameters`.
-    pub fn write<W: Write>(
-        &self,
-        mut writer: W
-    ) -> io::Result<()>
-    {
+    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
         self.params.write(&mut writer)?;
         writer.write_all(&self.cs_hash)?;
 
@@ -666,13 +632,8 @@ impl MPCParameters {
     /// Deserialize these parameters. If `checked` is false,
     /// we won't perform curve validity and group order
     /// checks.
-    pub fn read<R: Read>(
-        mut reader: R,
-        disallow_points_at_infinity: bool,
-        checked: bool
-    ) -> io::Result<MPCParameters>
-    {
-        let params = Parameters::read(&mut reader, disallow_points_at_infinity, checked)?;
+    pub fn read<R: Read>(mut reader: R, checked: bool) -> io::Result<MPCParameters> {
+        let params = Parameters::read(&mut reader, checked)?;
 
         let mut cs_hash = [0u8; 64];
         reader.read_exact(&mut cs_hash)?;
@@ -685,36 +646,29 @@ impl MPCParameters {
         }
 
         Ok(MPCParameters {
-            params, cs_hash, contributions
+            params,
+            cs_hash,
+            contributions,
         })
     }
 }
 
-
 /// This is a cheap helper utility that exists purely
 /// because Rust still doesn't have type-level integers
 /// and so doesn't implement `PartialEq` for `[T; 64]`
-pub fn contains_contribution(
-    contributions: &[[u8; 64]],
-    my_contribution: &[u8; 64]
-) -> bool
-{
+pub fn contains_contribution(contributions: &[[u8; 64]], my_contribution: &[u8; 64]) -> bool {
     for contrib in contributions {
         if &contrib[..] == &my_contribution[..] {
-            return true
+            return true;
         }
     }
 
-    return false
+    return false;
 }
 
 /// Verify a contribution, given the old parameters and
 /// the new parameters. Returns the hash of the contribution.
-pub fn verify_contribution(
-    before: &MPCParameters,
-    after: &MPCParameters
-) -> Result<[u8; 64], ()>
-{
+pub fn verify_contribution(before: &MPCParameters, after: &MPCParameters) -> Result<[u8; 64], ()> {
     // Transformation involves a single new object
     if after.contributions.len() != (before.contributions.len() + 1) {
         return Err(());
@@ -777,8 +731,10 @@ pub fn verify_contribution(
     }
 
     let pubkey = after.contributions.last().unwrap();
-    sink.write_all(pubkey.s.into_uncompressed().as_ref()).unwrap();
-    sink.write_all(pubkey.s_delta.into_uncompressed().as_ref()).unwrap();
+    sink.write_all(pubkey.s.into_uncompressed().as_ref())
+        .unwrap();
+    sink.write_all(pubkey.s_delta.into_uncompressed().as_ref())
+        .unwrap();
 
     let h = sink.into_hash();
 
@@ -797,7 +753,7 @@ pub fn verify_contribution(
     // Check the change from the old delta is consistent
     if !same_ratio(
         (before.params.vk.delta_g1, pubkey.delta_after),
-        (r, pubkey.r_delta)
+        (r, pubkey.r_delta),
     ) {
         return Err(());
     }
@@ -810,7 +766,7 @@ pub fn verify_contribution(
     // Current parameters should have consistent delta in G2
     if !same_ratio(
         (G1Affine::one(), pubkey.delta_after),
-        (G2Affine::one(), after.params.vk.delta_g2)
+        (G2Affine::one(), after.params.vk.delta_g2),
     ) {
         return Err(());
     }
@@ -818,14 +774,14 @@ pub fn verify_contribution(
     // H and L queries should be updated with delta^-1
     if !same_ratio(
         merge_pairs(&before.params.h, &after.params.h),
-        (after.params.vk.delta_g2, before.params.vk.delta_g2) // reversed for inverse
+        (after.params.vk.delta_g2, before.params.vk.delta_g2), // reversed for inverse
     ) {
         return Err(());
     }
 
     if !same_ratio(
         merge_pairs(&before.params.l, &after.params.l),
-        (after.params.vk.delta_g2, before.params.vk.delta_g2) // reversed for inverse
+        (after.params.vk.delta_g2, before.params.vk.delta_g2), // reversed for inverse
     ) {
         return Err(());
     }
@@ -840,15 +796,10 @@ pub fn verify_contribution(
     Ok(response)
 }
 
-
 /// Compute a keypair, given the current parameters. Keypairs
 /// cannot be reused for multiple contributions or contributions
 /// in different parameters.
-pub fn keypair<R: Rng>(
-    rng: &mut R,
-    current: &MPCParameters,
-) -> (PublicKey, PrivateKey)
-{
+pub fn keypair<R: Rng>(rng: &mut R, current: &MPCParameters) -> (PublicKey, PrivateKey) {
     // Sample random delta
     let delta: Fr = rng.gen();
 
@@ -866,7 +817,8 @@ pub fn keypair<R: Rng>(
             pubkey.write(&mut sink).unwrap();
         }
         sink.write_all(s.into_uncompressed().as_ref()).unwrap();
-        sink.write_all(s_delta.into_uncompressed().as_ref()).unwrap();
+        sink.write_all(s_delta.into_uncompressed().as_ref())
+            .unwrap();
 
         sink.into_hash()
     };
@@ -886,10 +838,8 @@ pub fn keypair<R: Rng>(
             s: s,
             s_delta: s_delta,
             r_delta: r_delta,
-            transcript: transcript
+            transcript: transcript,
         },
-        PrivateKey {
-            delta: delta
-        }
+        PrivateKey { delta: delta },
     )
 }

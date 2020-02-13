@@ -7,7 +7,7 @@ use powersoftau::{
 };
 
 use bellman_ce::domain::{EvaluationDomain, Point};
-use bellman_ce::multicore::Worker;
+use bellman_ce::worker::Worker;
 use bellman_ce::pairing::{bn256::Bn256, CurveAffine, CurveProjective, Engine};
 
 use std::fs::OpenOptions;

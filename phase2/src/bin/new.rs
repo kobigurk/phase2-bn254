@@ -1,10 +1,8 @@
-extern crate rand;
-extern crate phase2;
-extern crate exitcode;
-
-use std::fs::File;
+// TODO: remove this.
+#![allow(unused_variables)]
+#![allow(unreachable_code)]
 use phase2::parameters::MPCParameters;
-use phase2::circom_circuit::circuit_from_json_file;
+use std::fs::File;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -19,9 +17,11 @@ fn main() {
 
     // Import the circuit and create the initial parameters using phase 1
     println!("Creating initial parameters for {}...", circuit_filename);
-    let params = {
-        let c = circuit_from_json_file(&circuit_filename);
-        MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
+    // TODO: Figure out how to import the actual circuit.
+    let params: MPCParameters = {
+        // let c = unimplemented!();
+        // MPCParameters::new(c, should_filter_points_at_infinity).unwrap()
+        unimplemented!();
     };
 
     println!("Writing initial parameters to {}.", params_filename);

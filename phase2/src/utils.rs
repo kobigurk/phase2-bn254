@@ -1,42 +1,16 @@
-extern crate bellman_ce;
-extern crate rand;
-extern crate byteorder;
-
-use byteorder::{
-    BigEndian,
-    ReadBytesExt,
+use bellman_ce::pairing::{
+    bn256::{Fq12, G2},
+    ff::PrimeField,
+    CurveAffine, CurveProjective, Wnaf,
 };
+use byteorder::{BigEndian, ReadBytesExt};
 use num_bigint::BigUint;
 use num_traits::Num;
+use rand::{ChaChaRng, Rand, Rng, SeedableRng};
 use std::sync::Arc;
-use bellman_ce::pairing::{
-    ff::{
-        PrimeField,
-    },
-    CurveAffine,
-    CurveProjective,
-    Wnaf,
-    bn256::{
-        G2,
-        G1Affine,
-        G2Affine,
-        Fq12,
-    }
-};
-use rand::{
-    Rng,
-    Rand,
-    ChaChaRng,
-    SeedableRng
-};
-
 
 /// Checks if pairs have the same ratio.
-pub fn same_ratio<G1: CurveAffine>(
-    g1: (G1, G1),
-    g2: (G1::Pair, G1::Pair)
-) -> bool
-{
+pub fn same_ratio<G1: CurveAffine>(g1: (G1, G1), g2: (G1::Pair, G1::Pair)) -> bool {
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 
@@ -53,10 +27,9 @@ pub fn same_ratio<G1: CurveAffine>(
 /// e(g, (as)*r1 + (bs)*r2 + (cs)*r3) = e(g^s, a*r1 + b*r2 + c*r3)
 ///
 /// ... with high probability.
-pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
-{
+pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G) {
+    use rand::thread_rng;
     use std::sync::Mutex;
-    use rand::{thread_rng};
 
     assert_eq!(v1.len(), v2.len());
 
@@ -101,51 +74,28 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
     (s, sx)
 }
 
-
-
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
 /// than 32 bytes.
-pub fn hash_to_g2(mut digest: &[u8]) -> G2
-{
+pub fn hash_to_g2(mut digest: &[u8]) -> G2 {
     assert!(digest.len() >= 32);
 
     let mut seed = Vec::with_capacity(8);
 
     for _ in 0..8 {
-        seed.push(digest.read_u32::<BigEndian>().expect("assertion above guarantees this to work"));
+        seed.push(
+            digest
+                .read_u32::<BigEndian>()
+                .expect("assertion above guarantees this to work"),
+        );
     }
 
     ChaChaRng::from_seed(&seed).gen()
 }
 
 pub fn repr_to_big<T: std::fmt::Display>(r: T) -> String {
-    BigUint::from_str_radix(&format!("{}", r)[2..], 16).unwrap().to_str_radix(10)
-}
-
-pub fn p1_to_vec(p: &G1Affine) -> Vec<String> {
-    return vec![
-        repr_to_big(p.get_x().into_repr()),
-        repr_to_big(p.get_y().into_repr()),
-        if p.is_zero() { "0".to_string() } else { "1".to_string() }
-    ]
-}
-
-pub fn p2_to_vec(p: &G2Affine) -> Vec<Vec<String>> {
-    return vec![
-        vec![
-            repr_to_big(p.get_x().c0.into_repr()),
-            repr_to_big(p.get_x().c1.into_repr()),
-        ],
-        vec![
-            repr_to_big(p.get_y().c0.into_repr()),
-            repr_to_big(p.get_y().c1.into_repr()),
-        ],
-        if p.is_zero() {
-            vec!["0".to_string(), "0".to_string()]
-        } else {
-            vec!["1".to_string(), "0".to_string()]
-        }
-    ]
+    BigUint::from_str_radix(&format!("{}", r)[2..], 16)
+        .unwrap()
+        .to_str_radix(10)
 }
 
 pub fn pairing_to_vec(p: &Fq12) -> Vec<Vec<Vec<String>>> {
@@ -162,7 +112,7 @@ pub fn pairing_to_vec(p: &Fq12) -> Vec<Vec<Vec<String>>> {
             vec![
                 repr_to_big(p.c0.c2.c0.into_repr()),
                 repr_to_big(p.c0.c2.c1.into_repr()),
-            ]
+            ],
         ],
         vec![
             vec![
@@ -176,7 +126,7 @@ pub fn pairing_to_vec(p: &Fq12) -> Vec<Vec<Vec<String>>> {
             vec![
                 repr_to_big(p.c1.c2.c0.into_repr()),
                 repr_to_big(p.c1.c2.c1.into_repr()),
-            ]
+            ],
         ],
-    ]
+    ];
 }

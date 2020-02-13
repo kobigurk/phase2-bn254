@@ -1,5 +1,6 @@
 [package]
 name = "phase2"
+edition = "2018"
 version = "0.2.2"
 authors = ["Sean Bowe <ewillbefull@gmail.com>"]
 description = "Library for performing MPCs for creating zk-SNARK public parameters"
@@ -24,7 +25,7 @@ num-traits = "0.2.8"
 itertools = "0.8.1"
 hex = "0.4.0"
 cfg-if = "0.1.10"
-bellman_ce = { path = "../bellman", default-features = false } # active features depend on build type
+bellman_ce = { version = "0.3.2", default-features = false } # active features depend on build type
 
 # needed for native only but don't break wasm if present
 num_cpus = "1"

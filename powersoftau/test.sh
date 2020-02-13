@@ -11,18 +11,19 @@ set -e
 SIZE=10
 BATCH=256
 
-cargo run --release --bin new_constrained challenge1 $SIZE $BATCH
-yes | cargo run --release --bin compute_constrained challenge1 response1 $SIZE $BATCH
-cargo run --release --bin verify_transform_constrained challenge1 response1 challenge2 $SIZE $BATCH
+# since the `challenge1` file does not exist, this will also create it
+yes | cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE contribute --challenge-fname challenge1 --response-fname response1
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE transform --challenge-fname challenge1 --response-fname response1 --new-challenge-fname challenge2
 
-yes | cargo run --release --bin compute_constrained challenge2 response2 $SIZE $BATCH
-cargo run --release --bin verify_transform_constrained challenge2 response2 challenge3 $SIZE $BATCH
+yes | cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE contribute --challenge-fname challenge2 --response-fname response2
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE transform --challenge-fname challenge2 --response-fname response2 --new-challenge-fname challenge3
 
-yes | cargo run --release --bin compute_constrained challenge3 response3 $SIZE $BATCH
-cargo run --release --bin verify_transform_constrained challenge3 response3 challenge4 $SIZE $BATCH
+yes | cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE contribute --challenge-fname challenge3 --response-fname response3
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE transform --challenge-fname challenge3 --response-fname response3 --new-challenge-fname challenge4
 
-cargo run --release --bin beacon_constrained challenge4 response4 $SIZE $BATCH
-cargo run --release --bin verify_transform_constrained challenge4 response4 challenge5 $SIZE $BATCH
+# add a randomness contribution by a beacon at the end
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE beacon --challenge-fname challenge4 --response-fname response4
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE transform --challenge-fname challenge4 --response-fname response4 --new-challenge-fname challenge5
 
 cat response1 response2 response3 response4 > transcript
-cargo run --release --bin verify  transcript $SIZE $BATCH
+cargo run --release --bin powersoftau -- --batch-size $BATCH --power $SIZE verify --transcript-fname transcript

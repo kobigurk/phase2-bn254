@@ -4,20 +4,149 @@ use blake2::{Blake2b, Digest};
 use byteorder::{BigEndian, ReadBytesExt};
 use generic_array::GenericArray;
 use rand::chacha::ChaChaRng;
-use rand::{Rand, Rng, SeedableRng};
+use rand::{OsRng, Rand, Rng, SeedableRng};
 
-use memmap::Mmap;
 use std::io::{self, Write};
 use std::sync::Arc;
 use typenum::consts::U64;
 
+use crypto::digest::Digest as CryptoDigest;
+use crypto::sha2::Sha256;
+
 use super::parameters::UseCompression;
+
+pub fn print_hash(hash: &[u8]) {
+    for line in hash.chunks(16) {
+        print!("\t");
+        for section in line.chunks(4) {
+            for b in section {
+                print!("{:02x}", b);
+            }
+            print!(" ");
+        }
+        println!();
+    }
+}
+
+// Create an RNG based on a mixture of system randomness and user provided randomness
+pub fn user_system_randomness() -> Vec<u8> {
+    let mut system_rng = OsRng::new().unwrap();
+    let mut h = Blake2b::default();
+
+    // Gather 1024 bytes of entropy from the system
+    for _ in 0..1024 {
+        let r: u8 = system_rng.gen();
+        h.input(&[r]);
+    }
+
+    // Ask the user to provide some information for additional entropy
+    let mut user_input = String::new();
+    println!("Type some random text and press [ENTER] to provide additional entropy...");
+    std::io::stdin()
+        .read_line(&mut user_input)
+        .expect("expected to read some random text from the user");
+
+    // Hash it all up to make a seed
+    h.input(&user_input.as_bytes());
+    let arr: GenericArray<u8, U64> = h.result();
+    arr.to_vec()
+}
+
+#[allow(clippy::modulo_one)]
+pub fn beacon_randomness(mut beacon_hash: [u8; 32]) -> [u8; 32] {
+    // Performs 2^n hash iterations over it
+    const N: u64 = 10;
+
+    for i in 0..(1u64 << N) {
+        // Print 1024 of the interstitial states
+        // so that verification can be
+        // parallelized
+
+        if i % (1u64 << (N - 10)) == 0 {
+            print!("{}: ", i);
+            for b in beacon_hash.iter() {
+                print!("{:02x}", b);
+            }
+            println!();
+        }
+
+        let mut h = Sha256::new();
+        h.input(&beacon_hash);
+        h.result(&mut beacon_hash);
+    }
+
+    print!("Final result of beacon: ");
+    for b in beacon_hash.iter() {
+        print!("{:02x}", b);
+    }
+    println!();
+
+    beacon_hash
+}
+
+/// Interpret the first 32 bytes of the digest as 8 32-bit words
+pub fn get_rng(mut digest: &[u8]) -> impl Rng {
+    let mut seed = [0u32; 8];
+    for s in &mut seed {
+        *s = digest
+            .read_u32::<BigEndian>()
+            .expect("digest is large enough for this to work");
+    }
+
+    ChaChaRng::from_seed(&seed)
+}
+
+pub const fn num_bits<T>() -> usize {
+    std::mem::size_of::<T>() * 8
+}
+
+pub fn log_2(x: u64) -> u32 {
+    assert!(x > 0);
+    num_bits::<u64>() as u32 - x.leading_zeros() - 1
+}
+
+/// Abstraction over a writer which hashes the data being written.
+pub struct HashWriter<W: Write> {
+    writer: W,
+    hasher: Blake2b,
+}
+
+impl<W: Write> HashWriter<W> {
+    /// Construct a new `HashWriter` given an existing `writer` by value.
+    pub fn new(writer: W) -> Self {
+        HashWriter {
+            writer,
+            hasher: Blake2b::default(),
+        }
+    }
+
+    /// Destroy this writer and return the hash of what was written.
+    pub fn into_hash(self) -> GenericArray<u8, U64> {
+        self.hasher.result()
+    }
+}
+
+impl<W: Write> Write for HashWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes = self.writer.write(buf)?;
+
+        if bytes > 0 {
+            self.hasher.input(&buf[0..bytes]);
+        }
+
+        Ok(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
 
 /// Calculate the contribution hash from the resulting file. Original powers of tau implementation
 /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
 /// implementation now writes without a particular order, so plain recalculation at the end
 /// of the procedure is more efficient
-pub fn calculate_hash(input_map: &Mmap) -> GenericArray<u8, U64> {
+pub fn calculate_hash(input_map: &[u8]) -> GenericArray<u8, U64> {
     let chunk_size = 1 << 30; // read by 1GB from map
     let mut hasher = Blake2b::default();
     for chunk in input_map.chunks(chunk_size) {

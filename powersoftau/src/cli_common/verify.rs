@@ -1,9 +1,6 @@
-use bellman_ce::pairing::bn256::Bn256;
-use bellman_ce::pairing::bn256::{G1, G2};
-use bellman_ce::pairing::{CurveAffine, CurveProjective};
-use powersoftau::batched_accumulator::*;
-use powersoftau::parameters::CeremonyParams;
-use powersoftau::*;
+use crate::batched_accumulator::*;
+use crate::parameters::CeremonyParams;
+use bellman_ce::pairing::{CurveAffine, CurveProjective, Engine};
 
 use crate::keypair::*;
 use crate::parameters::*;
@@ -16,57 +13,7 @@ use std::fs::{remove_file, OpenOptions};
 use std::io::{self, BufWriter, Read, Write};
 use std::path::Path;
 
-use blake2::{Blake2b, Digest};
-use generic_array::GenericArray;
-use typenum::U64;
-
 use memmap::*;
-
-const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
-}
-
-fn log_2(x: u64) -> u32 {
-    assert!(x > 0);
-    num_bits::<u64>() as u32 - x.leading_zeros() - 1
-}
-
-/// Abstraction over a writer which hashes the data being written.
-pub struct HashWriter<W: Write> {
-    writer: W,
-    hasher: Blake2b,
-}
-
-impl<W: Write> HashWriter<W> {
-    /// Construct a new `HashWriter` given an existing `writer` by value.
-    pub fn new(writer: W) -> Self {
-        HashWriter {
-            writer,
-            hasher: Blake2b::default(),
-        }
-    }
-
-    /// Destroy this writer and return the hash of what was written.
-    pub fn into_hash(self) -> GenericArray<u8, U64> {
-        self.hasher.result()
-    }
-}
-
-impl<W: Write> Write for HashWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let bytes = self.writer.write(buf)?;
-
-        if bytes > 0 {
-            self.hasher.input(&buf[0..bytes]);
-        }
-
-        Ok(bytes)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
-    }
-}
 
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
@@ -136,8 +83,6 @@ fn get_challenge_file_hash<E: Engine>(
     tmp
 }
 
-use bellman_ce::pairing::Engine;
-
 // Computes the hash of the response file, given the new
 // accumulator, the player's public key, and the challenge
 // file's hash.
@@ -203,7 +148,7 @@ fn get_response_file_hash<E: Engine>(
     tmp
 }
 
-fn new_accumulator_for_verify(parameters: &CeremonyParams<Bn256>) -> BatchedAccumulator<Bn256> {
+fn new_accumulator_for_verify<T: Engine>(parameters: &CeremonyParams<T>) -> BatchedAccumulator<T> {
     let file_name = "tmp_initial_challenge";
     {
         if Path::new(file_name).exists() {
@@ -253,18 +198,7 @@ fn new_accumulator_for_verify(parameters: &CeremonyParams<Bn256>) -> BatchedAccu
     .expect("unable to read uncompressed accumulator")
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<transcript_file> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let transcript_filename = &args[1];
-    let circuit_power = args[2].parse().expect("could not parse circuit power");
-    let batch_size = args[3].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
+pub fn verify<E: Engine>(transcript_filename: &str, parameters: &CeremonyParams<E>) {
     // Try to load transcript file from disk.
     let reader = OpenOptions::new()
         .read(true)
@@ -440,10 +374,10 @@ fn main() {
         let mut g1_beta_coeffs = g1_beta_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
         // Batch normalize
-        G1::batch_normalization(&mut g1_coeffs);
-        G2::batch_normalization(&mut g2_coeffs);
-        G1::batch_normalization(&mut g1_alpha_coeffs);
-        G1::batch_normalization(&mut g1_beta_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_coeffs);
+        <E as Engine>::G2::batch_normalization(&mut g2_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_alpha_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_beta_coeffs);
 
         // H query of Groth16 needs...
         // x^i * (x^m - 1) for i in 0..=(m-2) a.k.a.
@@ -460,7 +394,7 @@ fn main() {
         }
 
         // Batch normalize this as well
-        G1::batch_normalization(&mut h);
+        <E as Engine>::G1::batch_normalization(&mut h);
 
         // Create the parameter file
         let writer = OpenOptions::new()

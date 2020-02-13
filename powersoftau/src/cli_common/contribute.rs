@@ -1,84 +1,25 @@
-use powersoftau::{
+use crate::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
-    utils::calculate_hash,
+    utils::{calculate_hash, print_hash},
 };
-
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::Engine;
 use memmap::*;
+use rand::Rng;
 use std::fs::OpenOptions;
-
 use std::io::{Read, Write};
 
 const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
 const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let response_filename = &args[2];
-    let circuit_power = args[3].parse().expect("could not parse circuit power");
-    let batch_size = args[4].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
-    println!(
-        "Will contribute to accumulator for 2^{} powers of tau",
-        parameters.size
-    );
-    println!(
-        "In total will generate up to {} powers",
-        parameters.powers_g1_length
-    );
-
-    // Create an RNG based on a mixture of system randomness and user provided randomness
-    let mut rng = {
-        use blake2::{Blake2b, Digest};
-        use byteorder::{BigEndian, ReadBytesExt};
-        use rand::chacha::ChaChaRng;
-        use rand::{OsRng, Rng, SeedableRng};
-
-        let h = {
-            let mut system_rng = OsRng::new().unwrap();
-            let mut h = Blake2b::default();
-
-            // Gather 1024 bytes of entropy from the system
-            for _ in 0..1024 {
-                let r: u8 = system_rng.gen();
-                h.input(&[r]);
-            }
-
-            // Ask the user to provide some information for additional entropy
-            let mut user_input = String::new();
-            println!("Type some random text and press [ENTER] to provide additional entropy...");
-            std::io::stdin()
-                .read_line(&mut user_input)
-                .expect("expected to read some random text from the user");
-
-            // Hash it all up to make a seed
-            h.input(&user_input.as_bytes());
-            h.result()
-        };
-
-        let mut digest = &h[..];
-
-        // Interpret the first 32 bytes of the digest as 8 32-bit words
-        let mut seed = [0u32; 8];
-        for s in &mut seed {
-            *s = digest
-                .read_u32::<BigEndian>()
-                .expect("digest is large enough for this to work");
-        }
-
-        ChaChaRng::from_seed(&seed)
-    };
-
+pub fn contribute<T: Engine>(
+    challenge_filename: &str,
+    response_filename: &str,
+    parameters: &CeremonyParams<T>,
+    mut rng: impl Rng,
+) {
     // Try to load challenge file from disk.
     let reader = OpenOptions::new()
         .read(true)
@@ -141,16 +82,7 @@ fn main() {
 
     {
         println!("`challenge` file contains decompressed points and has a hash:");
-        for line in current_accumulator_hash.as_slice().chunks(16) {
-            print!("\t");
-            for section in line.chunks(4) {
-                for b in section {
-                    print!("{:02x}", b);
-                }
-                print!(" ");
-            }
-            println!();
-        }
+        print_hash(&current_accumulator_hash);
 
         (&mut writable_map[0..])
             .write_all(current_accumulator_hash.as_slice())
@@ -171,16 +103,7 @@ fn main() {
             .expect("couldn't read hash of challenge file from response file");
 
         println!("`challenge` file claims (!!! Must not be blindly trusted) that it was based on the original contribution with a hash:");
-        for line in challenge_hash.chunks(16) {
-            print!("\t");
-            for section in line.chunks(4) {
-                for b in section {
-                    print!("{:02x}", b);
-                }
-                print!(" ");
-            }
-            println!();
-        }
+        print_hash(&challenge_hash);
     }
 
     // Construct our keypair using the RNG we created above
@@ -221,17 +144,6 @@ fn main() {
               Your contribution has been written to response file\n\n\
               The BLAKE2b hash of response file is:\n"
     );
-
-    for line in contribution_hash.as_slice().chunks(16) {
-        print!("\t");
-        for section in line.chunks(4) {
-            for b in section {
-                print!("{:02x}", b);
-            }
-            print!(" ");
-        }
-        println!();
-    }
-
+    print_hash(&contribution_hash);
     println!("Thank you for your participation, much appreciated! :)");
 }

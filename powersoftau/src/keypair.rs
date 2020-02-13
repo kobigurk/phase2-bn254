@@ -1,8 +1,6 @@
 use bellman_ce::pairing::{CurveAffine, CurveProjective, EncodedPoint, Engine};
 use blake2::{Blake2b, Digest};
 
-use memmap::{Mmap, MmapMut};
-
 use rand::{Rand, Rng};
 
 use std::io::{self, Read, Write};
@@ -169,7 +167,7 @@ impl<E: Engine> PublicKey<E> {
     /// contribution was output in compressed on uncompressed form
     pub fn write(
         &self,
-        output_map: &mut MmapMut,
+        output_map: &mut [u8],
         accumulator_was_compressed: UseCompression,
         parameters: &CeremonyParams<E>,
     ) -> io::Result<()> {
@@ -207,8 +205,6 @@ impl<E: Engine> PublicKey<E> {
 
         (&mut output_map[position..]).write_all(&self.beta_g2.into_uncompressed().as_ref())?;
 
-        output_map.flush()?;
-
         Ok(())
     }
 
@@ -216,12 +212,12 @@ impl<E: Engine> PublicKey<E> {
     /// always checked, since there aren't very many of them. Does not allow any
     /// points at infinity.
     pub fn read(
-        input_map: &Mmap,
+        input_map: &[u8],
         accumulator_was_compressed: UseCompression,
         parameters: &CeremonyParams<E>,
     ) -> Result<Self, DeserializationError> {
         fn read_uncompressed<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
-            input_map: &Mmap,
+            input_map: &[u8],
             position: usize,
         ) -> Result<C, DeserializationError> {
             let mut repr = C::Uncompressed::empty();

@@ -1,37 +1,27 @@
-use powersoftau::{
+use crate::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::calculate_hash,
 };
 
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::Engine;
 use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 use std::io::Write;
-
-#[macro_use]
-extern crate hex_literal;
 
 const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
 const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 #[allow(clippy::modulo_one)]
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let response_filename = &args[2];
-    let circuit_power = args[3].parse().expect("could not parse circuit power");
-    let batch_size = args[4].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
+pub fn beacon<T: Engine>(
+    challenge_filename: &str,
+    response_filename: &str,
+    parameters: &CeremonyParams<T>,
+    mut beacon_hash: [u8; 32],
+) {
     println!(
         "Will contribute a random beacon to accumulator for 2^{} powers of tau",
         parameters.size,
@@ -49,10 +39,6 @@ fn main() {
         use rand::chacha::ChaChaRng;
         use rand::SeedableRng;
 
-        // Place block hash here (block number #564321)
-        let mut cur_hash: [u8; 32] =
-            hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
-
         // Performs 2^n hash iterations over it
         const N: u64 = 10;
 
@@ -63,24 +49,24 @@ fn main() {
 
             if i % (1u64 << (N - 10)) == 0 {
                 print!("{}: ", i);
-                for b in cur_hash.iter() {
+                for b in beacon_hash.iter() {
                     print!("{:02x}", b);
                 }
                 println!();
             }
 
             let mut h = Sha256::new();
-            h.input(&cur_hash);
-            h.result(&mut cur_hash);
+            h.input(&beacon_hash);
+            h.result(&mut beacon_hash);
         }
 
         print!("Final result of beacon: ");
-        for b in cur_hash.iter() {
+        for b in beacon_hash.iter() {
             print!("{:02x}", b);
         }
         println!();
 
-        let mut digest = &cur_hash[..];
+        let mut digest = &beacon_hash[..];
 
         let mut seed = [0u32; 8];
         for s in &mut seed {

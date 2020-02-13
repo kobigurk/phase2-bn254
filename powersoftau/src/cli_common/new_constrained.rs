@@ -1,28 +1,15 @@
-use powersoftau::batched_accumulator::BatchedAccumulator;
-use powersoftau::parameters::UseCompression;
-use powersoftau::utils::{blank_hash, calculate_hash};
+use crate::batched_accumulator::BatchedAccumulator;
+use crate::parameters::{CeremonyParams, UseCompression};
+use crate::utils::{blank_hash, calculate_hash};
 
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::Engine;
 use memmap::*;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use powersoftau::parameters::CeremonyParams;
-
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<challenge_file> <ceremony_size> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let circuit_power = args[2].parse().expect("could not parse circuit power");
-    let batch_size = args[3].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
+pub fn new_constrained<T: Engine>(challenge_filename: &str, parameters: &CeremonyParams<T>) {
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",
         parameters.size

@@ -20,16 +20,24 @@ pub fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
-    let parameters = CeremonyParams::<Bn256>::new(
-        10, // here we use 10 since it's the reduced ceremony
-        21,
-    );
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 6 {
+        println!("Usage: \n<challenge_filename> <reduced_challenge_filename> <original_circuit_power> <reduced_circuit_power> <batch_size>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let challenge_filename = &args[1];
+    let reduced_challenge_filename = &args[2];
+    let original_circuit_power = args[3].parse().expect("could not parse original circuit power");
+    let reduced_circuit_power = args[4].parse().expect("could not parse reduced circuit power");
+    let batch_size = args[5].parse().expect("could not parse batch size");
 
-    // Try to load `./challenge` from disk.
+    let parameters = CeremonyParams::<Bn256>::new(reduced_circuit_power, batch_size);
+
+    // Try to load the challenge from disk.
     let reader = OpenOptions::new()
         .read(true)
-        .open("challenge")
-        .expect("unable open `./challenge` in this directory");
+        .open(challenge_filename)
+        .expect("unable to open challenge in this directory");
     let challenge_readable_map = unsafe {
         MmapOptions::new()
             .map(&reader)
@@ -59,8 +67,8 @@ fn main() {
         .read(true)
         .write(true)
         .create_new(true)
-        .open("reduced_challenge")
-        .expect("unable to create `./reduced_challenge` in this directory");
+        .open(reduced_challenge_filename)
+        .expect("unable to create the reduced challenge in this directory");
 
     // Recomputation stips the public key and uses hashing to link with the previous contibution after decompression
     writer
@@ -74,7 +82,7 @@ fn main() {
     };
 
     let hash = reduced_hash(
-        28, // this is the full size of the hash
+        original_circuit_power,
         parameters.size as u8,
     );
     (&mut writable_map[0..])
@@ -82,7 +90,7 @@ fn main() {
         .expect("unable to write a default hash to mmap");
     writable_map
         .flush()
-        .expect("unable to write reduced hash to `./reduced_challenge`");
+        .expect("unable to write reduced hash to the reduced_challenge");
 
     println!("Reduced hash for a reduced challenge:");
     for line in hash.as_slice().chunks(16) {

@@ -1,34 +1,49 @@
 use bellman_ce::pairing::{bn256::Bn256, Engine};
+use gumdrop::Options;
 use memmap::MmapOptions;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
+    cli_common::{curve_from_str, proving_system_from_str, CurveKind, ProvingSystem},
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::{calculate_hash, reduced_hash},
 };
 use std::{fs::OpenOptions, io::Write};
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 6 {
-        println!("Usage: \n<challenge_filename> <reduced_challenge_filename> <original_circuit_power> <reduced_circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let reduced_challenge_filename = &args[2];
-    let original_circuit_power = args[3]
-        .parse()
-        .expect("could not parse original circuit power");
-    let reduced_circuit_power = args[4]
-        .parse()
-        .expect("could not parse reduced circuit power");
-    let batch_size = args[5].parse().expect("could not parse batch size");
+#[derive(Debug, Options, Clone)]
+struct ReducePowersOpts {
+    help: bool,
+    #[options(help = "the challenge file which contains all the calculated powers of tau")]
+    challenge_fname: String,
+    #[options(help = "the challenge file which will contain the extracted poweres of tau")]
+    reduced_challenge_fname: String,
+    #[options(help = "the size of batches to process", default = "256")]
+    pub batch_size: usize,
+    #[options(help = "the circuit power used for calculating the original challenge file")]
+    pub original_circuit_power: usize,
+    #[options(help = "the number of powers which will be extracted")]
+    pub reduced_circuit_power: usize,
+    #[options(
+        help = "the elliptic curve to use",
+        default = "bn256",
+        parse(try_from_str = "curve_from_str")
+    )]
+    pub curve_kind: CurveKind,
+    #[options(
+        help = "the proving system to use",
+        default = "groth16",
+        parse(try_from_str = "proving_system_from_str")
+    )]
+    pub proving_system: ProvingSystem,
+}
 
-    let parameters = CeremonyParams::<Bn256>::new(reduced_circuit_power, batch_size);
+fn main() {
+    let opts = ReducePowersOpts::parse_args_default_or_exit();
+    let parameters = CeremonyParams::<Bn256>::new(opts.reduced_circuit_power, opts.batch_size);
 
     reduce_powers(
-        &challenge_filename,
-        &reduced_challenge_filename,
-        original_circuit_power,
+        &opts.challenge_fname,
+        &opts.reduced_challenge_fname,
+        opts.original_circuit_power,
         &parameters,
     );
 }

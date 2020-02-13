@@ -4,4 +4,4 @@ pub mod parameters;
 pub mod utils;
 
 #[allow(dead_code)]
-mod cli_common;
+pub mod cli_common;

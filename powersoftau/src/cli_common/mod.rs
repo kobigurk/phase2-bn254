@@ -109,7 +109,7 @@ pub struct VerifyOpts {
     pub transcript_fname: String,
 }
 
-fn curve_from_str(src: &str) -> Result<CurveKind, String> {
+pub fn curve_from_str(src: &str) -> Result<CurveKind, String> {
     let curve = match src.to_lowercase().as_str() {
         "bn256" => CurveKind::Bn256,
         _ => return Err("unsupported curve. Currently supported: bn256".to_string()),
@@ -117,7 +117,7 @@ fn curve_from_str(src: &str) -> Result<CurveKind, String> {
     Ok(curve)
 }
 
-fn proving_system_from_str(src: &str) -> Result<ProvingSystem, String> {
+pub fn proving_system_from_str(src: &str) -> Result<ProvingSystem, String> {
     let system = match src.to_lowercase().as_str() {
         "groth16" => ProvingSystem::Groth16,
         _ => return Err("unsupported proving system. Currently supported: groth16".to_string()),

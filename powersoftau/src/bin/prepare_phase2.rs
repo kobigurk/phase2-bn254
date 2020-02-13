@@ -1,4 +1,10 @@
-use powersoftau::{batched_accumulator::*, parameters::*, utils::log_2};
+use gumdrop::Options;
+use powersoftau::{
+    batched_accumulator::*,
+    cli_common::{curve_from_str, proving_system_from_str, CurveKind, ProvingSystem},
+    parameters::*,
+    utils::log_2,
+};
 
 use bellman_ce::domain::{EvaluationDomain, Point};
 use bellman_ce::multicore::Worker;
@@ -9,19 +15,40 @@ use std::io::{BufWriter, Write};
 
 use memmap::*;
 
+#[derive(Debug, Options, Clone)]
+struct PreparePhase2Opts {
+    help: bool,
+    #[options(
+        help = "the response file which will be processed for the specialization (phase 2) of the setup"
+    )]
+    response_fname: String,
+    #[options(
+        help = "the elliptic curve to use",
+        default = "bn256",
+        parse(try_from_str = "curve_from_str")
+    )]
+    pub curve_kind: CurveKind,
+    #[options(
+        help = "the proving system to use",
+        default = "groth16",
+        parse(try_from_str = "proving_system_from_str")
+    )]
+    pub proving_system: ProvingSystem,
+    #[options(help = "the size of batches to process", default = "256")]
+    pub batch_size: usize,
+    #[options(
+        help = "the circuit power (circuit size will be 2^{power})",
+        default = "21"
+    )]
+    pub power: usize,
+}
+
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<response_filename> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let response_filename = &args[1];
-    let circuit_power = args[2].parse().expect("could not parse circuit power");
-    let batch_size = args[3].parse().expect("could not parse batch size");
+    let opts = PreparePhase2Opts::parse_args_default_or_exit();
 
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
+    let parameters = CeremonyParams::<Bn256>::new(opts.power, opts.batch_size);
 
-    prepare_phase2(response_filename, &parameters);
+    prepare_phase2(&opts.response_fname, &parameters);
 }
 
 fn prepare_phase2<E: Engine>(response_filename: &str, parameters: &CeremonyParams<E>) {

@@ -1,6 +1,6 @@
 use crate::batched_accumulator::*;
 use crate::parameters::CeremonyParams;
-use bellman_ce::pairing::{CurveAffine, CurveProjective};
+use bellman_ce::pairing::{CurveAffine, CurveProjective, Engine};
 
 use crate::keypair::*;
 use crate::parameters::*;
@@ -13,57 +13,7 @@ use std::fs::{remove_file, OpenOptions};
 use std::io::{self, BufWriter, Read, Write};
 use std::path::Path;
 
-use blake2::{Blake2b, Digest};
-use generic_array::GenericArray;
-use typenum::U64;
-
 use memmap::*;
-
-const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
-}
-
-fn log_2(x: u64) -> u32 {
-    assert!(x > 0);
-    num_bits::<u64>() as u32 - x.leading_zeros() - 1
-}
-
-/// Abstraction over a writer which hashes the data being written.
-struct HashWriter<W: Write> {
-    writer: W,
-    hasher: Blake2b,
-}
-
-impl<W: Write> HashWriter<W> {
-    /// Construct a new `HashWriter` given an existing `writer` by value.
-    fn new(writer: W) -> Self {
-        HashWriter {
-            writer,
-            hasher: Blake2b::default(),
-        }
-    }
-
-    /// Destroy this writer and return the hash of what was written.
-    fn into_hash(self) -> GenericArray<u8, U64> {
-        self.hasher.result()
-    }
-}
-
-impl<W: Write> Write for HashWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let bytes = self.writer.write(buf)?;
-
-        if bytes > 0 {
-            self.hasher.input(&buf[0..bytes]);
-        }
-
-        Ok(bytes)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
-    }
-}
 
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
@@ -132,8 +82,6 @@ fn get_challenge_file_hash<E: Engine>(
 
     tmp
 }
-
-use bellman_ce::pairing::Engine;
 
 // Computes the hash of the response file, given the new
 // accumulator, the player's public key, and the challenge

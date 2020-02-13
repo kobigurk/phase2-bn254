@@ -1,23 +1,11 @@
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::{bn256::Bn256, Engine};
+use memmap::MmapOptions;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::{calculate_hash, reduced_hash},
 };
-
-use std::fs::OpenOptions;
-use std::io::Write;
-
-use memmap::MmapOptions;
-
-const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
-}
-
-pub fn log_2(x: u64) -> u32 {
-    assert!(x > 0);
-    num_bits::<u64>() as u32 - x.leading_zeros() - 1
-}
+use std::{fs::OpenOptions, io::Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -27,12 +15,30 @@ fn main() {
     }
     let challenge_filename = &args[1];
     let reduced_challenge_filename = &args[2];
-    let original_circuit_power = args[3].parse().expect("could not parse original circuit power");
-    let reduced_circuit_power = args[4].parse().expect("could not parse reduced circuit power");
+    let original_circuit_power = args[3]
+        .parse()
+        .expect("could not parse original circuit power");
+    let reduced_circuit_power = args[4]
+        .parse()
+        .expect("could not parse reduced circuit power");
     let batch_size = args[5].parse().expect("could not parse batch size");
 
     let parameters = CeremonyParams::<Bn256>::new(reduced_circuit_power, batch_size);
 
+    reduce_powers(
+        &challenge_filename,
+        &reduced_challenge_filename,
+        original_circuit_power,
+        &parameters,
+    );
+}
+
+fn reduce_powers<E: Engine>(
+    challenge_filename: &str,
+    reduced_challenge_filename: &str,
+    original_circuit_power: usize,
+    parameters: &CeremonyParams<E>,
+) {
     // Try to load the challenge from disk.
     let reader = OpenOptions::new()
         .read(true)
@@ -81,10 +87,7 @@ fn main() {
             .expect("unable to create a memory map for output")
     };
 
-    let hash = reduced_hash(
-        original_circuit_power,
-        parameters.size as u8,
-    );
+    let hash = reduced_hash(original_circuit_power as u8, parameters.size as u8);
     (&mut writable_map[0..])
         .write_all(hash.as_slice())
         .expect("unable to write a default hash to mmap");

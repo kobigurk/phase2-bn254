@@ -1,28 +1,13 @@
-use bellman_ce::pairing::bn256::Bn256;
-use bellman_ce::pairing::bn256::{G1, G2};
-use bellman_ce::pairing::{CurveAffine, CurveProjective};
-use powersoftau::batched_accumulator::*;
-use powersoftau::parameters::CeremonyParams;
-use powersoftau::*;
-
-use crate::parameters::*;
+use powersoftau::{batched_accumulator::*, parameters::*, utils::log_2};
 
 use bellman_ce::domain::{EvaluationDomain, Point};
 use bellman_ce::multicore::Worker;
+use bellman_ce::pairing::{bn256::Bn256, CurveAffine, CurveProjective, Engine};
 
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 
 use memmap::*;
-
-const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
-}
-
-fn log_2(x: u64) -> u32 {
-    assert!(x > 0);
-    num_bits::<u64>() as u32 - x.leading_zeros() - 1
-}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -36,6 +21,10 @@ fn main() {
 
     let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
+    prepare_phase2(response_filename, &parameters);
+}
+
+fn prepare_phase2<E: Engine>(response_filename: &str, parameters: &CeremonyParams<E>) {
     // Try to load response file from disk.
     let reader = OpenOptions::new()
         .read(true)
@@ -125,10 +114,10 @@ fn main() {
         let mut g1_beta_coeffs = g1_beta_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
         // Batch normalize
-        G1::batch_normalization(&mut g1_coeffs);
-        G2::batch_normalization(&mut g2_coeffs);
-        G1::batch_normalization(&mut g1_alpha_coeffs);
-        G1::batch_normalization(&mut g1_beta_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_coeffs);
+        <E as Engine>::G2::batch_normalization(&mut g2_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_alpha_coeffs);
+        <E as Engine>::G1::batch_normalization(&mut g1_beta_coeffs);
 
         // H query of Groth16 needs...
         // x^i * (x^m - 1) for i in 0..=(m-2) a.k.a.
@@ -145,7 +134,7 @@ fn main() {
         }
 
         // Batch normalize this as well
-        G1::batch_normalization(&mut h);
+        <E as Engine>::G1::batch_normalization(&mut h);
 
         // Create the parameter file
         let writer = OpenOptions::new()

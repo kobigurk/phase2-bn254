@@ -13,6 +13,52 @@ use typenum::consts::U64;
 
 use super::parameters::UseCompression;
 
+pub const fn num_bits<T>() -> usize {
+    std::mem::size_of::<T>() * 8
+}
+
+pub fn log_2(x: u64) -> u32 {
+    assert!(x > 0);
+    num_bits::<u64>() as u32 - x.leading_zeros() - 1
+}
+
+/// Abstraction over a writer which hashes the data being written.
+pub struct HashWriter<W: Write> {
+    writer: W,
+    hasher: Blake2b,
+}
+
+impl<W: Write> HashWriter<W> {
+    /// Construct a new `HashWriter` given an existing `writer` by value.
+    pub fn new(writer: W) -> Self {
+        HashWriter {
+            writer,
+            hasher: Blake2b::default(),
+        }
+    }
+
+    /// Destroy this writer and return the hash of what was written.
+    pub fn into_hash(self) -> GenericArray<u8, U64> {
+        self.hasher.result()
+    }
+}
+
+impl<W: Write> Write for HashWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes = self.writer.write(buf)?;
+
+        if bytes > 0 {
+            self.hasher.input(&buf[0..bytes]);
+        }
+
+        Ok(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
+
 /// Calculate the contribution hash from the resulting file. Original powers of tau implementation
 /// used a specially formed writer to write to the file and calculate a hash on the fly, but memory-constrained
 /// implementation now writes without a particular order, so plain recalculation at the end

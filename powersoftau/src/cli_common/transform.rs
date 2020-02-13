@@ -1,11 +1,10 @@
-use powersoftau::{
+use crate::{
     batched_accumulator::BatchedAccumulator,
     keypair::PublicKey,
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::calculate_hash,
 };
-
-use bellman_ce::pairing::bn256::Bn256;
+use bellman_ce::pairing::Engine;
 use memmap::*;
 use std::fs::OpenOptions;
 
@@ -15,20 +14,12 @@ const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 6 {
-        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file> <circuit_power> <batch_size>");
-        std::process::exit(exitcode::USAGE);
-    }
-    let challenge_filename = &args[1];
-    let response_filename = &args[2];
-    let new_challenge_filename = &args[3];
-    let circuit_power = args[4].parse().expect("could not parse circuit power");
-    let batch_size = args[5].parse().expect("could not parse batch size");
-
-    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
-
+pub fn transform<T: Engine>(
+    challenge_filename: &str,
+    response_filename: &str,
+    new_challenge_filename: &str,
+    parameters: &CeremonyParams<T>,
+) {
     println!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
         parameters.size

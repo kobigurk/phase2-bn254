@@ -8,18 +8,21 @@ rm tmp_*
 
 set -e
 
-cargo run --release --features smalltest --bin new_constrained challenge1
-yes | cargo run --release --features smalltest --bin compute_constrained challenge1 response1
-cargo run --release --features smalltest --bin verify_transform_constrained challenge1 response1 challenge2
+SIZE=10
+BATCH=256
 
-yes | cargo run --release --features smalltest --bin compute_constrained challenge2 response2
-cargo run --release --features smalltest --bin verify_transform_constrained challenge2 response2 challenge3
+cargo run --release --bin new_constrained challenge1 $SIZE $BATCH
+yes | cargo run --release --bin compute_constrained challenge1 response1 $SIZE $BATCH
+cargo run --release --bin verify_transform_constrained challenge1 response1 challenge2 $SIZE $BATCH
 
-yes | cargo run --release --features smalltest --bin compute_constrained challenge3 response3
-cargo run --release --features smalltest --bin verify_transform_constrained challenge3 response3 challenge4
+yes | cargo run --release --bin compute_constrained challenge2 response2 $SIZE $BATCH
+cargo run --release --bin verify_transform_constrained challenge2 response2 challenge3 $SIZE $BATCH
 
-cargo run --release --features smalltest --bin beacon_constrained challenge4 response4
-cargo run --release --features smalltest --bin verify_transform_constrained challenge4 response4 challenge5
+yes | cargo run --release --bin compute_constrained challenge3 response3 $SIZE $BATCH
+cargo run --release --bin verify_transform_constrained challenge3 response3 challenge4 $SIZE $BATCH
+
+cargo run --release --bin beacon_constrained challenge4 response4 $SIZE $BATCH
+cargo run --release --bin verify_transform_constrained challenge4 response4 challenge5 $SIZE $BATCH
 
 cat response1 response2 response3 response4 > transcript
-cargo run --release --features smalltest --bin verify  transcript
+cargo run --release --bin verify  transcript $SIZE $BATCH

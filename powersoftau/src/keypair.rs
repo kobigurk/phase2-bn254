@@ -9,7 +9,7 @@ use std::io::{self, Read, Write};
 
 use typenum::consts::U64;
 
-use super::parameters::{DeserializationError, PowersOfTauParameters, UseCompression};
+use super::parameters::{CeremonyParams, DeserializationError, UseCompression};
 use super::utils::{hash_to_g2, write_point};
 
 /// Contains terms of the form (s<sub>1</sub>, s<sub>1</sub><sup>x</sup>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub><sup>x</sup>)
@@ -167,42 +167,43 @@ impl<E: Engine> PublicKey<E> {
     /// This function is intended to write the key to the memory map and calculates
     /// a position for writing into the file itself based on information whether
     /// contribution was output in compressed on uncompressed form
-    pub fn write<P>(
+    pub fn write(
         &self,
         output_map: &mut MmapMut,
         accumulator_was_compressed: UseCompression,
-    ) -> io::Result<()>
-    where
-        P: PowersOfTauParameters,
-    {
+        parameters: &CeremonyParams,
+    ) -> io::Result<()> {
         let mut position = match accumulator_was_compressed {
-            UseCompression::Yes => P::CONTRIBUTION_BYTE_SIZE - P::PUBLIC_KEY_SIZE,
-            UseCompression::No => P::ACCUMULATOR_BYTE_SIZE,
+            UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
+            UseCompression::No => parameters.accumulator_size,
         };
 
+        let g1_size = parameters.curve.g1;
+        let g2_size = parameters.curve.g2;
+
         (&mut output_map[position..]).write_all(&self.tau_g1.0.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.tau_g1.1.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.alpha_g1.0.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.alpha_g1.1.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.beta_g1.0.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.beta_g1.1.into_uncompressed().as_ref())?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         (&mut output_map[position..]).write_all(&self.tau_g2.into_uncompressed().as_ref())?;
-        position += P::G2_UNCOMPRESSED_BYTE_SIZE;
+        position += g2_size;
 
         (&mut output_map[position..]).write_all(&self.alpha_g2.into_uncompressed().as_ref())?;
-        position += P::G2_UNCOMPRESSED_BYTE_SIZE;
+        position += g2_size;
 
         (&mut output_map[position..]).write_all(&self.beta_g2.into_uncompressed().as_ref())?;
 
@@ -214,13 +215,11 @@ impl<E: Engine> PublicKey<E> {
     /// Deserialize the public key. Points are always in uncompressed form, and
     /// always checked, since there aren't very many of them. Does not allow any
     /// points at infinity.
-    pub fn read<P>(
+    pub fn read(
         input_map: &Mmap,
         accumulator_was_compressed: UseCompression,
-    ) -> Result<Self, DeserializationError>
-    where
-        P: PowersOfTauParameters,
-    {
+        parameters: &CeremonyParams,
+    ) -> Result<Self, DeserializationError> {
         fn read_uncompressed<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
             input_map: &Mmap,
             position: usize,
@@ -241,33 +240,36 @@ impl<E: Engine> PublicKey<E> {
         }
 
         let mut position = match accumulator_was_compressed {
-            UseCompression::Yes => P::CONTRIBUTION_BYTE_SIZE - P::PUBLIC_KEY_SIZE,
-            UseCompression::No => P::ACCUMULATOR_BYTE_SIZE,
+            UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
+            UseCompression::No => parameters.accumulator_size,
         };
 
+        let g1_size = parameters.curve.g1;
+        let g2_size = parameters.curve.g2;
+
         let tau_g1_s = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let tau_g1_s_tau = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let alpha_g1_s = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let alpha_g1_s_alpha = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let beta_g1_s = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let beta_g1_s_beta = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G1_UNCOMPRESSED_BYTE_SIZE;
+        position += g1_size;
 
         let tau_g2 = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G2_UNCOMPRESSED_BYTE_SIZE;
+        position += g2_size;
 
         let alpha_g2 = read_uncompressed::<E, _>(input_map, position)?;
-        position += P::G2_UNCOMPRESSED_BYTE_SIZE;
+        position += g2_size;
 
         let beta_g2 = read_uncompressed::<E, _>(input_map, position)?;
 
@@ -279,5 +281,37 @@ impl<E: Engine> PublicKey<E> {
             alpha_g2,
             beta_g2,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{thread_rng, Rng};
+
+    mod bn256 {
+        use super::*;
+        use crate::parameters::{CurveKind, CurveParams};
+        use bellman_ce::pairing::bn256::Bn256;
+
+        #[test]
+        fn test_pubkey_serialization() {
+            let curve = CurveParams::new(CurveKind::Bn256);
+            let public_key_size = 6 * curve.g1 + 3 * curve.g2;
+
+            // Generate a random public key
+            let rng = &mut thread_rng();
+            let digest = (0..64).map(|_| rng.gen()).collect::<Vec<_>>();
+            let (pk, _) = keypair::<_, Bn256>(rng, &digest);
+
+            // Serialize it
+            let mut v = vec![];
+            pk.serialize(&mut v).unwrap();
+            assert_eq!(v.len(), public_key_size);
+
+            // Deserialize it and check that it matchesj
+            let deserialized = PublicKey::<Bn256>::deserialize(&mut &v[..]).unwrap();
+            assert!(pk == deserialized);
+        }
     }
 }

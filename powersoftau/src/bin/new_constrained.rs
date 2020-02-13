@@ -1,5 +1,3 @@
-use powersoftau::bn256::Bn256CeremonyParameters;
-
 use powersoftau::batched_accumulator::BatchedAccumulator;
 use powersoftau::parameters::UseCompression;
 use powersoftau::utils::blank_hash;
@@ -9,25 +7,29 @@ use memmap::*;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use powersoftau::parameters::PowersOfTauParameters;
+use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: \n<challenge_file>");
+    if args.len() != 4 {
+        println!("Usage: \n<challenge_file> <ceremony_size> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
+    let circuit_power = args[2].parse().expect("could not parse circuit power");
+    let batch_size = args[3].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",
-        Bn256CeremonyParameters::REQUIRED_POWER
+        parameters.size
     );
     println!(
         "In total will generate up to {} powers",
-        Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH
+        parameters.powers_g1_length
     );
 
     let file = OpenOptions::new()
@@ -38,11 +40,8 @@ fn main() {
         .expect("unable to create challenge file");
 
     let expected_challenge_length = match COMPRESS_NEW_CHALLENGE {
-        UseCompression::Yes => {
-            Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
-                - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
-        }
-        UseCompression::No => Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE,
+        UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
+        UseCompression::No => parameters.accumulator_size,
     };
 
     file.set_len(expected_challenge_length as u64)
@@ -75,9 +74,10 @@ fn main() {
         println!();
     }
 
-    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(
+    BatchedAccumulator::<Bn256>::generate_initial(
         &mut writable_map,
         COMPRESS_NEW_CHALLENGE,
+        &parameters,
     )
     .expect("generation of initial accumulator is successful");
     writable_map
@@ -88,8 +88,7 @@ fn main() {
     let output_readonly = writable_map
         .make_read_only()
         .expect("must make a map readonly");
-    let contribution_hash =
-        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let contribution_hash = BatchedAccumulator::<Bn256>::calculate_hash(&output_readonly);
 
     println!("Empty contribution is formed with a hash:");
 

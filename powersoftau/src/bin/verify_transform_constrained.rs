@@ -1,5 +1,4 @@
 use powersoftau::batched_accumulator::BatchedAccumulator;
-use powersoftau::bn256::Bn256CeremonyParameters;
 use powersoftau::keypair::PublicKey;
 use powersoftau::parameters::{CheckForCorrectness, UseCompression};
 
@@ -9,7 +8,7 @@ use std::fs::OpenOptions;
 
 use std::io::{Read, Write};
 
-use powersoftau::parameters::PowersOfTauParameters;
+use powersoftau::parameters::{CeremonyParams, CurveKind};
 
 const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
@@ -17,17 +16,21 @@ const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file>");
+    if args.len() != 6 {
+        println!("Usage: \n<challenge_file> <response_file> <new_challenge_file> <circuit_power> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
     let response_filename = &args[2];
     let new_challenge_filename = &args[3];
+    let circuit_power = args[4].parse().expect("could not parse circuit power");
+    let batch_size = args[5].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
-        Bn256CeremonyParameters::REQUIRED_POWER
+        parameters.size
     );
 
     // Try to load challenge file from disk.
@@ -41,11 +44,8 @@ fn main() {
             .metadata()
             .expect("unable to get filesystem metadata for challenge file");
         let expected_challenge_length = match PREVIOUS_CHALLENGE_IS_COMPRESSED {
-            UseCompression::Yes => {
-                Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE
-                    - Bn256CeremonyParameters::PUBLIC_KEY_SIZE
-            }
-            UseCompression::No => Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE,
+            UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
+            UseCompression::No => parameters.accumulator_size,
         };
         if metadata.len() != (expected_challenge_length as u64) {
             panic!(
@@ -73,11 +73,8 @@ fn main() {
             .metadata()
             .expect("unable to get filesystem metadata for response file");
         let expected_response_length = match CONTRIBUTION_IS_COMPRESSED {
-            UseCompression::Yes => Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE,
-            UseCompression::No => {
-                Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE
-                    + Bn256CeremonyParameters::PUBLIC_KEY_SIZE
-            }
+            UseCompression::Yes => parameters.contribution_size,
+            UseCompression::No => parameters.accumulator_size + parameters.public_key_size,
         };
         if metadata.len() != (expected_response_length as u64) {
             panic!(
@@ -99,9 +96,7 @@ fn main() {
     // Check that contribution is correct
 
     let current_accumulator_hash =
-        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(
-            &challenge_readable_map,
-        );
+        BatchedAccumulator::<Bn256>::calculate_hash(&challenge_readable_map);
 
     println!("Hash of the `challenge` file for verification:");
     for line in current_accumulator_hash.as_slice().chunks(16) {
@@ -142,9 +137,7 @@ fn main() {
         }
     }
 
-    let response_hash = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(
-        &response_readable_map,
-    );
+    let response_hash = BatchedAccumulator::<Bn256>::calculate_hash(&response_readable_map);
 
     println!("Hash of the response file for verification:");
     for line in response_hash.as_slice().chunks(16) {
@@ -159,9 +152,10 @@ fn main() {
     }
 
     // get the contributor's public key
-    let public_key = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(
+    let public_key = PublicKey::<Bn256>::read(
         &response_readable_map,
         CONTRIBUTION_IS_COMPRESSED,
+        &parameters,
     )
     .expect("wasn't able to deserialize the response file's public key");
 
@@ -171,7 +165,7 @@ fn main() {
         "Verifying a contribution to contain proper powers and correspond to the public key..."
     );
 
-    let valid = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::verify_transformation(
+    let valid = BatchedAccumulator::<Bn256>::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
         &public_key,
@@ -180,6 +174,7 @@ fn main() {
         CONTRIBUTION_IS_COMPRESSED,
         CheckForCorrectness::No,
         CheckForCorrectness::Yes,
+        &parameters,
     );
 
     if !valid {
@@ -206,7 +201,7 @@ fn main() {
 
         // Recomputation strips the public key and uses hashing to link with the previous contribution after decompression
         writer
-            .set_len(Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE as u64)
+            .set_len(parameters.accumulator_size as u64)
             .expect("must make output file large enough");
 
         let mut writable_map = unsafe {
@@ -225,10 +220,11 @@ fn main() {
                 .expect("unable to write hash to new challenge file");
         }
 
-        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::decompress(
+        BatchedAccumulator::<Bn256>::decompress(
             &response_readable_map,
             &mut writable_map,
             CheckForCorrectness::No,
+            &parameters,
         )
         .expect("must decompress a response for a new challenge");
 
@@ -239,9 +235,7 @@ fn main() {
             .expect("must make a map readonly");
 
         let recompressed_hash =
-            BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(
-                &new_challenge_readable_map,
-            );
+            BatchedAccumulator::<Bn256>::calculate_hash(&new_challenge_readable_map);
 
         println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
 

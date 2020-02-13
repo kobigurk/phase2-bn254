@@ -2,7 +2,7 @@ use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use powersoftau::batched_accumulator::*;
-use powersoftau::bn256::Bn256CeremonyParameters;
+use powersoftau::parameters::{CeremonyParams, CurveKind};
 use powersoftau::*;
 
 use crate::parameters::*;
@@ -25,6 +25,12 @@ fn log_2(x: u64) -> u32 {
 }
 
 fn main() {
+    let parameters = CeremonyParams::new(
+        CurveKind::Bn256,
+        28, // turn this to 10 for the small test
+        21, // turn this to 8  for the small test
+    );
+
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         println!("Usage: \n<response_filename>");
@@ -43,10 +49,11 @@ fn main() {
             .expect("unable to create a memory map for input")
     };
 
-    let current_accumulator = BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::deserialize(
+    let current_accumulator = BatchedAccumulator::<Bn256>::deserialize(
         &response_readable_map,
         CheckForCorrectness::Yes,
         UseCompression::Yes,
+        &parameters,
     )
     .expect("unable to read uncompressed accumulator");
 
@@ -182,7 +189,7 @@ fn main() {
 
         // Lagrange coefficients in G1 (for constructing
         // LC/IC queries and precomputing polynomials for A)
-        for coeff in g1_coeffs {
+        for coeff in g1_coeffs.clone() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 

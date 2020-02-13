@@ -2,41 +2,124 @@ use bellman_ce::pairing::GroupDecodingError;
 use std::fmt;
 use std::io;
 
-pub trait PowersOfTauParameters: Clone {
-    const REQUIRED_POWER: usize;
-
-    const G1_UNCOMPRESSED_BYTE_SIZE: usize;
-    const G2_UNCOMPRESSED_BYTE_SIZE: usize;
-    const G1_COMPRESSED_BYTE_SIZE: usize;
-    const G2_COMPRESSED_BYTE_SIZE: usize;
-
-    const TAU_POWERS_LENGTH: usize = (1 << Self::REQUIRED_POWER);
-
-    const TAU_POWERS_G1_LENGTH: usize = (Self::TAU_POWERS_LENGTH << 1) - 1;
-
-    const ACCUMULATOR_BYTE_SIZE: usize = (Self::TAU_POWERS_G1_LENGTH * Self::G1_UNCOMPRESSED_BYTE_SIZE) + // g1 tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G2_UNCOMPRESSED_BYTE_SIZE) + // g2 tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G1_UNCOMPRESSED_BYTE_SIZE) + // alpha tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G1_UNCOMPRESSED_BYTE_SIZE) // beta tau powers
-                                            + Self::G2_UNCOMPRESSED_BYTE_SIZE // beta in g2
-                                            + Self::HASH_SIZE; // blake2b hash of previous contribution
-
-    const PUBLIC_KEY_SIZE: usize = 3 * Self::G2_UNCOMPRESSED_BYTE_SIZE + // tau, alpha, and beta in g2
-                                    6 * Self::G1_UNCOMPRESSED_BYTE_SIZE; // (s1, s1*tau), (s2, s2*alpha), (s3, s3*beta) in g1
-
-    const CONTRIBUTION_BYTE_SIZE: usize = (Self::TAU_POWERS_G1_LENGTH * Self::G1_COMPRESSED_BYTE_SIZE) + // g1 tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G2_COMPRESSED_BYTE_SIZE) + // g2 tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G1_COMPRESSED_BYTE_SIZE) + // alpha tau powers
-                                            (Self::TAU_POWERS_LENGTH * Self::G1_COMPRESSED_BYTE_SIZE) // beta tau powers
-                                            + Self::G2_COMPRESSED_BYTE_SIZE // beta in g2
-                                            + Self::HASH_SIZE // blake2b hash of input accumulator
-                                            + Self::PUBLIC_KEY_SIZE; // public key
-
-    // Blake2b hash size
-    const HASH_SIZE: usize = 64;
-
-    const EMPIRICAL_BATCH_SIZE: usize = 1 << 21;
+/// The sizes of the group elements of a curev
+#[derive(Clone, PartialEq, Eq)]
+pub struct CurveParams {
+    pub g1: usize,
+    pub g2: usize,
+    pub g1_compressed: usize,
+    pub g2_compressed: usize,
 }
+
+/// The types of curves we support
+#[derive(Clone, PartialEq, Eq)]
+pub enum CurveKind {
+    Bn256,
+}
+
+impl CurveParams {
+    /// Creates a new curve based on the provided CurveKind
+    pub fn new(kind: CurveKind) -> Self {
+        let (g1, g2) = match kind {
+            CurveKind::Bn256 => (64, 128),
+        };
+
+        CurveParams {
+            g1,
+            g2,
+            g1_compressed: g1 / 2,
+            g2_compressed: g2 / 2,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+/// The parameters used for the trusted setup ceremony
+pub struct CeremonyParams {
+    /// The type of the curve being used (currently only supports BN256)
+    pub curve: CurveParams,
+    /// The number of Powers of Tau G1 elements which will be accumulated
+    pub powers_g1_length: usize,
+    /// The number of Powers of Tau Alpha/Beta/G2 elements which will be accumulated
+    pub powers_length: usize,
+    /// The circuit size exponent (ie length will be 2^size), depends on the computation you want to support
+    pub size: usize,
+    /// The empirical batch size for the batched accumulator.
+    /// This is a hyper parameter and may be different for each
+    /// curve.
+    pub batch_size: usize,
+    // Size of the used public key
+    pub public_key_size: usize,
+    /// Total size of the accumulator used for the ceremony
+    pub accumulator_size: usize,
+    /// Total size of the contribution
+    pub contribution_size: usize,
+    /// Size of the hash of the previous contribution
+    pub hash_size: usize,
+}
+
+impl CeremonyParams {
+    /// Constructs a new ceremony parameters object from the type of provided curve
+    pub fn new(kind: CurveKind, size: usize, batch_size: usize) -> Self {
+        // create the curve
+        let curve = CurveParams::new(kind);
+        Self::new_with_curve(curve, size, batch_size)
+    }
+
+    /// Constructs a new ceremony parameters object from the directly provided curve with parameters
+    /// Consider using the `new` method if you want to use one of the pre-implemented curves
+    pub fn new_with_curve(curve: CurveParams, size: usize, batch_size: usize) -> Self {
+        // asume we're using a 64 byte long hash function such as Blake
+        let hash_size = 64;
+
+        // 2^{size}
+        let powers_length = 1 << size;
+        // 2^{size+1} - 1
+        let powers_g1_length = (powers_length << 1) - 1;
+
+        let accumulator_size =
+            // G1 Tau powers
+            powers_g1_length * curve.g1 +
+            // G2 Tau Powers + Alpha Tau powers + Beta Tau powers
+            powers_length * (curve.g2 + (curve.g1 * 2)) +
+            // Beta in G2
+            curve.g2 +
+            // Hash of the previous contribution
+            hash_size;
+
+        let public_key_size =
+           // tau, alpha, beta in g2
+           3 * curve.g2 +
+           // (s1, s1*tau), (s2, s2*alpha), (s3, s3*beta) in g1
+           6 * curve.g1;
+
+        let contribution_size =
+            // G1 Tau powers (compressed)
+            powers_g1_length * curve.g1_compressed +
+            // G2 Tau Powers + Alpha Tau powers + Beta Tau powers (compressed)
+            powers_length * (curve.g2_compressed + (curve.g1_compressed * 2)) +
+            // Beta in G2
+            curve.g2_compressed +
+            // Hash of the previous contribution
+            hash_size +
+            // The public key of the previous contributor
+            public_key_size;
+
+        Self {
+            curve,
+            size,
+            batch_size,
+            accumulator_size,
+            public_key_size,
+            contribution_size,
+            hash_size,
+            powers_length,
+            powers_g1_length,
+        }
+    }
+}
+
+// TODO: Add tests!
 
 /// Determines if point compression should be used.
 #[derive(Copy, Clone, PartialEq)]

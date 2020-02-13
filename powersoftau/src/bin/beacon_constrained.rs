@@ -1,16 +1,14 @@
-use powersoftau::bn256::Bn256CeremonyParameters;
-
-use powersoftau::batched_accumulator::BatchedAccumulator;
-use powersoftau::keypair::keypair;
-use powersoftau::parameters::{CheckForCorrectness, UseCompression};
+use powersoftau::{
+    batched_accumulator::BatchedAccumulator,
+    keypair::keypair,
+    parameters::{CeremonyParams, CheckForCorrectness, CurveKind, UseCompression},
+};
 
 use bellman_ce::pairing::bn256::Bn256;
-use memmap::*;
+use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 use std::io::Write;
-
-use powersoftau::parameters::PowersOfTauParameters;
 
 #[macro_use]
 extern crate hex_literal;
@@ -22,20 +20,24 @@ const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 #[allow(clippy::modulo_one)]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        println!("Usage: \n<challenge_file> <response_file>");
+    if args.len() != 5 {
+        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
     let response_filename = &args[2];
+    let circuit_power = args[3].parse().expect("could not parse circuit power");
+    let batch_size = args[4].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::new(CurveKind::Bn256, circuit_power, batch_size);
 
     println!(
         "Will contribute a random beacon to accumulator for 2^{} powers of tau",
-        Bn256CeremonyParameters::REQUIRED_POWER
+        parameters.size,
     );
     println!(
         "In total will generate up to {} powers",
-        Bn256CeremonyParameters::TAU_POWERS_G1_LENGTH
+        parameters.powers_g1_length,
     );
 
     // Create an RNG based on the outcome of the random beacon
@@ -102,8 +104,8 @@ fn main() {
             .metadata()
             .expect("unable to get filesystem metadata for challenge file");
         let expected_challenge_length = match INPUT_IS_COMPRESSED {
-            UseCompression::Yes => Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE,
-            UseCompression::No => Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE,
+            UseCompression::Yes => parameters.contribution_size,
+            UseCompression::No => parameters.accumulator_size,
         };
 
         if metadata.len() != (expected_challenge_length as u64) {
@@ -130,11 +132,8 @@ fn main() {
         .expect("unable to create response file in this directory");
 
     let required_output_length = match COMPRESS_THE_OUTPUT {
-        UseCompression::Yes => Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE,
-        UseCompression::No => {
-            Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE
-                + Bn256CeremonyParameters::PUBLIC_KEY_SIZE
-        }
+        UseCompression::Yes => parameters.contribution_size,
+        UseCompression::No => parameters.accumulator_size + parameters.public_key_size,
     };
 
     writer
@@ -149,8 +148,7 @@ fn main() {
 
     println!("Calculating previous contribution hash...");
 
-    let current_accumulator_hash =
-        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&readable_map);
+    let current_accumulator_hash = BatchedAccumulator::<Bn256>::calculate_hash(&readable_map);
 
     {
         println!("Contributing on top of the hash:");
@@ -181,28 +179,28 @@ fn main() {
     println!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
-    BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::transform(
+    BatchedAccumulator::<Bn256>::transform(
         &readable_map,
         &mut writable_map,
         INPUT_IS_COMPRESSED,
         COMPRESS_THE_OUTPUT,
         CHECK_INPUT_CORRECTNESS,
         &privkey,
+        &parameters,
     )
     .expect("must transform with the key");
     println!("Finishing writing your contribution to response file...");
 
     // Write the public key
     pubkey
-        .write::<Bn256CeremonyParameters>(&mut writable_map, COMPRESS_THE_OUTPUT)
+        .write(&mut writable_map, COMPRESS_THE_OUTPUT, &parameters)
         .expect("unable to write public key");
 
     // Get the hash of the contribution, so the user can compare later
     let output_readonly = writable_map
         .make_read_only()
         .expect("must make a map readonly");
-    let contribution_hash =
-        BatchedAccumulator::<Bn256, Bn256CeremonyParameters>::calculate_hash(&output_readonly);
+    let contribution_hash = BatchedAccumulator::<Bn256>::calculate_hash(&output_readonly);
 
     print!(
         "Done!\n\n\

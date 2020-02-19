@@ -32,6 +32,29 @@ impl<E: Engine> CurveParams<E> {
             engine_type: PhantomData,
         }
     }
+
+    pub fn g1_size(&self, compression: UseCompression) -> usize {
+        match compression {
+            UseCompression::Yes => self.g1_compressed,
+            UseCompression::No => self.g1,
+        }
+    }
+
+    pub fn g2_size(&self, compression: UseCompression) -> usize {
+        match compression {
+            UseCompression::Yes => self.g2_compressed,
+            UseCompression::No => self.g2,
+        }
+    }
+
+    pub fn get_size(&self, element_type: ElementType, compression: UseCompression) -> usize {
+        match element_type {
+            ElementType::AlphaG1 | ElementType::BetaG1 | ElementType::TauG1 => {
+                self.g1_size(compression)
+            }
+            ElementType::BetaG2 | ElementType::TauG2 => self.g2_size(compression),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]

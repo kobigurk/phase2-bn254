@@ -7,8 +7,8 @@ use powersoftau::{
 };
 
 use bellman_ce::domain::{EvaluationDomain, Point};
-use bellman_ce::worker::Worker;
 use bellman_ce::pairing::{bn256::Bn256, CurveAffine, CurveProjective, Engine};
+use bellman_ce::worker::Worker;
 
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
@@ -51,7 +51,7 @@ fn main() {
     prepare_phase2(&opts.response_fname, &parameters);
 }
 
-fn prepare_phase2<E: Engine>(response_filename: &str, parameters: &CeremonyParams<E>) {
+fn prepare_phase2<E: Engine + Sync>(response_filename: &str, parameters: &CeremonyParams<E>) {
     // Try to load response file from disk.
     let reader = OpenOptions::new()
         .read(true)

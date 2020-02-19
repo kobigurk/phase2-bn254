@@ -1,14 +1,11 @@
-mod new_constrained;
-pub use new_constrained::new_constrained;
+mod new_challenge;
+pub use new_challenge::new_challenge;
 
 mod contribute;
 pub use contribute::contribute;
 
 mod transform;
 pub use transform::transform;
-
-mod verify;
-pub use verify::verify;
 
 use gumdrop::Options;
 use std::default::Default;
@@ -52,8 +49,11 @@ pub struct PowersOfTauOpts {
 // The supported commands
 #[derive(Debug, Options, Clone)]
 pub enum Command {
-    // this checks if a challenge file is already present and if not it creates it
-    // equivalent of `new_constrained` + `compute_constrained`. Generates a response
+    // this creates a new challenge
+    #[options(
+        help = "creates a new challenge for the ceremony"
+    )]
+    New(NewOpts),
     #[options(
         help = "contribute to ceremony by producing a response to a challenge (or create a new challenge if this is the first contribution)"
     )]
@@ -64,9 +64,18 @@ pub enum Command {
     Beacon(ContributeOpts),
     // this receives a challenge + response file, verifies it and generates a new challenge
     #[options(help = "verify the contributions so far and generate a new challenge")]
-    Transform(TransformOpts),
-    #[options(help = "verify that the transcript was generated correctly")]
-    Verify(VerifyOpts),
+    VerifyAndTransform(VerifyAndTransformOpts),
+}
+
+// Options for the Contribute command
+#[derive(Debug, Options, Clone)]
+pub struct NewOpts {
+    help: bool,
+    #[options(
+        help = "the challenge file name to be created",
+        default = "challenge"
+    )]
+    pub challenge_fname: String,
 }
 
 // Options for the Contribute command
@@ -74,7 +83,7 @@ pub enum Command {
 pub struct ContributeOpts {
     help: bool,
     #[options(
-        help = "the provided challenge file (will create a new one if you are the first participant in the ceremony",
+        help = "the provided challenge file",
         default = "challenge"
     )]
     pub challenge_fname: String,
@@ -83,7 +92,7 @@ pub struct ContributeOpts {
 }
 
 #[derive(Debug, Options, Clone)]
-pub struct TransformOpts {
+pub struct VerifyAndTransformOpts {
     help: bool,
     #[options(help = "the provided challenge file", default = "challenge")]
     pub challenge_fname: String,
@@ -97,13 +106,6 @@ pub struct TransformOpts {
         default = "new_challenge"
     )]
     pub new_challenge_fname: String,
-}
-
-#[derive(Debug, Options, Clone)]
-pub struct VerifyOpts {
-    help: bool,
-    #[options(help = "the ceremony's transcript", default = "transcript")]
-    pub transcript_fname: String,
 }
 
 pub fn curve_from_str(src: &str) -> Result<CurveKind, String> {

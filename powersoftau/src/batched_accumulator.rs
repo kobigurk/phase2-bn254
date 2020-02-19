@@ -1,6 +1,6 @@
 /// Memory constrained accumulator that checks parts of the initial information in parts that fit to memory
 /// and then contributes to entropy in parts as well
-use bellman_ce::pairing::ff::{Field, PrimeField};
+use bellman_ce::pairing::ff::Field;
 use bellman_ce::pairing::*;
 use itertools::{Itertools, MinMaxResult::MinMax};
 use log::{error, info};
@@ -8,14 +8,14 @@ use log::{error, info};
 use generic_array::GenericArray;
 
 use std::io::{self, Read, Write};
-use std::sync::{Arc, Mutex};
 use typenum::consts::U64;
 
 use super::keypair::{PrivateKey, PublicKey};
 use super::parameters::{
     CeremonyParams, CheckForCorrectness, DeserializationError, ElementType, UseCompression,
 };
-use super::utils::{blank_hash, compute_g2_s, power_pairs, same_ratio};
+use super::utils::{batch_exp, blank_hash, compute_g2_s, power_pairs, same_ratio};
+use rayon::prelude::*;
 
 pub enum AccumulatorState {
     Empty,
@@ -47,7 +47,7 @@ pub struct BatchedAccumulator<'a, E: Engine> {
     pub parameters: &'a CeremonyParams<E>,
 }
 
-impl<'a, E: Engine> BatchedAccumulator<'a, E> {
+impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
     pub fn empty(parameters: &'a CeremonyParams<E>) -> Self {
         Self {
             tau_powers_g1: vec![],
@@ -57,29 +57,6 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
             beta_g2: E::G2Affine::zero(),
             hash: blank_hash(),
             parameters,
-        }
-    }
-
-    fn g1_size(&self, compression: UseCompression) -> usize {
-        match compression {
-            UseCompression::Yes => self.parameters.curve.g1_compressed,
-            UseCompression::No => self.parameters.curve.g1,
-        }
-    }
-
-    fn g2_size(&self, compression: UseCompression) -> usize {
-        match compression {
-            UseCompression::Yes => self.parameters.curve.g2_compressed,
-            UseCompression::No => self.parameters.curve.g2,
-        }
-    }
-
-    fn get_size(&self, element_type: ElementType, compression: UseCompression) -> usize {
-        match element_type {
-            ElementType::AlphaG1 | ElementType::BetaG1 | ElementType::TauG1 => {
-                self.g1_size(compression)
-            }
-            ElementType::BetaG2 | ElementType::TauG2 => self.g2_size(compression),
         }
     }
 
@@ -97,8 +74,8 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         element_type: ElementType,
         compression: UseCompression,
     ) -> usize {
-        let g1_size = self.g1_size(compression);
-        let g2_size = self.g2_size(compression);
+        let g1_size = self.parameters.curve.g1_size(compression);
+        let g2_size = self.parameters.curve.g2_size(compression);
         let required_tau_g1_power = self.parameters.powers_g1_length;
         let required_power = self.parameters.powers_length;
         let parameters = &self.parameters;
@@ -781,7 +758,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         Ok(())
     }
 
-    fn read_points_chunk<ENC: EncodedPoint>(
+    fn read_points_chunk<G: EncodedPoint>(
         &mut self,
         from: usize,
         size: usize,
@@ -789,110 +766,49 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         compression: UseCompression,
         checked: CheckForCorrectness,
         input: &[u8],
-    ) -> Result<Vec<ENC::Affine>, DeserializationError> {
-        // Read the encoded elements
-        let mut res = vec![ENC::empty(); size];
-
-        for (i, encoded) in res.iter_mut().enumerate() {
-            let index = from + i;
-            match element_type {
-                ElementType::TauG1 => {
-                    if index >= self.parameters.powers_g1_length {
-                        return Ok(vec![]);
-                    }
+    ) -> Result<Vec<G::Affine>, DeserializationError> {
+        let element_size = self.parameters.curve.get_size(element_type, compression);
+        (from..from + size)
+            .into_par_iter()
+            .flat_map(|index| {
+                // return empty vector if we are out of bounds
+                // (we should not throw an error though!)
+                if self.is_out_of_bounds(element_type, index) {
+                    return None;
                 }
-                ElementType::AlphaG1
-                | ElementType::BetaG1
-                | ElementType::BetaG2
-                | ElementType::TauG2 => {
-                    if index >= self.parameters.powers_length {
-                        return Ok(vec![]);
-                    }
+
+                // get the slice corresponding to the element
+                let position = self.calculate_position(index, element_type, compression);
+                let mut slice = &input[position..position + element_size];
+                // read to a point
+                let mut res = G::empty();
+                if let Err(e) = slice.read_exact(res.as_mut()) {
+                    return Some(Err(e.into()));
                 }
-            };
-            let position = self.calculate_position(index, element_type, compression);
-            let element_size = self.get_size(element_type, compression);
-            let mut memory_slice = input
-                .get(position..position + element_size)
-                .expect("must read point data from file");
-            memory_slice.read_exact(encoded.as_mut())?;
-        }
 
-        // Allocate space for the deserialized elements
-        let mut res_affine = vec![ENC::Affine::zero(); size];
-
-        let mut chunk_size = res.len() / num_cpus::get();
-        if chunk_size == 0 {
-            chunk_size = 1;
-        }
-
-        // If any of our threads encounter a deserialization/IO error, catch
-        // it with this.
-        let decoding_error = Arc::new(Mutex::new(None));
-
-        crossbeam::scope(|scope| {
-            for (source, target) in res
-                .chunks(chunk_size)
-                .zip(res_affine.chunks_mut(chunk_size))
-            {
-                let decoding_error = decoding_error.clone();
-
-                scope.spawn(move || {
-                    assert_eq!(source.len(), target.len());
-                    for (source, target) in source.iter().zip(target.iter_mut()) {
-                        match {
-                            // If we're a participant, we don't need to check all of the
-                            // elements in the accumulator, which saves a lot of time.
-                            // The hash chain prevents this from being a problem: the
-                            // transcript guarantees that the accumulator was properly
-                            // formed.
-                            match checked {
-                                CheckForCorrectness::Yes => {
-                                    // Points at infinity are never expected in the accumulator
-                                    source
-                                        .into_affine()
-                                        .map_err(|e| e.into())
-                                        .and_then(|source| {
-                                            if source.is_zero() {
-                                                Err(DeserializationError::PointAtInfinity)
-                                            } else {
-                                                Ok(source)
-                                            }
-                                        })
-                                }
-                                CheckForCorrectness::No => {
-                                    source.into_affine_unchecked().map_err(|e| e.into())
+                Some(match checked {
+                    CheckForCorrectness::Yes => {
+                        // Points at infinity are never expected in the accumulator
+                        match res.into_affine() {
+                            Ok(p) => {
+                                if p.is_zero() {
+                                    Err(DeserializationError::PointAtInfinity)
+                                } else {
+                                    Ok(p)
                                 }
                             }
-                        } {
-                            Ok(source) => {
-                                *target = source;
-                            }
-                            Err(e) => {
-                                *decoding_error.lock().unwrap() = Some(e);
-                            }
+                            Err(e) => Err(e.into()),
                         }
                     }
-                });
-            }
-        });
-
-        // extra check that during the decompression all the the initially initialized infinitu points
-        // were replaced with something
-        for decoded in res_affine.iter() {
-            if decoded.is_zero() {
-                return Err(DeserializationError::PointAtInfinity);
-            }
-        }
-
-        match Arc::try_unwrap(decoding_error)
-            .unwrap()
-            .into_inner()
-            .unwrap()
-        {
-            Some(e) => Err(e),
-            None => Ok(res_affine),
-        }
+                    // If we're a participant, we don't need to check all of the
+                    // elements in the accumulator, which saves a lot of time.
+                    // The hash chain prevents this from being a problem: the
+                    // transcript guarantees that the accumulator was properly
+                    // formed.
+                    CheckForCorrectness::No => res.into_affine_unchecked().map_err(|e| e.into()),
+                })
+            })
+            .collect()
     }
 
     fn write_all(
@@ -942,6 +858,25 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         Ok(())
     }
 
+    fn is_out_of_bounds(&self, element_type: ElementType, index: usize) -> bool {
+        match element_type {
+            ElementType::TauG1 => {
+                if index >= self.parameters.powers_g1_length {
+                    return true;
+                }
+            }
+            ElementType::AlphaG1
+            | ElementType::BetaG1
+            | ElementType::BetaG2
+            | ElementType::TauG2 => {
+                if index >= self.parameters.powers_length {
+                    return true;
+                }
+            }
+        };
+        false
+    }
+
     fn write_point<C>(
         &mut self,
         index: usize,
@@ -954,31 +889,17 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         C: CurveAffine<Engine = E, Scalar = E::Fr>,
     {
         let output = output.as_mut();
-        match element_type {
-            ElementType::TauG1 => {
-                if index >= self.parameters.powers_g1_length {
-                    return Ok(());
-                }
-            }
-            ElementType::AlphaG1
-            | ElementType::BetaG1
-            | ElementType::BetaG2
-            | ElementType::TauG2 => {
-                if index >= self.parameters.powers_length {
-                    return Ok(());
-                }
-            }
-        };
+        if self.is_out_of_bounds(element_type, index) {
+            return Ok(());
+        }
 
         match compression {
             UseCompression::Yes => {
                 let position = self.calculate_position(index, element_type, compression);
-                // let size = self.get_size(element_type, compression);
                 (&mut output[position..]).write_all(p.into_compressed().as_ref())?;
             }
             UseCompression::No => {
                 let position = self.calculate_position(index, element_type, compression);
-                // let size = self.get_size(element_type, compression);
                 (&mut output[position..]).write_all(p.into_uncompressed().as_ref())?;
             }
         };
@@ -1010,7 +931,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
     /// WARNING: Contributor does not have to check that values from challenge file were serialized
     /// correctly, but we may want to enforce it if a ceremony coordinator does not recompress the previous
     /// contribution into the new challenge file
-    pub fn transform(
+    pub fn contribute(
         input: &[u8],
         output: &mut [u8],
         input_is_compressed: UseCompression,
@@ -1019,61 +940,6 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
         key: &PrivateKey<E>,
         parameters: &'a CeremonyParams<E>,
     ) -> io::Result<()> {
-        /// Exponentiate a large number of points, with an optional coefficient to be applied to the
-        /// exponent.
-        fn batch_exp<EE: Engine, C: CurveAffine<Engine = EE, Scalar = EE::Fr>>(
-            bases: &mut [C],
-            exp: &[C::Scalar],
-            coeff: Option<&C::Scalar>,
-        ) {
-            assert_eq!(bases.len(), exp.len());
-            let mut projective = vec![C::Projective::zero(); bases.len()];
-            let chunk_size = bases.len() / num_cpus::get();
-
-            // Perform wNAF over multiple cores, placing results into `projective`.
-            crossbeam::scope(|scope| {
-                for ((bases, exp), projective) in bases
-                    .chunks_mut(chunk_size)
-                    .zip(exp.chunks(chunk_size))
-                    .zip(projective.chunks_mut(chunk_size))
-                {
-                    scope.spawn(move || {
-                        let mut wnaf = Wnaf::new();
-
-                        for ((base, exp), projective) in
-                            bases.iter_mut().zip(exp.iter()).zip(projective.iter_mut())
-                        {
-                            let mut exp = *exp;
-                            if let Some(coeff) = coeff {
-                                exp.mul_assign(coeff);
-                            }
-
-                            *projective =
-                                wnaf.base(base.into_projective(), 1).scalar(exp.into_repr());
-                        }
-                    });
-                }
-            });
-
-            // Perform batch normalization
-            crossbeam::scope(|scope| {
-                for projective in projective.chunks_mut(chunk_size) {
-                    scope.spawn(move || {
-                        C::Projective::batch_normalization(projective);
-                    });
-                }
-            });
-
-            // Turn it all back into affine points
-            for (projective, affine) in projective.iter().zip(bases.iter_mut()) {
-                *affine = projective.into_affine();
-                assert!(
-                    !affine.is_zero(),
-                    "your contribution happened to produce a point at infinity, please re-run"
-                );
-            }
-        }
-
         let mut accumulator = Self::empty(parameters);
 
         for chunk in &(0..parameters.powers_length).chunks(parameters.batch_size) {
@@ -1107,14 +973,14 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                     }
                 });
 
-                batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
-                batch_exp::<E, _>(&mut accumulator.tau_powers_g2, &taupowers[0..], None);
-                batch_exp::<E, _>(
+                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
+                batch_exp(&mut accumulator.tau_powers_g2, &taupowers[0..], None);
+                batch_exp(
                     &mut accumulator.alpha_tau_powers_g1,
                     &taupowers[0..],
                     Some(&key.alpha),
                 );
-                batch_exp::<E, _>(
+                batch_exp(
                     &mut accumulator.beta_tau_powers_g1,
                     &taupowers[0..],
                     Some(&key.beta),
@@ -1169,7 +1035,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                     }
                 });
 
-                batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
+                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
                 //accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
                 //assert!(!accumulator.beta_g2.is_zero(), "your contribution happened to produce a point at infinity, please re-run");
                 accumulator.write_chunk(start, compress_the_output, output)?;
@@ -1237,95 +1103,84 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
     }
 }
 
-/// Verifies a transformation of the `BatchedAccumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
-pub fn verify_transform<E: Engine>(
-    before: &BatchedAccumulator<E>,
-    after: &BatchedAccumulator<E>,
-    key: &PublicKey<E>,
-    digest: &[u8],
-) -> bool {
-    assert_eq!(digest.len(), 64);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parameters::CurveParams;
+    use bellman_ce::pairing::Engine as PairingEngine;
+    use bellman_ce::pairing::{bls12_381::Bls12 as Bls12_381, bn256::Bn256};
+    use rand::{thread_rng, Rand, Rng};
 
-    let tau_g2_s = compute_g2_s::<E>(&digest, &key.tau_g1.0, &key.tau_g1.1, 0);
-    let alpha_g2_s = compute_g2_s::<E>(&digest, &key.alpha_g1.0, &key.alpha_g1.1, 1);
-    let beta_g2_s = compute_g2_s::<E>(&digest, &key.beta_g1.0, &key.beta_g1.1, 2);
+    #[test]
+    fn serializer() {
+        serialize_accumulator_curve::<Bls12_381>(UseCompression::Yes);
+        serialize_accumulator_curve::<Bls12_381>(UseCompression::No);
 
-    // Check the proofs-of-knowledge for tau/alpha/beta
-
-    // g1^s / g1^(s*x) = g2^s / g2^(s*x)
-    if !same_ratio(key.tau_g1, (tau_g2_s, key.tau_g2)) {
-        return false;
-    }
-    if !same_ratio(key.alpha_g1, (alpha_g2_s, key.alpha_g2)) {
-        return false;
-    }
-    if !same_ratio(key.beta_g1, (beta_g2_s, key.beta_g2)) {
-        return false;
+        serialize_accumulator_curve::<Bn256>(UseCompression::Yes);
+        serialize_accumulator_curve::<Bn256>(UseCompression::No);
     }
 
-    // Check the correctness of the generators for tau powers
-    if after.tau_powers_g1[0] != E::G1Affine::one() {
-        return false;
-    }
-    if after.tau_powers_g2[0] != E::G2Affine::one() {
-        return false;
+    fn serialize_accumulator_curve<E: PairingEngine + Sync>(compress: UseCompression) {
+        // create a small accumulator with some random state
+        let curve = CurveParams::<E>::new();
+        let parameters = CeremonyParams::new_with_curve(curve, 2, 4);
+        let mut accumulator = random_accumulator::<E>(&parameters);
+
+        let expected_challenge_length = match compress {
+            UseCompression::Yes => parameters.contribution_size - parameters.public_key_size,
+            UseCompression::No => parameters.accumulator_size,
+        };
+        let mut buffer = vec![0; expected_challenge_length];
+
+        // serialize it and ensure that the recovered version matches the original
+        accumulator
+            .serialize(&mut buffer, compress, &parameters)
+            .unwrap();
+        let deserialized = BatchedAccumulator::deserialize(
+            &buffer,
+            CheckForCorrectness::Yes,
+            compress,
+            &parameters,
+        )
+        .unwrap();
+
+        assert_eq!(deserialized.tau_powers_g1, accumulator.tau_powers_g1);
+        assert_eq!(deserialized.tau_powers_g2, accumulator.tau_powers_g2);
+        assert_eq!(
+            deserialized.alpha_tau_powers_g1,
+            accumulator.alpha_tau_powers_g1
+        );
+        assert_eq!(
+            deserialized.beta_tau_powers_g1,
+            accumulator.beta_tau_powers_g1
+        );
+        assert_eq!(deserialized.beta_g2, accumulator.beta_g2);
     }
 
-    // Did the participant multiply the previous tau by the new one?
-    if !same_ratio(
-        (before.tau_powers_g1[1], after.tau_powers_g1[1]),
-        (tau_g2_s, key.tau_g2),
-    ) {
-        return false;
+    // Helpers
+
+    fn random_point<C: CurveAffine>(rng: &mut impl Rng) -> C {
+        C::Projective::rand(rng).into_affine()
     }
 
-    // Did the participant multiply the previous alpha by the new one?
-    if !same_ratio(
-        (before.alpha_tau_powers_g1[0], after.alpha_tau_powers_g1[0]),
-        (alpha_g2_s, key.alpha_g2),
-    ) {
-        return false;
+    fn random_point_vec<C: CurveAffine>(size: usize, rng: &mut impl Rng) -> Vec<C> {
+        (0..size).map(|_| random_point(rng)).collect()
     }
 
-    // Did the participant multiply the previous beta by the new one?
-    if !same_ratio(
-        (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
-        (beta_g2_s, key.beta_g2),
-    ) {
-        return false;
+    fn random_accumulator<'a, E: PairingEngine>(
+        parameters: &'a CeremonyParams<E>,
+    ) -> BatchedAccumulator<'a, E> {
+        let tau_g1_size = parameters.powers_g1_length;
+        let other_size = parameters.powers_length;
+        let rng = &mut thread_rng();
+        BatchedAccumulator {
+            tau_powers_g1: random_point_vec(tau_g1_size, rng),
+            tau_powers_g2: random_point_vec(other_size, rng),
+            alpha_tau_powers_g1: random_point_vec(other_size, rng),
+            beta_tau_powers_g1: random_point_vec(other_size, rng),
+            beta_g2: random_point(rng),
+            hash: blank_hash(),
+            parameters,
+        }
     }
-    if !same_ratio(
-        (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
-        (before.beta_g2, after.beta_g2),
-    ) {
-        return false;
-    }
-
-    // Are the powers of tau correct?
-    if !same_ratio(
-        power_pairs(&after.tau_powers_g1),
-        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
-    ) {
-        return false;
-    }
-    if !same_ratio(
-        power_pairs(&after.tau_powers_g2),
-        (after.tau_powers_g1[0], after.tau_powers_g1[1]),
-    ) {
-        return false;
-    }
-    if !same_ratio(
-        power_pairs(&after.alpha_tau_powers_g1),
-        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
-    ) {
-        return false;
-    }
-    if !same_ratio(
-        power_pairs(&after.beta_tau_powers_g1),
-        (after.tau_powers_g2[0], after.tau_powers_g2[1]),
-    ) {
-        return false;
-    }
-
-    true
 }

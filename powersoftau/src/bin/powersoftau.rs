@@ -1,12 +1,9 @@
 use gumdrop::Options;
-use powersoftau::cli_common::{
-    contribute, new_constrained, transform, verify, Command, PowersOfTauOpts,
-};
+use powersoftau::cli_common::{contribute, new_challenge, transform, Command, PowersOfTauOpts};
 use powersoftau::parameters::CeremonyParams;
 use powersoftau::utils::{beacon_randomness, get_rng, user_system_randomness};
 
 use bellman_ce::pairing::bn256::Bn256;
-use std::path::PathBuf;
 use std::process;
 
 #[macro_use]
@@ -25,17 +22,13 @@ fn main() {
     });
 
     match command {
+        Command::New(opt) => {
+            new_challenge(&opt.challenge_fname, &parameters);
+        },
         Command::Contribute(opt) => {
-            let challenge_fname = opt.challenge_fname;
-            let challenge_file = PathBuf::from(&challenge_fname);
-
-            if !challenge_file.exists() {
-                // If the challenge file does not exist, then we have to first initiate the ceremony
-                new_constrained(&challenge_fname, &parameters);
-            }
             // contribute to the randomness
             let rng = get_rng(&user_system_randomness());
-            contribute(&challenge_fname, &opt.response_fname, &parameters, rng)
+            contribute(&opt.challenge_fname, &opt.response_fname, &parameters, rng);
         }
         Command::Beacon(opt) => {
             // use the beacon's randomness
@@ -45,7 +38,7 @@ fn main() {
             let rng = get_rng(&beacon_randomness(beacon_hash));
             contribute(&opt.challenge_fname, &opt.response_fname, &parameters, rng);
         }
-        Command::Transform(opt) => {
+        Command::VerifyAndTransform(opt) => {
             // we receive a previous participation, verify it, and generate a new challenge from it
             transform(
                 &opt.challenge_fname,
@@ -53,9 +46,6 @@ fn main() {
                 &opt.new_challenge_fname,
                 &parameters,
             );
-        }
-        Command::Verify(opt) => {
-            verify(&opt.transcript_fname, &parameters);
         }
     };
 }

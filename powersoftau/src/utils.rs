@@ -12,6 +12,7 @@ use typenum::consts::U64;
 
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
+use rayon::prelude::*;
 
 use super::parameters::UseCompression;
 
@@ -26,6 +27,39 @@ pub fn print_hash(hash: &[u8]) {
         }
         println!();
     }
+}
+
+/// Exponentiate a large number of points, with an optional coefficient to be applied to the
+/// exponent. Panics if provided arguments have different length.
+pub fn batch_exp<C: CurveAffine>(bases: &mut [C], exps: &[C::Scalar], coeff: Option<&C::Scalar>) {
+    // ensure the 2 vectors have the same length
+    assert_eq!(bases.len(), exps.len());
+    // raise the base to the exponent and assign it back to the base
+    // this will return the points as projective
+    let mut points: Vec<_> = bases
+        .par_iter_mut()
+        .enumerate()
+        .map(|(i, base)| {
+            let mut exp = exps[i];
+
+            // If a coefficient was provided, multiply the exponent
+            // by that coefficient
+            if let Some(coeff) = coeff {
+                exp.mul_assign(coeff);
+            }
+
+            // Raise the base to the exponent (additive notation so it is executed
+            // via a multiplication)
+            base.mul(exp)
+        })
+        .collect();
+
+    // normalize the batch and cast to affine
+    C::Projective::batch_normalization(&mut points);
+    bases
+        .par_iter_mut()
+        .zip(points)
+        .for_each(|(base, proj)| *base = proj.into_affine());
 }
 
 // Create an RNG based on a mixture of system randomness and user provided randomness

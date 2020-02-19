@@ -9,7 +9,7 @@ use std::io::Write;
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
-pub fn new_constrained<T: Engine>(challenge_filename: &str, parameters: &CeremonyParams<T>) {
+pub fn new_challenge<T: Engine + Sync>(challenge_filename: &str, parameters: &CeremonyParams<T>) {
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",
         parameters.size

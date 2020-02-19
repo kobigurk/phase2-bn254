@@ -14,7 +14,7 @@ const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
 const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;
 const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
-pub fn contribute<T: Engine>(
+pub fn contribute<T: Engine + Sync>(
     challenge_filename: &str,
     response_filename: &str,
     parameters: &CeremonyParams<T>,
@@ -113,7 +113,7 @@ pub fn contribute<T: Engine>(
     println!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
-    BatchedAccumulator::transform(
+    BatchedAccumulator::contribute(
         &readable_map,
         &mut writable_map,
         INPUT_IS_COMPRESSED,
@@ -122,7 +122,7 @@ pub fn contribute<T: Engine>(
         &privkey,
         &parameters,
     )
-    .expect("must transform with the key");
+    .expect("must contribute with the key");
 
     println!("Finishing writing your contribution to response file...");
 

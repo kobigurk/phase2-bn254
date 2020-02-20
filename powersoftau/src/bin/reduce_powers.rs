@@ -1,4 +1,3 @@
-use bellman_ce::pairing::{bn256::Bn256, Engine};
 use gumdrop::Options;
 use memmap::MmapOptions;
 use powersoftau::{
@@ -8,6 +7,7 @@ use powersoftau::{
     utils::{calculate_hash, print_hash, reduced_hash},
 };
 use std::{fs::OpenOptions, io::Write};
+use zexe_algebra::{curves::bls12_381::Bls12_381, PairingEngine as Engine};
 
 #[derive(Debug, Options, Clone)]
 struct ReducePowersOpts {
@@ -24,7 +24,7 @@ struct ReducePowersOpts {
     pub reduced_circuit_power: usize,
     #[options(
         help = "the elliptic curve to use",
-        default = "bn256",
+        default = "bls12_381",
         parse(try_from_str = "curve_from_str")
     )]
     pub curve_kind: CurveKind,
@@ -38,7 +38,7 @@ struct ReducePowersOpts {
 
 fn main() {
     let opts = ReducePowersOpts::parse_args_default_or_exit();
-    let parameters = CeremonyParams::<Bn256>::new(opts.reduced_circuit_power, opts.batch_size);
+    let parameters = CeremonyParams::<Bls12_381>::new(opts.reduced_circuit_power, opts.batch_size);
 
     reduce_powers(
         &opts.challenge_fname,

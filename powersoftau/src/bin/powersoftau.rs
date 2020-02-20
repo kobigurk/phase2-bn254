@@ -1,19 +1,30 @@
 use gumdrop::Options;
-use powersoftau::cli_common::{contribute, new_challenge, transform, Command, PowersOfTauOpts};
+use powersoftau::cli_common::{
+    contribute, new_challenge, transform, Command, CurveKind, PowersOfTauOpts,
+};
 use powersoftau::parameters::CeremonyParams;
 use powersoftau::utils::{beacon_randomness, get_rng, user_system_randomness};
 
-use bellman_ce::pairing::bn256::Bn256;
 use std::process;
+use zexe_algebra::{
+    curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6},
+    PairingEngine as Engine,
+};
 
 #[macro_use]
 extern crate hex_literal;
 
 fn main() {
     let opts: PowersOfTauOpts = PowersOfTauOpts::parse_args_default_or_exit();
+    match opts.curve_kind {
+        CurveKind::Bls12_381 => execute_cmd::<Bls12_381>(opts),
+        CurveKind::Bls12_377 => execute_cmd::<Bls12_377>(opts),
+        CurveKind::SW6 => execute_cmd::<SW6>(opts),
+    };
+}
 
-    // TODO: Make this depend on `opts.curve_kind`
-    let parameters = CeremonyParams::<Bn256>::new(opts.power, opts.batch_size);
+fn execute_cmd<E: Engine>(opts: PowersOfTauOpts) {
+    let parameters = CeremonyParams::<E>::new(opts.power, opts.batch_size);
 
     let command = opts.command.unwrap_or_else(|| {
         eprintln!("No command was provided.");
@@ -24,7 +35,7 @@ fn main() {
     match command {
         Command::New(opt) => {
             new_challenge(&opt.challenge_fname, &parameters);
-        },
+        }
         Command::Contribute(opt) => {
             // contribute to the randomness
             let rng = get_rng(&user_system_randomness());

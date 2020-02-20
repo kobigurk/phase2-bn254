@@ -1,20 +1,20 @@
-use bellman_ce::pairing::ff::{Field, PrimeField, PrimeFieldRepr};
-use bellman_ce::pairing::*;
 use blake2::{Blake2b, Digest};
-use byteorder::{BigEndian, ReadBytesExt};
 use generic_array::GenericArray;
-use rand::chacha::ChaChaRng;
-use rand::{OsRng, Rand, Rng, SeedableRng};
-
-use std::io::{self, Write};
-use std::sync::Arc;
-use typenum::consts::U64;
+use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
 use rayon::prelude::*;
-
-use super::parameters::UseCompression;
+use std::io::{self, Write};
+use std::ops::AddAssign;
+use std::ops::MulAssign;
+use std::sync::Arc;
+use typenum::consts::U64;
+use zexe_algebra::{
+    AffineCurve, BigInteger, One, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
+    ToBytes, UniformRand, Zero,
+};
 
 pub fn print_hash(hash: &[u8]) {
     for line in hash.chunks(16) {
@@ -31,7 +31,11 @@ pub fn print_hash(hash: &[u8]) {
 
 /// Exponentiate a large number of points, with an optional coefficient to be applied to the
 /// exponent. Panics if provided arguments have different length.
-pub fn batch_exp<C: CurveAffine>(bases: &mut [C], exps: &[C::Scalar], coeff: Option<&C::Scalar>) {
+pub(crate) fn batch_exp<C: AffineCurve>(
+    bases: &mut [C],
+    exps: &[C::ScalarField],
+    coeff: Option<&C::ScalarField>,
+) {
     // ensure the 2 vectors have the same length
     assert_eq!(bases.len(), exps.len());
     // raise the base to the exponent and assign it back to the base
@@ -53,8 +57,8 @@ pub fn batch_exp<C: CurveAffine>(bases: &mut [C], exps: &[C::Scalar], coeff: Opt
             base.mul(exp)
         })
         .collect();
-
-    // normalize the batch and cast to affine
+    // we do not use Zexe's batch_normalization_into_affine because it allocates
+    // a new vector
     C::Projective::batch_normalization(&mut points);
     bases
         .par_iter_mut()
@@ -64,7 +68,7 @@ pub fn batch_exp<C: CurveAffine>(bases: &mut [C], exps: &[C::Scalar], coeff: Opt
 
 // Create an RNG based on a mixture of system randomness and user provided randomness
 pub fn user_system_randomness() -> Vec<u8> {
-    let mut system_rng = OsRng::new().unwrap();
+    let mut system_rng = OsRng;
     let mut h = Blake2b::default();
 
     // Gather 1024 bytes of entropy from the system
@@ -119,15 +123,9 @@ pub fn beacon_randomness(mut beacon_hash: [u8; 32]) -> [u8; 32] {
 }
 
 /// Interpret the first 32 bytes of the digest as 8 32-bit words
-pub fn get_rng(mut digest: &[u8]) -> impl Rng {
-    let mut seed = [0u32; 8];
-    for s in &mut seed {
-        *s = digest
-            .read_u32::<BigEndian>()
-            .expect("digest is large enough for this to work");
-    }
-
-    ChaChaRng::from_seed(&seed)
+pub fn get_rng(digest: &[u8]) -> impl Rng {
+    let seed = from_slice(digest);
+    ChaChaRng::from_seed(seed)
 }
 
 pub const fn num_bits<T>() -> usize {
@@ -191,45 +189,52 @@ pub fn calculate_hash(input_map: &[u8]) -> GenericArray<u8, U64> {
 
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
 /// than 32 bytes.
-pub fn hash_to_g2<E: Engine>(mut digest: &[u8]) -> E::G2 {
-    assert!(digest.len() >= 32);
+pub fn hash_to_g2<E: PairingEngine>(digest: &[u8]) -> E::G2Projective {
+    let seed = from_slice(digest);
+    let mut rng = ChaChaRng::from_seed(seed);
+    E::G2Projective::rand(&mut rng)
+}
 
-    let mut seed = Vec::with_capacity(8);
-
-    for _ in 0..8 {
-        seed.push(
-            digest
-                .read_u32::<BigEndian>()
-                .expect("assertion above guarantees this to work"),
-        );
-    }
-
-    ChaChaRng::from_seed(&seed).gen()
+fn from_slice(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0; 32];
+    let bytes = &bytes[..array.len()]; // panics if not enough data
+    array.copy_from_slice(bytes);
+    array
 }
 
 #[cfg(test)]
-mod bn256_tests {
+mod tests {
     use super::*;
-    use bellman_ce::pairing::bn256::{Bn256, Fr, G1Affine, G2Affine};
-    use rand::{thread_rng, Rand};
+    use zexe_algebra::{
+        curves::{
+            bls12_377::Bls12_377,
+            bls12_381::{Bls12_381, G1Affine, G2Affine},
+        },
+        fields::bls12_381::Fr,
+    };
 
     #[test]
-    fn test_hash_to_g2_bn256() {
+    fn test_hash_to_g2() {
+        test_hash_to_g2_curve::<Bls12_381>();
+        test_hash_to_g2_curve::<Bls12_377>();
+    }
+
+    fn test_hash_to_g2_curve<E: PairingEngine>() {
         assert!(
-            hash_to_g2::<Bn256>(&[
+            hash_to_g2::<E>(&[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32, 33
-            ]) == hash_to_g2::<Bn256>(&[
+            ]) == hash_to_g2::<E>(&[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32, 34
             ])
         );
 
         assert!(
-            hash_to_g2::<Bn256>(&[
+            hash_to_g2::<E>(&[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32
-            ]) != hash_to_g2::<Bn256>(&[
+            ]) != hash_to_g2::<E>(&[
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 33
             ])
@@ -237,12 +242,12 @@ mod bn256_tests {
     }
 
     #[test]
-    fn test_same_ratio_bn256() {
+    fn test_same_ratio() {
         let rng = &mut thread_rng();
 
         let s = Fr::rand(rng);
-        let g1 = G1Affine::one();
-        let g2 = G2Affine::one();
+        let g1 = G1Affine::prime_subgroup_generator();
+        let g2 = G2Affine::prime_subgroup_generator();
         let g1_s = g1.mul(s).into_affine();
         let g2_s = g2.mul(s).into_affine();
 
@@ -252,37 +257,39 @@ mod bn256_tests {
 
     #[test]
     fn test_power_pairs() {
+        use std::ops::MulAssign;
         let rng = &mut thread_rng();
 
         let mut v = vec![];
         let x = Fr::rand(rng);
         let mut acc = Fr::one();
         for _ in 0..100 {
-            v.push(G1Affine::one().mul(acc).into_affine());
+            v.push(G1Affine::prime_subgroup_generator().mul(acc).into_affine());
             acc.mul_assign(&x);
         }
 
-        let gx = G2Affine::one().mul(x).into_affine();
+        let gx = G2Affine::prime_subgroup_generator().mul(x).into_affine();
 
-        assert!(same_ratio(power_pairs(&v), (G2Affine::one(), gx)));
+        assert!(same_ratio(
+            power_pairs(&v),
+            (G2Affine::prime_subgroup_generator(), gx)
+        ));
 
         v[1] = v[1].mul(Fr::rand(rng)).into_affine();
 
-        assert!(!same_ratio(power_pairs(&v), (G2Affine::one(), gx)));
+        assert!(!same_ratio(
+            power_pairs(&v),
+            (G2Affine::prime_subgroup_generator(), gx)
+        ));
     }
 }
 
-fn merge_pairs<E: Engine, G: CurveAffine<Engine = E, Scalar = E::Fr>>(
-    v1: &[G],
-    v2: &[G],
-) -> (G, G) {
-    use rand::thread_rng;
-
+fn merge_pairs<G: AffineCurve>(v1: &[G], v2: &[G]) -> (G, G) {
     assert_eq!(v1.len(), v2.len());
     let rng = &mut thread_rng();
 
-    let randomness: Vec<<G::Scalar as PrimeField>::Repr> = (0..v1.len())
-        .map(|_| G::Scalar::rand(rng).into_repr())
+    let randomness: Vec<<G::ScalarField as PrimeField>::BigInt> = (0..v1.len())
+        .map(|_| G::ScalarField::rand(rng).into_repr())
         .collect();
 
     let s = dense_multiexp(&v1, &randomness[..]).into_affine();
@@ -293,8 +300,8 @@ fn merge_pairs<E: Engine, G: CurveAffine<Engine = E, Scalar = E::Fr>>(
 
 /// Construct a single pair (s, s^x) for a vector of
 /// the form [1, x, x^2, x^3, ...].
-pub fn power_pairs<E: Engine, G: CurveAffine<Engine = E, Scalar = E::Fr>>(v: &[G]) -> (G, G) {
-    merge_pairs::<E, _>(&v[0..(v.len() - 1)], &v[1..])
+pub fn power_pairs<G: AffineCurve>(v: &[G]) -> (G, G) {
+    merge_pairs(&v[0..(v.len() - 1)], &v[1..])
 }
 
 /// Compute BLAKE2b("")
@@ -311,25 +318,12 @@ pub fn reduced_hash(old_power: u8, new_power: u8) -> GenericArray<u8, U64> {
 /// Checks if pairs have the same ratio.
 /// Under the hood uses pairing to check
 /// x1/x2 = y1/y2 => x1*y2 = x2*y1
-pub fn same_ratio<E: Engine, G1: CurveAffine<Engine = E, Scalar = E::Fr>>(
-    g1: (G1, G1),
-    g2: (G1::Pair, G1::Pair),
-) -> bool {
+pub fn same_ratio<G: PairingCurve>(g1: (G, G), g2: (G::PairWith, G::PairWith)) -> bool {
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 
-pub fn write_point<W, G>(writer: &mut W, p: &G, compression: UseCompression) -> io::Result<()>
-where
-    W: Write,
-    G: CurveAffine,
-{
-    match compression {
-        UseCompression::Yes => writer.write_all(p.into_compressed().as_ref()),
-        UseCompression::No => writer.write_all(p.into_uncompressed().as_ref()),
-    }
-}
-
-pub fn compute_g2_s<E: Engine>(
+// TODO: Figure out if we can make this infallible?
+pub fn compute_g2_s<E: PairingEngine>(
     digest: &[u8],
     g1_s: &E::G1Affine,
     g1_s_x: &E::G1Affine,
@@ -338,19 +332,20 @@ pub fn compute_g2_s<E: Engine>(
     let mut h = Blake2b::default();
     h.input(&[personalization]);
     h.input(digest);
-    h.input(g1_s.into_uncompressed().as_ref());
-    h.input(g1_s_x.into_uncompressed().as_ref());
-
+    let mut data = Vec::new();
+    g1_s.write(&mut data).unwrap();
+    g1_s_x.write(&mut data).unwrap();
+    h.input(&data);
     hash_to_g2::<E>(h.result().as_ref()).into_affine()
 }
 
 /// Perform multi-exponentiation. The caller is responsible for ensuring that
 /// the number of bases is the same as the number of exponents.
 #[allow(dead_code)]
-pub fn dense_multiexp<G: CurveAffine>(
+pub fn dense_multiexp<G: AffineCurve>(
     bases: &[G],
-    exponents: &[<G::Scalar as PrimeField>::Repr],
-) -> <G as CurveAffine>::Projective {
+    exponents: &[<G::ScalarField as PrimeField>::BigInt],
+) -> G::Projective {
     if exponents.len() != bases.len() {
         panic!("invalid length")
     }
@@ -363,31 +358,31 @@ pub fn dense_multiexp<G: CurveAffine>(
     dense_multiexp_inner(bases, exponents, 0, c, true)
 }
 
-fn dense_multiexp_inner<G: CurveAffine>(
+fn dense_multiexp_inner<G: AffineCurve>(
     bases: &[G],
-    exponents: &[<G::Scalar as PrimeField>::Repr],
+    exponents: &[<G::ScalarField as PrimeField>::BigInt],
     mut skip: u32,
     c: u32,
     handle_trivial: bool,
-) -> <G as CurveAffine>::Projective {
+) -> <G as AffineCurve>::Projective {
     use std::sync::Mutex;
     // Perform this region of the multiexp. We use a different strategy - go over region in parallel,
     // then over another region, etc. No Arc required
     let chunk = (bases.len() / num_cpus::get()) + 1;
     let this = {
         // let mask = (1u64 << c) - 1u64;
-        let this_region = Mutex::new(<G as CurveAffine>::Projective::zero());
+        let this_region = Mutex::new(G::Projective::zero());
         let arc = Arc::new(this_region);
         crossbeam::scope(|scope| {
             for (base, exp) in bases.chunks(chunk).zip(exponents.chunks(chunk)) {
                 let this_region_rwlock = arc.clone();
                 // let handle =
                 scope.spawn(move || {
-                    let mut buckets = vec![<G as CurveAffine>::Projective::zero(); (1 << c) - 1];
+                    let mut buckets = vec![<G as AffineCurve>::Projective::zero(); (1 << c) - 1];
                     // Accumulate the result
                     let mut acc = G::Projective::zero();
-                    let zero = G::Scalar::zero().into_repr();
-                    let one = G::Scalar::one().into_repr();
+                    let zero = G::ScalarField::zero().into_repr();
+                    let one = G::ScalarField::one().into_repr();
 
                     for (base, &exp) in base.iter().zip(exp.iter()) {
                         // let index = (exp.as_ref()[0] & mask) as usize;
@@ -405,7 +400,7 @@ fn dense_multiexp_inner<G: CurveAffine>(
                                 }
                             } else {
                                 let mut exp = exp;
-                                exp.shr(skip);
+                                exp.divn(skip);
                                 let exp = exp.as_ref()[0] % (1 << c);
                                 if exp != 0 {
                                     buckets[(exp - 1) as usize].add_assign_mixed(base);
@@ -435,18 +430,48 @@ fn dense_multiexp_inner<G: CurveAffine>(
 
     skip += c;
 
-    if skip >= <G::Scalar as PrimeField>::NUM_BITS {
+    if skip >= <G::ScalarField as PrimeField>::size_in_bits() as u32 {
         // There isn't another region, and this will be the highest region
         this
     } else {
         // next region is actually higher than this one, so double it enough times
         let mut next_region = dense_multiexp_inner(bases, exponents, skip, c, false);
         for _ in 0..c {
-            next_region.double();
+            next_region = next_region.double();
         }
 
         next_region.add_assign(&this);
 
         next_region
+    }
+}
+
+#[cfg(test)]
+pub mod test_helpers {
+    use super::*;
+    pub fn random_point<C: AffineCurve>(rng: &mut impl Rng) -> C {
+        C::Projective::rand(rng).into_affine()
+    }
+
+    pub fn random_point_vec<C: AffineCurve>(size: usize, rng: &mut impl Rng) -> Vec<C> {
+        (0..size).map(|_| random_point(rng)).collect()
+    }
+
+    pub fn random_point_vec_batched<C: AffineCurve>(
+        size: usize,
+        batch_size: usize,
+        rng: &mut impl Rng,
+    ) -> Vec<Vec<C>> {
+        let mut batches = Vec::new();
+        let div = size / batch_size;
+        for _ in 0..div {
+            batches.push(random_point_vec(batch_size, rng));
+        }
+        let remainder = size % batch_size;
+        if remainder > 0 {
+            batches.push(random_point_vec(remainder, rng));
+        }
+
+        batches
     }
 }

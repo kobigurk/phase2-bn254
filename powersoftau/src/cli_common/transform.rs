@@ -4,9 +4,9 @@ use crate::{
     parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
     utils::{calculate_hash, print_hash},
 };
-use bellman_ce::pairing::Engine;
 use memmap::*;
 use std::fs::OpenOptions;
+use zexe_algebra::PairingEngine as Engine;
 
 use std::io::{Read, Write};
 

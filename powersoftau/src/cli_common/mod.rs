@@ -12,7 +12,9 @@ use std::default::Default;
 
 #[derive(Debug, Clone)]
 pub enum CurveKind {
-    Bn256,
+    Bls12_381,
+    Bls12_377,
+    SW6,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +27,7 @@ pub struct PowersOfTauOpts {
     help: bool,
     #[options(
         help = "the elliptic curve to use",
-        default = "bn256",
+        default = "bls12_381",
         parse(try_from_str = "curve_from_str")
     )]
     pub curve_kind: CurveKind,
@@ -50,9 +52,7 @@ pub struct PowersOfTauOpts {
 #[derive(Debug, Options, Clone)]
 pub enum Command {
     // this creates a new challenge
-    #[options(
-        help = "creates a new challenge for the ceremony"
-    )]
+    #[options(help = "creates a new challenge for the ceremony")]
     New(NewOpts),
     #[options(
         help = "contribute to ceremony by producing a response to a challenge (or create a new challenge if this is the first contribution)"
@@ -71,10 +71,7 @@ pub enum Command {
 #[derive(Debug, Options, Clone)]
 pub struct NewOpts {
     help: bool,
-    #[options(
-        help = "the challenge file name to be created",
-        default = "challenge"
-    )]
+    #[options(help = "the challenge file name to be created", default = "challenge")]
     pub challenge_fname: String,
 }
 
@@ -82,10 +79,7 @@ pub struct NewOpts {
 #[derive(Debug, Options, Clone)]
 pub struct ContributeOpts {
     help: bool,
-    #[options(
-        help = "the provided challenge file",
-        default = "challenge"
-    )]
+    #[options(help = "the provided challenge file", default = "challenge")]
     pub challenge_fname: String,
     #[options(help = "the response file which will be generated")]
     pub response_fname: String,
@@ -110,8 +104,10 @@ pub struct VerifyAndTransformOpts {
 
 pub fn curve_from_str(src: &str) -> Result<CurveKind, String> {
     let curve = match src.to_lowercase().as_str() {
-        "bn256" => CurveKind::Bn256,
-        _ => return Err("unsupported curve. Currently supported: bn256".to_string()),
+        "bls12_381" => CurveKind::Bls12_381,
+        "bls12_377" => CurveKind::Bls12_377,
+        "sw6" => CurveKind::SW6,
+        _ => return Err("unsupported curve.".to_string()),
     };
     Ok(curve)
 }

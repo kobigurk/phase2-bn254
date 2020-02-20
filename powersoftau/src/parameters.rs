@@ -1,10 +1,10 @@
-use bellman_ce::pairing::{CurveAffine, EncodedPoint, Engine, GroupDecodingError};
 use std::fmt;
 use std::io;
 use std::marker::PhantomData;
+use zexe_algebra::{CanonicalSerialize, PairingEngine, SerializationError, Zero};
 
-/// The sizes of the group elements of a curev
-#[derive(Clone, PartialEq, Eq, Default)]
+/// The sizes of the group elements of a curve
+#[derive(Clone, PartialEq, Eq, Default, Debug)]
 pub struct CurveParams<E> {
     /// Size of a G1 Element
     pub g1: usize,
@@ -17,22 +17,33 @@ pub struct CurveParams<E> {
     engine_type: PhantomData<E>,
 }
 
-impl<E: Engine> CurveParams<E> {
+impl<E: PairingEngine> CurveParams<E> {
     pub fn new() -> CurveParams<E> {
-        let g1 = <<E as Engine>::G1Affine as CurveAffine>::Uncompressed::size();
-        let g2 = <<E as Engine>::G2Affine as CurveAffine>::Uncompressed::size();
-        let g1_compressed = <<E as Engine>::G1Affine as CurveAffine>::Compressed::size();
-        let g2_compressed = <<E as Engine>::G2Affine as CurveAffine>::Compressed::size();
+        let g1 = <E as PairingEngine>::G1Affine::zero();
+        let mut g1_bytes_compressed = vec![0; <E as PairingEngine>::G1Affine::buffer_size()];
+        g1.serialize(&[], &mut g1_bytes_compressed)
+            .expect("could not serialize G1 element");
+        let g1_compressed = g1_bytes_compressed.len();
+        let g1_size = 2 * g1_compressed;
+
+        let g2 = <E as PairingEngine>::G2Affine::zero();
+        let mut g2_bytes_compressed = vec![0; <E as PairingEngine>::G2Affine::buffer_size()];
+        g2.serialize(&[], &mut g2_bytes_compressed)
+            .expect("could not serialize G2 element");
+        let g2_compressed = g2_bytes_compressed.len();
+        let g2_size = 2 * g2_compressed;
 
         CurveParams {
-            g1,
-            g2,
+            g1: g1_size,
+            g2: g2_size,
             g1_compressed,
             g2_compressed,
             engine_type: PhantomData,
         }
     }
+}
 
+impl<E> CurveParams<E> {
     pub fn g1_size(&self, compression: UseCompression) -> usize {
         match compression {
             UseCompression::Yes => self.g1_compressed,
@@ -57,10 +68,10 @@ impl<E: Engine> CurveParams<E> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// The parameters used for the trusted setup ceremony
 pub struct CeremonyParams<E> {
-    /// The type of the curve being used (currently only supports BN256)
+    /// The type of the curve being used
     pub curve: CurveParams<E>,
     /// The number of Powers of Tau G1 elements which will be accumulated
     pub powers_g1_length: usize,
@@ -82,7 +93,7 @@ pub struct CeremonyParams<E> {
     pub hash_size: usize,
 }
 
-impl<E: Engine> CeremonyParams<E> {
+impl<E: PairingEngine> CeremonyParams<E> {
     /// Constructs a new ceremony parameters object from the type of provided curve
     pub fn new(size: usize, batch_size: usize) -> Self {
         // create the curve
@@ -165,16 +176,24 @@ pub enum CheckForCorrectness {
 #[derive(Debug)]
 pub enum DeserializationError {
     IoError(io::Error),
-    DecodingError(GroupDecodingError),
+    CompressionError(SerializationError),
     PointAtInfinity,
+    PositionError(ElementType, usize, usize),
 }
 
 impl fmt::Display for DeserializationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             DeserializationError::IoError(ref e) => write!(f, "Disk IO error: {}", e),
-            DeserializationError::DecodingError(ref e) => write!(f, "Decoding error: {}", e),
             DeserializationError::PointAtInfinity => write!(f, "Point at infinity found"),
+            DeserializationError::CompressionError(ref e) => {
+                write!(f, "Serialization error: {}", e)
+            }
+            DeserializationError::PositionError(e, group_size, index) => write!(
+                f,
+                "Index of {} element must not exceed {}, while it's {}",
+                e, group_size, index
+            ),
         }
     }
 }
@@ -185,9 +204,9 @@ impl From<io::Error> for DeserializationError {
     }
 }
 
-impl From<GroupDecodingError> for DeserializationError {
-    fn from(err: GroupDecodingError) -> DeserializationError {
-        DeserializationError::DecodingError(err)
+impl From<SerializationError> for DeserializationError {
+    fn from(err: SerializationError) -> DeserializationError {
+        DeserializationError::CompressionError(err)
     }
 }
 
@@ -198,4 +217,42 @@ pub enum ElementType {
     AlphaG1,
     BetaG1,
     BetaG2,
+}
+
+impl fmt::Display for ElementType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ElementType::TauG1 => write!(f, "TauG1"),
+            ElementType::TauG2 => write!(f, "TauG2"),
+            ElementType::AlphaG1 => write!(f, "AlphaG1"),
+            ElementType::BetaG1 => write!(f, "BetaG1"),
+            ElementType::BetaG2 => write!(f, "BetaG2"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zexe_algebra::curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
+
+    #[test]
+    fn params_sizes() {
+        curve_params_test::<Bls12_377>(96, 192, 48, 96);
+        curve_params_test::<Bls12_381>(96, 192, 48, 96);
+        curve_params_test::<SW6>(196, 588, 98, 294);
+    }
+
+    fn curve_params_test<E: PairingEngine>(
+        g1: usize,
+        g2: usize,
+        g1_compressed: usize,
+        g2_compressed: usize,
+    ) {
+        let p = CurveParams::<E>::new();
+        assert_eq!(p.g1, g1);
+        assert_eq!(p.g2, g2);
+        assert_eq!(p.g1_compressed, g1_compressed);
+        assert_eq!(p.g2_compressed, g2_compressed);
+    }
 }

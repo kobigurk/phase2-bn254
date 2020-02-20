@@ -2,10 +2,10 @@ use crate::batched_accumulator::BatchedAccumulator;
 use crate::parameters::{CeremonyParams, UseCompression};
 use crate::utils::{blank_hash, calculate_hash, print_hash};
 
-use bellman_ce::pairing::Engine;
 use memmap::*;
 use std::fs::OpenOptions;
 use std::io::Write;
+use zexe_algebra::PairingEngine as Engine;
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 

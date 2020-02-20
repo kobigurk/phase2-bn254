@@ -3,18 +3,37 @@ use generic_array::GenericArray;
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 
+use super::parameters::Error;
+use super::parameters::VerificationError;
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
 use rayon::prelude::*;
+use std::convert::TryInto;
 use std::io::{self, Write};
 use std::ops::AddAssign;
 use std::ops::MulAssign;
 use std::sync::Arc;
 use typenum::consts::U64;
 use zexe_algebra::{
-    AffineCurve, BigInteger, One, PairingCurve, PairingEngine, PrimeField, ProjectiveCurve,
-    ToBytes, UniformRand, Zero,
+    AffineCurve, BigInteger, CanonicalSerialize, Field, One, PairingCurve, PairingEngine,
+    PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
+
+/// Generate the powers by raising the key's `tau` to all powers
+/// belonging to this chunk
+pub fn generate_powers_of_tau<E: PairingEngine>(
+    tau: &E::Fr,
+    start: usize,
+    size: usize,
+) -> Vec<E::Fr> {
+    // Uh no better way to do this, this should never fail
+    let start: u64 = start.try_into().expect("could not convert to u64");
+    let size: u64 = size.try_into().expect("could not convert to u64");
+    (start..start + size)
+        .into_par_iter()
+        .map(|i| tau.pow([i]))
+        .collect()
+}
 
 pub fn print_hash(hash: &[u8]) {
     for line in hash.chunks(16) {
@@ -251,8 +270,8 @@ mod tests {
         let g1_s = g1.mul(s).into_affine();
         let g2_s = g2.mul(s).into_affine();
 
-        assert!(same_ratio((g1, g1_s), (g2, g2_s)));
-        assert!(!same_ratio((g1_s, g1), (g2, g2_s)));
+        assert!(same_ratio(&(g1, g1_s), &(g2, g2_s)));
+        assert!(!same_ratio(&(g1_s, g1), &(g2, g2_s)));
     }
 
     #[test]
@@ -271,15 +290,15 @@ mod tests {
         let gx = G2Affine::prime_subgroup_generator().mul(x).into_affine();
 
         assert!(same_ratio(
-            power_pairs(&v),
-            (G2Affine::prime_subgroup_generator(), gx)
+            &power_pairs(&v),
+            &(G2Affine::prime_subgroup_generator(), gx)
         ));
 
         v[1] = v[1].mul(Fr::rand(rng)).into_affine();
 
         assert!(!same_ratio(
-            power_pairs(&v),
-            (G2Affine::prime_subgroup_generator(), gx)
+            &power_pairs(&v),
+            &(G2Affine::prime_subgroup_generator(), gx)
         ));
     }
 }
@@ -318,25 +337,38 @@ pub fn reduced_hash(old_power: u8, new_power: u8) -> GenericArray<u8, U64> {
 /// Checks if pairs have the same ratio.
 /// Under the hood uses pairing to check
 /// x1/x2 = y1/y2 => x1*y2 = x2*y1
-pub fn same_ratio<G: PairingCurve>(g1: (G, G), g2: (G::PairWith, G::PairWith)) -> bool {
+pub fn same_ratio<G: PairingCurve>(g1: &(G, G), g2: &(G::PairWith, G::PairWith)) -> bool {
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 
-// TODO: Figure out if we can make this infallible?
+pub fn check_same_ratio<G: PairingCurve>(
+    g1: &(G, G),
+    g2: &(G::PairWith, G::PairWith),
+    err: &'static str,
+) -> Result<(), VerificationError> {
+    if g1.0.pairing_with(&g2.1) != g1.1.pairing_with(&g2.0) {
+        return Err(VerificationError::InvalidRatio(err));
+    }
+    Ok(())
+}
+
+/// Compute BLAKE2b(personalization | transcript | g^s | g^{s*x})
+/// and then hash it to G2
 pub fn compute_g2_s<E: PairingEngine>(
     digest: &[u8],
     g1_s: &E::G1Affine,
     g1_s_x: &E::G1Affine,
     personalization: u8,
-) -> E::G2Affine {
+) -> Result<E::G2Affine, Error> {
     let mut h = Blake2b::default();
     h.input(&[personalization]);
     h.input(digest);
-    let mut data = Vec::new();
-    g1_s.write(&mut data).unwrap();
-    g1_s_x.write(&mut data).unwrap();
+    let size = E::G1Affine::buffer_size();
+    let mut data = vec![0; 2 * size];
+    g1_s.serialize(&[], &mut data[..size])?;
+    g1_s_x.serialize(&[], &mut data[size..])?;
     h.input(&data);
-    hash_to_g2::<E>(h.result().as_ref()).into_affine()
+    Ok(hash_to_g2::<E>(h.result().as_ref()).into_affine())
 }
 
 /// Perform multi-exponentiation. The caller is responsible for ensuring that

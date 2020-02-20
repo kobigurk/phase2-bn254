@@ -107,7 +107,8 @@ pub fn contribute<T: Engine + Sync>(
     }
 
     // Construct our keypair using the RNG we created above
-    let (pubkey, privkey) = keypair(&mut rng, current_accumulator_hash.as_ref());
+    let (pubkey, privkey) =
+        keypair(&mut rng, current_accumulator_hash.as_ref()).expect("could not generate keypair");
 
     // Perform the transformation
     println!("Computing and writing your contribution, this could take a while...");

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::io;
 use std::marker::PhantomData;
+use thiserror::Error;
 use zexe_algebra::{CanonicalSerialize, PairingEngine, SerializationError, Zero};
 
 /// The sizes of the group elements of a curve
@@ -154,8 +155,6 @@ impl<E: PairingEngine> CeremonyParams<E> {
     }
 }
 
-// TODO: Add tests!
-
 /// Determines if point compression should be used.
 #[derive(Copy, Clone, PartialEq)]
 pub enum UseCompression {
@@ -173,41 +172,30 @@ pub enum CheckForCorrectness {
 }
 
 /// Errors that might occur during deserialization.
-#[derive(Debug)]
-pub enum DeserializationError {
-    IoError(io::Error),
-    CompressionError(SerializationError),
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Disk IO error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("Serialization error in Zexe: {0}")]
+    ZexeSerializationError(#[from] SerializationError),
+    #[error("Got point at infinity")]
     PointAtInfinity,
+    #[error("Index of {0} must not exceed {1} (got {2}.")]
     PositionError(ElementType, usize, usize),
+    #[error("Error during verification: {0}")]
+    VerificationError(#[from] VerificationError),
+    #[error("Invalid variable length: expected {expected}, got {got}")]
+    InvalidLength { expected: usize, got: usize },
 }
 
-impl fmt::Display for DeserializationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DeserializationError::IoError(ref e) => write!(f, "Disk IO error: {}", e),
-            DeserializationError::PointAtInfinity => write!(f, "Point at infinity found"),
-            DeserializationError::CompressionError(ref e) => {
-                write!(f, "Serialization error: {}", e)
-            }
-            DeserializationError::PositionError(e, group_size, index) => write!(
-                f,
-                "Index of {} element must not exceed {}, while it's {}",
-                e, group_size, index
-            ),
-        }
-    }
-}
-
-impl From<io::Error> for DeserializationError {
-    fn from(err: io::Error) -> DeserializationError {
-        DeserializationError::IoError(err)
-    }
-}
-
-impl From<SerializationError> for DeserializationError {
-    fn from(err: SerializationError) -> DeserializationError {
-        DeserializationError::CompressionError(err)
-    }
+#[derive(Debug, Error)]
+pub enum VerificationError {
+    #[error("Invalid ratio! Context: {0}")]
+    /// The ratio check via the pairing of the provided elements failed
+    InvalidRatio(&'static str),
+    #[error("Invalid generator for {0} powers")]
+    /// The first power of Tau was not the generator of that group
+    InvalidGenerator(ElementType),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

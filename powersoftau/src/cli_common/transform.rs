@@ -129,7 +129,7 @@ pub fn transform<T: Engine + Sync>(
         "Verifying a contribution to contain proper powers and correspond to the public key..."
     );
 
-    let valid = BatchedAccumulator::verify_transformation(
+    let res = BatchedAccumulator::verify_transformation(
         &challenge_readable_map,
         &response_readable_map,
         &public_key,
@@ -141,8 +141,8 @@ pub fn transform<T: Engine + Sync>(
         &parameters,
     );
 
-    if !valid {
-        println!("Verification failed, contribution was invalid somehow.");
+    if let Err(e) = res {
+        println!("Verification failed: {}", e);
         panic!("INVALID CONTRIBUTION!!!");
     } else {
         println!("Verification succeeded!");

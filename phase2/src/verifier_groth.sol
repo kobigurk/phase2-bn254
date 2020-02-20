@@ -170,7 +170,7 @@ contract Verifier {
     function verifyProof(
         bytes memory proof,
         uint256[<%vk_input_length%>] memory input
-    ) public view returns (bool r) {
+    ) public view returns (bool) {
         uint256[8] memory p = abi.decode(proof, (uint256[8]));
 
         // Make sure that each element in the proof is less than the prime q

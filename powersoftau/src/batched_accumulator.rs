@@ -403,6 +403,7 @@ impl<E:Engine, P: PowersOfTauParameters> BachedAccumulator<E, P> {
 
         if !same_ratio(power_pairs(&tau_powers_last_first_chunks), (tau_powers_g2_0, tau_powers_g2_1)) {
             println!("Invalid ratio power_pairs(&after.tau_powers_g1), (tau_powers_g2_0, tau_powers_g2_1) in TauG1 contribution intersection");
+            return false;
         }
         true
     }

@@ -140,7 +140,12 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
         check_output_for_correctness: CheckForCorrectness,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<()> {
-        assert_eq!(digest.len(), 64);
+        if digest.len() != 64 {
+            return Err(Error::InvalidLength {
+                expected: 64,
+                got: digest.len(),
+            });
+        }
 
         let tau_g2_s = compute_g2_s::<E>(&digest, &key.tau_g1.0, &key.tau_g1.1, 0)?;
         let alpha_g2_s = compute_g2_s::<E>(&digest, &key.alpha_g1.0, &key.alpha_g1.1, 1)?;
@@ -287,7 +292,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 }
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -317,16 +322,19 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                     &output,
                 )?;
 
-                assert_eq!(
-                    before.tau_powers_g2.len(),
-                    0,
-                    "during rest of tau g1 generation tau g2 must be empty"
-                );
-                assert_eq!(
-                    after.tau_powers_g2.len(),
-                    0,
-                    "during rest of tau g1 generation tau g2 must be empty"
-                );
+                if !before.tau_powers_g2.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: before.tau_powers_g2.len(),
+                    });
+                }
+
+                if !after.tau_powers_g2.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: after.tau_powers_g2.len(),
+                    });
+                }
 
                 // Are the powers of tau correct?
                 check_same_ratio(
@@ -339,7 +347,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 }
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -372,7 +380,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 )?;
                 accumulator.write_chunk(start, UseCompression::No, output)?;
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -388,25 +396,31 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                     check_input_for_correctness,
                     &input,
                 )?;
-                assert_eq!(
-                    accumulator.tau_powers_g2.len(),
-                    0,
-                    "during rest of tau g1 generation tau g2 must be empty"
-                );
-                assert_eq!(
-                    accumulator.alpha_tau_powers_g1.len(),
-                    0,
-                    "during rest of tau g1 generation alpha*tau in g1 must be empty"
-                );
-                assert_eq!(
-                    accumulator.beta_tau_powers_g1.len(),
-                    0,
-                    "during rest of tau g1 generation beta*tau in g1 must be empty"
-                );
+
+                if !accumulator.tau_powers_g2.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.tau_powers_g2.len(),
+                    });
+                }
+
+                if !accumulator.alpha_tau_powers_g1.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.alpha_tau_powers_g1.len(),
+                    });
+                }
+
+                if !accumulator.beta_tau_powers_g1.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.beta_tau_powers_g1.len(),
+                    });
+                }
 
                 accumulator.write_chunk(start, UseCompression::No, output)?;
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -445,7 +459,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                     beta_g2.extend_from_slice(&[accumulator.beta_g2]);
                 }
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -461,28 +475,31 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                     check_input_for_correctness,
                     &input,
                 )?;
-                assert_eq!(
-                    accumulator.tau_powers_g2.len(),
-                    0,
-                    "during rest of tau g1 generation tau g2 must be empty"
-                );
-                assert_eq!(
-                    accumulator.alpha_tau_powers_g1.len(),
-                    0,
-                    "during rest of tau g1 generation alpha*tau in g1 must be empty"
-                );
-                assert_eq!(
-                    accumulator.beta_tau_powers_g1.len(),
-                    0,
-                    "during rest of tau g1 generation beta*tau in g1 must be empty"
-                );
+
+                if !accumulator.tau_powers_g2.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.tau_powers_g2.len(),
+                    });
+                }
+
+                if !accumulator.alpha_tau_powers_g1.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.alpha_tau_powers_g1.len(),
+                    });
+                }
+
+                if !accumulator.beta_tau_powers_g1.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.beta_tau_powers_g1.len(),
+                    });
+                }
 
                 tau_powers_g1.extend_from_slice(&accumulator.tau_powers_g1);
-                tau_powers_g2.extend_from_slice(&accumulator.tau_powers_g2);
-                alpha_tau_powers_g1.extend_from_slice(&accumulator.alpha_tau_powers_g1);
-                beta_tau_powers_g1.extend_from_slice(&accumulator.beta_tau_powers_g1);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -516,7 +533,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 };
                 tmp_acc.write_chunk(start, compression, output)?;
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -535,7 +552,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 };
                 tmp_acc.write_chunk(start, compression, output)?;
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -798,27 +815,26 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
 
                 let taupowers = generate_powers_of_tau::<E>(&key.tau, start, size);
 
-                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
-                batch_exp(&mut accumulator.tau_powers_g2, &taupowers[0..], None);
+                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None)?;
+                batch_exp(&mut accumulator.tau_powers_g2, &taupowers[0..], None)?;
                 batch_exp(
                     &mut accumulator.alpha_tau_powers_g1,
                     &taupowers[0..],
                     Some(&key.alpha),
-                );
+                )?;
                 batch_exp(
                     &mut accumulator.beta_tau_powers_g1,
                     &taupowers[0..],
                     Some(&key.beta),
-                );
+                )?;
                 accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                assert!(
-                    !accumulator.beta_g2.is_zero(),
-                    "your contribution happened to produce a point at infinity, please re-run"
-                );
+                if accumulator.beta_g2.is_zero() {
+                    return Err(Error::PointAtInfinity);
+                }
                 accumulator.write_chunk(start, compress_the_output, output)?;
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -834,21 +850,20 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                     check_input_for_correctness,
                     &input,
                 )?;
-                assert_eq!(
-                    accumulator.tau_powers_g2.len(),
-                    0,
-                    "during rest of tau g1 generation tau g2 must be empty"
-                );
+                if !accumulator.tau_powers_g2.is_empty() {
+                    return Err(Error::InvalidLength {
+                        expected: 0,
+                        got: accumulator.tau_powers_g2.len(),
+                    });
+                }
 
                 let taupowers = generate_powers_of_tau::<E>(&key.tau, start, size);
-                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
-                //accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                //assert!(!accumulator.beta_g2.is_zero(), "your contribution happened to produce a point at infinity, please re-run");
+                batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None)?;
                 accumulator.write_chunk(start, compress_the_output, output)?;
 
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -878,7 +893,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 accumulator.write_chunk(start, compress_the_output, output)?;
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 
@@ -901,7 +916,7 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
                 accumulator.write_chunk(start, compress_the_output, output)?;
                 info!("Done processing {} powers of tau", end);
             } else {
-                panic!("Chunk does not have a min and max");
+                return Err(Error::InvalidChunk);
             }
         }
 

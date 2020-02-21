@@ -186,6 +186,8 @@ pub enum Error {
     VerificationError(#[from] VerificationError),
     #[error("Invalid variable length: expected {expected}, got {got}")]
     InvalidLength { expected: usize, got: usize },
+    #[error("Chunk does not have a min and max")]
+    InvalidChunk,
 }
 
 #[derive(Debug, Error)]

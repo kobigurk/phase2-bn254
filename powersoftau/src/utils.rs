@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use std::convert::TryInto;
 use std::io::{self, Write};
 use std::ops::AddAssign;
-use std::ops::MulAssign;
+use std::ops::Mul;
 use std::sync::Arc;
 use typenum::consts::U64;
 use zexe_algebra::{
@@ -49,27 +49,31 @@ pub fn print_hash(hash: &[u8]) {
 }
 
 /// Exponentiate a large number of points, with an optional coefficient to be applied to the
-/// exponent. Panics if provided arguments have different length.
+/// exponent.
 pub(crate) fn batch_exp<C: AffineCurve>(
     bases: &mut [C],
     exps: &[C::ScalarField],
     coeff: Option<&C::ScalarField>,
-) {
-    // ensure the 2 vectors have the same length
-    assert_eq!(bases.len(), exps.len());
+) -> Result<(), Error> {
+    if bases.len() != exps.len() {
+        return Err(Error::InvalidLength {
+            expected: bases.len(),
+            got: exps.len(),
+        });
+    }
     // raise the base to the exponent and assign it back to the base
     // this will return the points as projective
     let mut points: Vec<_> = bases
         .par_iter_mut()
-        .enumerate()
-        .map(|(i, base)| {
-            let mut exp = exps[i];
-
+        .zip(exps)
+        .map(|(base, exp)| {
             // If a coefficient was provided, multiply the exponent
             // by that coefficient
-            if let Some(coeff) = coeff {
-                exp.mul_assign(coeff);
-            }
+            let exp = if let Some(coeff) = coeff {
+                exp.mul(coeff)
+            } else {
+                *exp
+            };
 
             // Raise the base to the exponent (additive notation so it is executed
             // via a multiplication)
@@ -83,6 +87,8 @@ pub(crate) fn batch_exp<C: AffineCurve>(
         .par_iter_mut()
         .zip(points)
         .for_each(|(base, proj)| *base = proj.into_affine());
+
+    Ok(())
 }
 
 // Create an RNG based on a mixture of system randomness and user provided randomness

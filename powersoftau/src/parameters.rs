@@ -96,6 +96,7 @@ pub struct CeremonyParams<E> {
 
 impl<E: PairingEngine> CeremonyParams<E> {
     /// Constructs a new ceremony parameters object from the type of provided curve
+    /// Panics if given batch_size = 0
     pub fn new(size: usize, batch_size: usize) -> Self {
         // create the curve
         let curve = CurveParams::<E>::new();

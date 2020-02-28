@@ -3,7 +3,7 @@
 [[package]]
 name = "algebra"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serialize-uncompressed#d35256f627ae0ae3aef15612b77c58116c97eeb6"
+source = "git+https://github.com/gakonst/zexe?branch=serialize-uncompressed#3039fc1d5885753ea4317914744b111d614d2afc"
 dependencies = [
  "derivative",
  "num-traits",

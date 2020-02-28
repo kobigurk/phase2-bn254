@@ -1,30 +1,16 @@
+use generic_array::GenericArray;
 /// Memory constrained accumulator that checks parts of the initial information in parts that fit to memory
 /// and then contributes to entropy in parts as well
-use itertools::{Itertools, MinMaxResult};
 use log::info;
-use zexe_algebra::{AffineCurve, PairingEngine as Engine, ProjectiveCurve, Zero};
-
-use generic_array::GenericArray;
-
 use typenum::consts::U64;
+use zexe_algebra::PairingEngine as Engine;
 
 use super::{
     keypair::{PrivateKey, PublicKey},
-    parameters::{
-        CeremonyParams, CheckForCorrectness, ElementType, Error, UseCompression, VerificationError,
-    },
-    utils::{
-        batch_exp, blank_hash, check_same_ratio, compute_g2_s, generate_powers_of_tau, power_pairs,
-        Result,
-    },
+    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
+    raw::raw_accumulator,
+    utils::{blank_hash, Result},
 };
-use rayon::prelude::*;
-pub enum AccumulatorState {
-    Empty,
-    NonEmpty,
-    Transformed,
-}
-
 /// The `BatchedAccumulator` is an object that participants of the ceremony contribute
 /// randomness to. This object contains powers of trapdoor `tau` in G1 and in G2 over
 /// fixed generators, and additionally in G1 over two other generators of exponents
@@ -62,79 +48,33 @@ impl<'a, E: Engine> PartialEq for BatchedAccumulator<'a, E> {
 }
 
 impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
-    pub fn empty(parameters: &'a CeremonyParams<E>) -> Self {
-        Self {
-            tau_powers_g1: vec![],
-            tau_powers_g2: vec![],
-            alpha_tau_powers_g1: vec![],
-            beta_tau_powers_g1: vec![],
-            beta_g2: E::G2Affine::zero(),
-            hash: blank_hash(),
-            parameters,
-        }
+    /// Generates the initial accumulator
+    pub fn generate_initial(
+        output: &mut [u8],
+        compress_the_output: UseCompression,
+        parameters: &'a CeremonyParams<E>,
+    ) -> Result<()> {
+        raw_accumulator::init(output, parameters, compress_the_output);
+        Ok(())
     }
 
-    /// File expected structure
-    /// HASH_SIZE bytes for the hash of the contribution
-    /// TAU_POWERS_G1_LENGTH of G1 points
-    /// TAU_POWERS_LENGTH of G2 points
-    /// TAU_POWERS_LENGTH of G1 points for alpha
-    /// TAU_POWERS_LENGTH of G1 points for beta
-    /// One G2 point for beta
-    /// Public key appended to the end of file, but it's irrelevant for an accumulator itself
-    fn calculate_position(
-        &self,
-        index: usize,
-        element_type: ElementType,
-        compression: UseCompression,
-    ) -> Result<usize> {
-        let g1_size = self.parameters.curve.g1_size(compression);
-        let g2_size = self.parameters.curve.g2_size(compression);
-        let required_tau_g1_power = self.parameters.powers_g1_length;
-        let required_power = self.parameters.powers_length;
-        let parameters = &self.parameters;
-        let position = match element_type {
-            ElementType::TauG1 => {
-                if index >= required_tau_g1_power {
-                    return Err(Error::PositionError(
-                        element_type,
-                        required_tau_g1_power,
-                        index,
-                    ));
-                }
-                g1_size * index
-            }
-            ElementType::TauG2 => {
-                if index >= required_power {
-                    return Err(Error::PositionError(element_type, required_power, index));
-                }
-                g1_size * required_tau_g1_power + g2_size * index
-            }
-            ElementType::AlphaG1 => {
-                if index >= required_power {
-                    return Err(Error::PositionError(element_type, required_power, index));
-                }
-                g1_size * required_tau_g1_power + g2_size * required_power + g1_size * index
-            }
-            ElementType::BetaG1 => {
-                if index >= required_power {
-                    return Err(Error::PositionError(element_type, required_power, index));
-                }
-                g1_size * required_tau_g1_power
-                    + g2_size * required_power
-                    + g1_size * required_power
-                    + g1_size * index
-            }
-            ElementType::BetaG2 => {
-                g1_size * required_tau_g1_power
-                    + g2_size * required_power
-                    + g1_size * required_power
-                    + g1_size * required_power
-            }
-        };
-
-        // The element's position is offset by the hash's size
-        Ok(parameters.hash_size + position)
+    pub fn contribute(
+        input: &[u8],
+        output: &mut [u8],
+        input_is_compressed: UseCompression,
+        compress_the_output: UseCompression,
+        _check_input_for_correctness: CheckForCorrectness,
+        key: &PrivateKey<E>,
+        parameters: &'a CeremonyParams<E>,
+    ) -> Result<()> {
+        raw_accumulator::contribute(
+            (input, input_is_compressed),
+            (output, compress_the_output),
+            key,
+            parameters,
+        )?;
+        info!("Contributed to the accumulator!");
+        Ok(())
     }
 
     /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
@@ -146,641 +86,47 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
         digest: &[u8],
         input_is_compressed: UseCompression,
         output_is_compressed: UseCompression,
-        check_input_for_correctness: CheckForCorrectness,
-        check_output_for_correctness: CheckForCorrectness,
+        _check_input_for_correctness: CheckForCorrectness,
+        _check_output_for_correctness: CheckForCorrectness,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<()> {
-        if digest.len() != 64 {
-            return Err(Error::InvalidLength {
-                expected: 64,
-                got: digest.len(),
-            });
-        }
-
-        let tau_g2_s = compute_g2_s::<E>(&digest, &key.tau_g1.0, &key.tau_g1.1, 0)?;
-        let alpha_g2_s = compute_g2_s::<E>(&digest, &key.alpha_g1.0, &key.alpha_g1.1, 1)?;
-        let beta_g2_s = compute_g2_s::<E>(&digest, &key.beta_g1.0, &key.beta_g1.1, 2)?;
-
-        // put in tuple form for convenience
-        let tau_g2_check = &(tau_g2_s, key.tau_g2);
-        let alpha_g2_check = &(alpha_g2_s, key.alpha_g2);
-        let beta_g2_check = &(beta_g2_s, key.beta_g2);
-
-        // Check the proofs-of-knowledge for tau/alpha/beta
-        let check_ratios = &[
-            (key.tau_g1, tau_g2_check, "Tau G1<>G2"),
-            (key.alpha_g1, alpha_g2_check, "Alpha G1<>G2"),
-            (key.beta_g1, beta_g2_check, "Beta G1<>G2"),
-        ];
-        for (a, b, err) in check_ratios {
-            check_same_ratio(a, b, err)?;
-        }
-
-        // Load accumulators AND perform computations
-        let mut before = Self::empty(parameters);
-        let mut after = Self::empty(parameters);
-        let chunk_size = 2;
-        before.read_chunk(
-            0,
-            chunk_size,
-            input_is_compressed,
-            check_input_for_correctness,
-            &input,
+        raw_accumulator::verify(
+            (input, input_is_compressed),
+            (output, output_is_compressed),
+            key,
+            digest,
+            parameters,
         )?;
-        after.read_chunk(
-            0,
-            chunk_size,
-            output_is_compressed,
-            check_output_for_correctness,
-            &output,
-        )?;
-        Self::check_initial_conditions(
-            &before,
-            &after,
-            tau_g2_check,
-            alpha_g2_check,
-            beta_g2_check,
-            &(before.beta_g2, after.beta_g2),
-        )?;
-
-        Self::check_accumulated_powers(
-            &mut before,
-            &mut after,
-            input,
-            output,
-            input_is_compressed,
-            output_is_compressed,
-            check_input_for_correctness,
-            check_output_for_correctness,
-        )?;
-
-        info!("Accumulator was calculated correctly!");
-
         Ok(())
     }
 
-    pub fn decompress(
-        input: &[u8],
+    pub fn serialize(
+        &self,
         output: &mut [u8],
-        check_input_for_correctness: CheckForCorrectness,
+        compression: UseCompression,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<()> {
-        let mut accumulator = Self::empty(parameters);
+        let elements = (
+            self.tau_powers_g1.as_ref(),
+            self.tau_powers_g2.as_ref(),
+            self.alpha_tau_powers_g1.as_ref(),
+            self.beta_tau_powers_g1.as_ref(),
+            &self.beta_g2,
+        );
 
-        Self::iter_chunk(parameters, |start, end| {
-            let size = end - start + 1;
-            accumulator.read_chunk(
-                start,
-                size,
-                UseCompression::Yes,
-                check_input_for_correctness,
-                &input,
-            )?;
-
-            if start < parameters.powers_length {
-                accumulator.write_chunk(start, UseCompression::No, output)?;
-            } else {
-                accumulator.write_points_chunk(
-                    &accumulator.tau_powers_g1,
-                    output,
-                    start,
-                    UseCompression::No,
-                    ElementType::TauG1,
-                )?;
-            }
-
-            Ok(())
-        })?;
+        raw_accumulator::serialize(elements, output, compression, parameters)?;
 
         Ok(())
     }
 
-    pub fn read_chunk(
-        &mut self,
-        from: usize,
-        size: usize,
-        compression: UseCompression,
-        checked: CheckForCorrectness,
-        input: &[u8],
-    ) -> Result<()> {
-        // Read `size` G1 Tau Elements
-        self.tau_powers_g1 =
-            self.read_points_chunk(&input, from, size, ElementType::TauG1, compression, checked)?;
-
-        // Read `size` G2 Tau Elements
-        self.tau_powers_g2 =
-            self.read_points_chunk(&input, from, size, ElementType::TauG2, compression, checked)?;
-
-        // Read `size` G1 Alpha Elements
-        self.alpha_tau_powers_g1 = self.read_points_chunk(
-            &input,
-            from,
-            size,
-            ElementType::AlphaG1,
-            compression,
-            checked,
-        )?;
-
-        // Read `size` G1 Beta Elements
-        self.beta_tau_powers_g1 = self.read_points_chunk(
-            &input,
-            from,
-            size,
-            ElementType::BetaG1,
-            compression,
-            checked,
-        )?;
-
-        // Read 1 G2 Beta Element
-        self.beta_g2 =
-            self.read_points_chunk(&input, 0, 1, ElementType::BetaG2, compression, checked)?[0];
-
-        Ok(())
-    }
-
-    fn read_points_chunk<G: AffineCurve>(
-        &self,
-        input: &[u8],
-        from: usize,
-        size: usize,
-        element_type: ElementType,
-        compression: UseCompression,
-        checked: CheckForCorrectness,
-    ) -> Result<Vec<G>> {
-        let element_size = self.parameters.curve.get_size(element_type, compression);
-        (from..from + size)
-            .into_par_iter()
-            .flat_map(|index| {
-                // return empty vector if we are out of bounds
-                // (we should not throw an error though!)
-                if self.is_out_of_bounds(element_type, index) {
-                    return None;
-                }
-
-                // get the slice corresponding to the element
-                let position = match self.calculate_position(index, element_type, compression) {
-                    Ok(p) => p,
-                    Err(e) => return Some(Err(e)),
-                };
-                let chunk = &input[position..position + element_size];
-                // read to a point
-                let res = if compression == UseCompression::Yes {
-                    G::deserialize(chunk, &mut [])
-                } else {
-                    G::deserialize_uncompressed(chunk)
-                };
-                let point = match res {
-                    Ok(point) => point,
-                    Err(e) => return Some(Err(e.into())),
-                };
-
-                Some(if point.is_zero() && checked == CheckForCorrectness::Yes {
-                    Err(Error::PointAtInfinity)
-                } else {
-                    Ok(point)
-                })
-            })
-            .collect()
-    }
-
-    fn is_out_of_bounds(&self, element_type: ElementType, index: usize) -> bool {
-        match element_type {
-            ElementType::TauG1 => {
-                if index >= self.parameters.powers_g1_length {
-                    return true;
-                }
-            }
-            ElementType::AlphaG1
-            | ElementType::BetaG1
-            | ElementType::BetaG2
-            | ElementType::TauG2 => {
-                if index >= self.parameters.powers_length {
-                    return true;
-                }
-            }
-        };
-        false
-    }
-
-    fn write_point<C>(
-        &self,
-        p: &C,
-        output: &mut [u8],
-        index: usize,
-        compression: UseCompression,
-        element_type: ElementType,
-    ) -> Result<()>
-    where
-        C: AffineCurve,
-    {
-        if self.is_out_of_bounds(element_type, index) {
-            return Ok(());
-        }
-
-        let position = self.calculate_position(index, element_type, compression)?;
-        let element_size = self.parameters.curve.get_size(element_type, compression);
-        match compression {
-            UseCompression::Yes => {
-                p.serialize(&[], &mut output[position..position + element_size])?
-            }
-            UseCompression::No => {
-                p.serialize_uncompressed(&mut output[position..position + element_size])?
-            }
-        };
-
-        Ok(())
-    }
-
-    fn write_points_chunk(
-        &self,
-        elements: &[impl AffineCurve],
-        output: &mut [u8],
-        chunk_start: usize,
-        compressed: UseCompression,
-        element_type: ElementType,
-    ) -> Result<()> {
-        elements
-            .iter()
-            .enumerate()
-            .map(|(i, c)| self.write_point(c, output, chunk_start + i, compressed, element_type))
-            .collect::<Result<_>>()?;
-        Ok(())
-    }
-
-    /// Write the accumulator with some compression behavior.
-    fn write_chunk(
-        &self,
-        chunk_start: usize,
-        compression: UseCompression,
-        output: &mut [u8],
-    ) -> Result<()> {
-        // Write the G1 Tau elements
-        self.write_points_chunk(
-            &self.tau_powers_g1,
-            output,
-            chunk_start,
-            compression,
-            ElementType::TauG1,
-        )?;
-
-        if chunk_start < self.parameters.powers_length {
-            // Write the G2 Tau elements
-            self.write_points_chunk(
-                &self.tau_powers_g2,
-                output,
-                chunk_start,
-                compression,
-                ElementType::TauG2,
-            )?;
-            // Write the G1 Alpha elements
-            self.write_points_chunk(
-                &self.alpha_tau_powers_g1,
-                output,
-                chunk_start,
-                compression,
-                ElementType::AlphaG1,
-            )?;
-            // Write the G1 Beta elements
-            self.write_points_chunk(
-                &self.beta_tau_powers_g1,
-                output,
-                chunk_start,
-                compression,
-                ElementType::BetaG1,
-            )?;
-            // Writes 1 G2 Beta element
-            self.write_point(
-                &self.beta_g2,
-                output,
-                chunk_start,
-                compression,
-                ElementType::BetaG2,
-            )?
-        }
-
-        Ok(())
-    }
-
-    /// Transforms the accumulator with a private key.
-    /// Due to large amount of data in a previous accumulator even in the compressed form
-    /// this function can now work on compressed input. Output can be made in any form
-    /// WARNING: Contributor does not have to check that values from challenge file were serialized
-    /// correctly, but we may want to enforce it if a ceremony coordinator does not recompress the previous
-    /// contribution into the new challenge file
-    pub fn contribute(
-        input: &[u8],
-        output: &mut [u8],
-        input_is_compressed: UseCompression,
-        compress_the_output: UseCompression,
-        check_input_for_correctness: CheckForCorrectness,
-        key: &PrivateKey<E>,
-        parameters: &'a CeremonyParams<E>,
-    ) -> Result<()> {
-        let mut accumulator = Self::empty(parameters);
-
-        Self::iter_chunk(parameters, |start, end| {
-            let size = end - start + 1;
-            accumulator.read_chunk(
-                start,
-                size,
-                input_is_compressed,
-                check_input_for_correctness,
-                &input,
-            )?;
-
-            // generate the powers from our private key
-            let taupowers = generate_powers_of_tau::<E>(&key.tau, start, start + size);
-
-            // batch Exp everything up to powers_length, and TauG1 additionally up to the full length
-            batch_exp(&mut accumulator.tau_powers_g1, &taupowers[0..], None)?;
-            if start < parameters.powers_length {
-                batch_exp(&mut accumulator.tau_powers_g2, &taupowers[0..], None)?;
-                batch_exp(
-                    &mut accumulator.alpha_tau_powers_g1,
-                    &taupowers[0..],
-                    Some(&key.alpha),
-                )?;
-                batch_exp(
-                    &mut accumulator.beta_tau_powers_g1,
-                    &taupowers[0..],
-                    Some(&key.beta),
-                )?;
-                accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();
-                if accumulator.beta_g2.is_zero() {
-                    return Err(Error::PointAtInfinity);
-                }
-                accumulator.write_chunk(start, compress_the_output, output)?;
-            } else {
-                accumulator.write_points_chunk(
-                    &accumulator.tau_powers_g1,
-                    output,
-                    start,
-                    compress_the_output,
-                    ElementType::TauG1,
-                )?;
-            }
-
-            info!("Done contributing {} powers of tau", end);
-
-            Ok(())
-        })?;
-
-        Ok(())
-    }
-
-    /// Generates the initial accumulator
-    pub fn generate_initial(
-        output: &mut [u8],
-        compress_the_output: UseCompression,
-        parameters: &'a CeremonyParams<E>,
-    ) -> Result<()> {
-        // Write the first Tau powers in chunks where every initial element is a G1 or G2 `one`
-        Self::iter_chunk(parameters, |start, end| {
-            let size = end - start + 1;
-            if start < parameters.powers_length {
-                let accumulator = Self {
-                    tau_powers_g1: vec![E::G1Affine::prime_subgroup_generator(); size],
-                    tau_powers_g2: vec![E::G2Affine::prime_subgroup_generator(); size],
-                    alpha_tau_powers_g1: vec![E::G1Affine::prime_subgroup_generator(); size],
-                    beta_tau_powers_g1: vec![E::G1Affine::prime_subgroup_generator(); size],
-                    beta_g2: E::G2Affine::prime_subgroup_generator(),
-                    hash: blank_hash(),
-                    parameters,
-                };
-                accumulator.write_chunk(start, compress_the_output, output)?;
-            } else {
-                let powers = vec![E::G1Affine::prime_subgroup_generator(); size];
-                let acc = Self::empty(parameters);
-                acc.write_points_chunk(
-                    &powers,
-                    output,
-                    start,
-                    compress_the_output,
-                    ElementType::TauG1,
-                )?;
-            }
-
-            Ok(())
-        })?;
-
-        info!("Initial accumulator created");
-        Ok(())
-    }
-
-    /// Helper function to iterate over the accumulator in chunks.
-    /// `action` will perform an action on the chunk
-    pub fn iter_chunk(
-        parameters: &CeremonyParams<E>,
-        mut action: impl FnMut(usize, usize) -> Result<()>,
-    ) -> Result<()> {
-        (0..parameters.powers_g1_length)
-            .chunks(parameters.batch_size)
-            .into_iter()
-            .map(|chunk| {
-                let (start, end) = match chunk.minmax() {
-                    MinMaxResult::MinMax(start, end) => (start, end),
-                    MinMaxResult::OneElement(start) => (start, start),
-                    _ => return Err(Error::InvalidChunk),
-                };
-                action(start, end)
-            })
-            .collect::<Result<_>>()
-    }
-
-    /// We have preallocated the accumulators
-    #[allow(clippy::too_many_arguments)]
-    fn check_accumulated_powers(
-        before: &mut BatchedAccumulator<E>,
-        after: &mut BatchedAccumulator<E>,
-        input: &[u8],
-        output: &[u8],
-        input_is_compressed: UseCompression,
-        output_is_compressed: UseCompression,
-        check_input_for_correctness: CheckForCorrectness,
-        check_output_for_correctness: CheckForCorrectness,
-    ) -> Result<()> {
-        // Read by parts and just verify same ratios. Cause of two fixed variables with tau_powers_g2_1 = tau_powers_g2_0 ^ s
-        // one does not need to care about some overlapping
-        let g1_check = &(after.tau_powers_g1[0], after.tau_powers_g1[1]);
-        let g2_check = &(after.tau_powers_g2[0], after.tau_powers_g2[1]);
-        let parameters = before.parameters;
-        let mut tau_powers_last_first_chunks = vec![E::G1Affine::zero(); 2];
-        let tau_powers_length = parameters.powers_length;
-
-        Self::iter_chunk(parameters, |start, end| {
-            let size = end - start + 1 + if end == tau_powers_length - 1 { 0 } else { 1 };
-            before.read_chunk(
-                start,
-                size,
-                input_is_compressed,
-                check_input_for_correctness,
-                &input,
-            )?;
-            after.read_chunk(
-                start,
-                size,
-                output_is_compressed,
-                check_output_for_correctness,
-                &output,
-            )?;
-
-            if start < tau_powers_length {
-                // Check that the powers of tau are correct
-                let check_pairs = &[
-                    (
-                        power_pairs(&after.tau_powers_g1),
-                        g2_check,
-                        "PowerPairs TauG1",
-                    ),
-                    (
-                        power_pairs(&after.alpha_tau_powers_g1),
-                        g2_check,
-                        "PowerPairs AlphaG1",
-                    ),
-                    (
-                        power_pairs(&after.beta_tau_powers_g1),
-                        g2_check,
-                        "PowerPairs BetaG1",
-                    ),
-                    // we change the order because the tuple is of the form (G1, G2)
-                    // the pairing is a commutative operation, so it doesn't affect the result
-                    (
-                        *g1_check,
-                        &power_pairs(&after.tau_powers_g2),
-                        "PowerPairs TauG2",
-                    ),
-                ];
-
-                for (a, b, err) in check_pairs {
-                    check_same_ratio(a, b, err)?;
-                }
-
-                if end == tau_powers_length - 1 {
-                    tau_powers_last_first_chunks[0] = after.tau_powers_g1[size - 1];
-                }
-            } else {
-                check_same_ratio(
-                    &power_pairs(&after.tau_powers_g1),
-                    g2_check,
-                    "PowerPairs Tau G1",
-                )?;
-
-                if start == parameters.powers_length {
-                    tau_powers_last_first_chunks[1] = after.tau_powers_g1[0];
-                }
-            }
-
-            Ok(())
-        })?;
-
-        // checks the intersection
-        // todo: do we still need this now that we have combined the 2 loops?
-        check_same_ratio(
-            &power_pairs(&tau_powers_last_first_chunks),
-            g2_check,
-            "LastChunk PowerPairs Tau G1",
-        )?;
-
-        Ok(())
-    }
-
-    /// Checks that the initial ratios are correctly formed
-    fn check_initial_conditions(
-        before: &BatchedAccumulator<E>,
-        after: &BatchedAccumulator<E>,
-        tau_g2_check: &(E::G2Affine, E::G2Affine),
-        alpha_g2_check: &(E::G2Affine, E::G2Affine),
-        beta_g2_check: &(E::G2Affine, E::G2Affine),
-        other_beta: &(E::G2Affine, E::G2Affine),
-    ) -> Result<()> {
-        // Check the correctness of the generators for tau powers
-        if after.tau_powers_g1[0] != E::G1Affine::prime_subgroup_generator() {
-            return Err(VerificationError::InvalidGenerator(ElementType::TauG1).into());
-        }
-        if after.tau_powers_g2[0] != E::G2Affine::prime_subgroup_generator() {
-            return Err(VerificationError::InvalidGenerator(ElementType::TauG2).into());
-        }
-
-        let check_ratios = &[
-            // Did the participant multiply the previous tau by the new one?
-            (
-                (before.tau_powers_g1[1], after.tau_powers_g1[1]),
-                tau_g2_check,
-                "Before-After: Tau[1] G1<>G2",
-            ),
-            // Did the participant multiply the previous alpha by the new one?
-            (
-                (before.alpha_tau_powers_g1[0], after.alpha_tau_powers_g1[0]),
-                alpha_g2_check,
-                "Before-After: Alpha[0] G1<>G2",
-            ),
-            // Did the participant multiply the previous beta by the new one?
-            (
-                (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
-                beta_g2_check,
-                "Before-After: Beta[0] G1<>G2",
-            ),
-            // todo: since we're checking with the same G1 elements above, can't we remove the same_ratio
-            // call and replace it with an assertion that the G2 elements are the same as above?
-            (
-                (before.beta_tau_powers_g1[0], after.beta_tau_powers_g1[0]),
-                other_beta,
-                "Before-After: Beta[0] G1<>G2",
-            ),
-        ];
-
-        for (a, b, err) in check_ratios {
-            check_same_ratio(a, b, err)?;
-        }
-
-        Ok(())
-    }
-}
-
-// These functions are only useful in tests. In reality they won't ever be used
-// because they require being able to load the entirety of the accumulator to memory
-#[cfg(test)]
-impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
     pub fn deserialize(
         input: &[u8],
-        check_input_for_correctness: CheckForCorrectness,
+        _check_input_for_correctness: CheckForCorrectness,
         compression: UseCompression,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<BatchedAccumulator<'a, E>> {
-        let mut accumulator = Self::empty(parameters);
-
-        let mut tau_powers_g1 = vec![];
-        let mut tau_powers_g2 = vec![];
-        let mut alpha_tau_powers_g1 = vec![];
-        let mut beta_tau_powers_g1 = vec![];
-        let mut beta_g2 = E::G2Affine::zero();
-
-        Self::iter_chunk(parameters, |start, end| {
-            let size = end - start + 1;
-            accumulator.read_chunk(
-                start,
-                size,
-                compression,
-                check_input_for_correctness,
-                &input,
-            )?;
-
-            // We only get Tau G2 and Alpha/Beta G1 elements up to `powers_length`
-            if start < parameters.powers_length {
-                tau_powers_g1.extend_from_slice(&accumulator.tau_powers_g1);
-                tau_powers_g2.extend_from_slice(&accumulator.tau_powers_g2);
-                alpha_tau_powers_g1.extend_from_slice(&accumulator.alpha_tau_powers_g1);
-                beta_tau_powers_g1.extend_from_slice(&accumulator.beta_tau_powers_g1);
-                if start == 0 {
-                    beta_g2 = accumulator.beta_g2;
-                }
-            } else {
-                tau_powers_g1.extend_from_slice(&accumulator.tau_powers_g1);
-            }
-
-            Ok(())
-        })?;
-
+        let (tau_powers_g1, tau_powers_g2, alpha_tau_powers_g1, beta_tau_powers_g1, beta_g2) =
+            raw_accumulator::deserialize(input, compression, parameters)?;
         Ok(BatchedAccumulator {
             tau_powers_g1,
             tau_powers_g2,
@@ -792,39 +138,13 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
         })
     }
 
-    pub fn serialize(
-        &mut self,
+    pub fn decompress(
+        input: &[u8],
         output: &mut [u8],
-        compression: UseCompression,
+        _check_input_for_correctness: CheckForCorrectness,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<()> {
-        Self::iter_chunk(parameters, |start, end_taug1| {
-            if start < parameters.powers_length {
-                // Ensure we do not exceed bounds
-                let end_powers = std::cmp::min(parameters.powers_length - 1, end_taug1);
-                let tmp_acc = BatchedAccumulator::<E> {
-                    tau_powers_g1: (&self.tau_powers_g1[start..=end_taug1]).to_vec(),
-                    tau_powers_g2: (&self.tau_powers_g2[start..=end_powers]).to_vec(),
-                    alpha_tau_powers_g1: (&self.alpha_tau_powers_g1[start..=end_powers]).to_vec(),
-                    beta_tau_powers_g1: (&self.beta_tau_powers_g1[start..=end_powers]).to_vec(),
-                    beta_g2: self.beta_g2,
-                    hash: self.hash,
-                    parameters,
-                };
-                tmp_acc.write_chunk(start, compression, output)?;
-            } else {
-                self.write_points_chunk(
-                    &self.tau_powers_g1[start..=end_taug1],
-                    output,
-                    start,
-                    compression,
-                    ElementType::TauG1,
-                )?;
-            }
-
-            Ok(())
-        })?;
-
+        raw_accumulator::decompress(input, output, parameters)?;
         Ok(())
     }
 }
@@ -833,11 +153,13 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
 mod tests {
     use super::*;
     use crate::utils::{
-        calculate_hash,
-        test_helpers::{random_point, random_point_vec, random_point_vec_batched},
+        batch_exp, calculate_hash, generate_powers_of_tau,
+        test_helpers::{random_point, random_point_vec},
     };
     use rand::thread_rng;
-    use zexe_algebra::curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
+    use zexe_algebra::curves::{
+        bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6, AffineCurve, ProjectiveCurve,
+    };
 
     #[test]
     fn serialize_multiple_batches() {
@@ -951,11 +273,7 @@ mod tests {
         .unwrap();
         before.beta_g2 = before.beta_g2.mul(privkey.beta).into_affine();
 
-        assert_eq!(deserialized.tau_powers_g1, before.tau_powers_g1);
-        assert_eq!(deserialized.tau_powers_g2, before.tau_powers_g2);
-        assert_eq!(deserialized.alpha_tau_powers_g1, before.alpha_tau_powers_g1);
-        assert_eq!(deserialized.beta_tau_powers_g1, before.beta_tau_powers_g1);
-        assert_eq!(deserialized.beta_g2, before.beta_g2);
+        assert_eq!(deserialized, before);
     }
 
     #[test]
@@ -1191,270 +509,6 @@ mod tests {
         assert_eq!(deserialized, accumulator);
     }
 
-    #[test]
-    fn read_write_chunk_bls_12_381() {
-        // ensure that serializing and deserializing works for varying batch sizes and powers
-        // todo: add benchmarks to this so that we can figure out optimal batch sizes for each curve
-        read_write_chunk_curve::<Bls12_381>(3, 6, UseCompression::Yes);
-        read_write_chunk_curve::<Bls12_381>(5, 2, UseCompression::Yes);
-        read_write_chunk_curve::<Bls12_381>(3, 6, UseCompression::No);
-        read_write_chunk_curve::<Bls12_381>(5, 2, UseCompression::No);
-    }
-
-    #[test]
-    fn read_write_chunk_bls_12_377() {
-        read_write_chunk_curve::<Bls12_377>(3, 6, UseCompression::Yes);
-        read_write_chunk_curve::<Bls12_377>(5, 2, UseCompression::Yes);
-        read_write_chunk_curve::<Bls12_377>(3, 6, UseCompression::No);
-        read_write_chunk_curve::<Bls12_377>(5, 2, UseCompression::No);
-    }
-
-    #[test]
-    #[ignore]
-    fn read_write_chunk_sw6() {
-        read_write_chunk_curve::<SW6>(3, 6, UseCompression::Yes);
-        read_write_chunk_curve::<SW6>(5, 2, UseCompression::Yes);
-        read_write_chunk_curve::<SW6>(3, 6, UseCompression::No);
-        read_write_chunk_curve::<SW6>(5, 2, UseCompression::No);
-    }
-
-    fn read_write_chunk_curve<E: Engine + Sync>(
-        powers: usize,
-        batch_size: usize,
-        compressed: UseCompression,
-    ) {
-        // we have a giant ceremony with N powers and 2N-1 tau_g1 elements which we want to split in batches of $batch_size
-        let params = CeremonyParams::<E>::new(powers, batch_size);
-        let acc = &BatchedAccumulator::empty(&params);
-        let rng = &mut thread_rng();
-
-        let tau_g1_powers = params.powers_g1_length;
-        let other_powers = params.powers_length;
-
-        // assume we have a huge buffer which can handle all operations. in practice, this will be
-        // something like a MMap which can be lazily evaluated
-        let mut buffer = vec![0; params.accumulator_size];
-
-        // generate our G1 batches for TauG1
-        let tau_g1: Vec<Vec<E::G1Affine>> =
-            random_point_vec_batched(tau_g1_powers, batch_size, rng);
-        // let's also serialize some Tau G2 points
-        let tau_g2: Vec<Vec<E::G2Affine>> = random_point_vec_batched(other_powers, batch_size, rng);
-        let alpha_g1: Vec<Vec<E::G1Affine>> =
-            random_point_vec_batched(other_powers, batch_size, rng);
-        let beta_g1: Vec<Vec<E::G1Affine>> =
-            random_point_vec_batched(other_powers, batch_size, rng);
-
-        // serialize them (we do all together to ensure that there is no part of the buffer which gets overwritten)
-        serialize_batches(
-            acc,
-            &mut buffer,
-            &tau_g1,
-            batch_size,
-            ElementType::TauG1,
-            compressed,
-        );
-        serialize_batches(
-            acc,
-            &mut buffer,
-            &tau_g2,
-            batch_size,
-            ElementType::TauG2,
-            compressed,
-        );
-        serialize_batches(
-            acc,
-            &mut buffer,
-            &alpha_g1,
-            batch_size,
-            ElementType::AlphaG1,
-            compressed,
-        );
-        serialize_batches(
-            acc,
-            &mut buffer,
-            &beta_g1,
-            batch_size,
-            ElementType::BetaG1,
-            compressed,
-        );
-
-        // deserialize the buffer in batches
-        let deserialized_tau_g1: Vec<Vec<E::G1Affine>> = deserialize_batches(
-            acc,
-            &buffer,
-            tau_g1_powers,
-            batch_size,
-            ElementType::TauG1,
-            compressed,
-        );
-        let deserialized_tau_g2: Vec<Vec<E::G2Affine>> = deserialize_batches(
-            acc,
-            &buffer,
-            other_powers,
-            batch_size,
-            ElementType::TauG2,
-            compressed,
-        );
-        let deserialized_alpha_g1: Vec<Vec<E::G1Affine>> = deserialize_batches(
-            acc,
-            &buffer,
-            other_powers,
-            batch_size,
-            ElementType::AlphaG1,
-            compressed,
-        );
-        let deserialized_beta_g1: Vec<Vec<E::G1Affine>> = deserialize_batches(
-            acc,
-            &buffer,
-            other_powers,
-            batch_size,
-            ElementType::BetaG1,
-            compressed,
-        );
-        assert_eq!(tau_g1, deserialized_tau_g1);
-        assert_eq!(tau_g2, deserialized_tau_g2);
-        assert_eq!(alpha_g1, deserialized_alpha_g1);
-        assert_eq!(beta_g1, deserialized_beta_g1);
-    }
-
-    #[test]
-    fn calculate_position_test() {
-        fn test_position<'a, E: Engine + Sync>(
-            acc: &BatchedAccumulator<'a, E>,
-            index: usize,
-            element_type: ElementType,
-            compression: UseCompression,
-            expected: usize,
-        ) {
-            let pos = acc
-                .calculate_position(index, element_type, compression)
-                .unwrap();
-            // offset by 64 for the blake2b hash size
-            assert_eq!(pos, expected + 64);
-        }
-
-        // Ensure that indexes greater than allowed produce an error
-        fn index_out_of_bounds<'a, E: Engine + Sync>(
-            acc: &BatchedAccumulator<'a, E>,
-            length: usize,
-            element: ElementType,
-        ) {
-            acc.calculate_position(length + 1, element, UseCompression::No)
-                .unwrap_err();
-            acc.calculate_position(length + 1, element, UseCompression::Yes)
-                .unwrap_err();
-        }
-
-        let params = CeremonyParams::<Bls12_381>::new(10, 100);
-        let acc = &BatchedAccumulator::empty(&params);
-        let g1 = &params.curve.g1;
-        let g1_c = params.curve.g1_compressed;
-        let g2 = &params.curve.g2;
-        let g2_c = params.curve.g2_compressed;
-        let index = 1000;
-
-        // TauG1 are just offset by their index
-        let expected = g1 * index;
-        test_position(acc, index, ElementType::TauG1, UseCompression::No, expected);
-        let expected = g1_c * index;
-        test_position(
-            acc,
-            index,
-            ElementType::TauG1,
-            UseCompression::Yes,
-            expected,
-        );
-
-        // TauG2 elements follow the TauG1 elements
-        let expected = g1 * params.powers_g1_length + g2 * index;
-        test_position(acc, index, ElementType::TauG2, UseCompression::No, expected);
-        let expected = g1_c * params.powers_g1_length + g2_c * index;
-        test_position(
-            acc,
-            index,
-            ElementType::TauG2,
-            UseCompression::Yes,
-            expected,
-        );
-
-        // AlphaG1 elements follow the TauG2 elements
-        let expected = g1 * (params.powers_g1_length + index) + g2 * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::AlphaG1,
-            UseCompression::No,
-            expected,
-        );
-        let expected = g1_c * (params.powers_g1_length + index) + g2_c * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::AlphaG1,
-            UseCompression::Yes,
-            expected,
-        );
-
-        // BetaG1 elements follow the AlphaG1 elements
-        let expected = g1 * (params.powers_g1_length + index) + (g1 + g2) * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::BetaG1,
-            UseCompression::No,
-            expected,
-        );
-        let expected =
-            g1_c * (params.powers_g1_length + index) + (g1_c + g2_c) * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::BetaG1,
-            UseCompression::Yes,
-            expected,
-        );
-
-        // The BetaG2 element is 1 element right after the BetaG1, independently of index
-        let expected = g1 * params.powers_g1_length + (2 * g1 + g2) * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::BetaG2,
-            UseCompression::No,
-            expected,
-        );
-        test_position(acc, 0, ElementType::BetaG2, UseCompression::No, expected);
-        test_position(
-            acc,
-            1_000_000_000,
-            ElementType::BetaG2,
-            UseCompression::No,
-            expected,
-        );
-        let expected = g1_c * params.powers_g1_length + (2 * g1_c + g2_c) * params.powers_length;
-        test_position(
-            acc,
-            index,
-            ElementType::BetaG2,
-            UseCompression::Yes,
-            expected,
-        );
-        test_position(acc, 0, ElementType::BetaG2, UseCompression::Yes, expected);
-        test_position(
-            acc,
-            1_000_000_000,
-            ElementType::BetaG2,
-            UseCompression::Yes,
-            expected,
-        );
-
-        index_out_of_bounds(acc, params.powers_g1_length, ElementType::TauG1);
-        index_out_of_bounds(acc, params.powers_length, ElementType::TauG2);
-        index_out_of_bounds(acc, params.powers_length, ElementType::AlphaG1);
-        index_out_of_bounds(acc, params.powers_length, ElementType::BetaG1);
-    }
-
     // Helpers
     fn generate_random_accumulator<'a, E: Engine>(
         parameters: &'a CeremonyParams<E>,
@@ -1463,7 +517,7 @@ mod tests {
         let tau_g1_size = parameters.powers_g1_length;
         let other_size = parameters.powers_length;
         let rng = &mut thread_rng();
-        let mut acc = BatchedAccumulator {
+        let acc = BatchedAccumulator {
             tau_powers_g1: random_point_vec(tau_g1_size, rng),
             tau_powers_g2: random_point_vec(other_size, rng),
             alpha_tau_powers_g1: random_point_vec(other_size, rng),
@@ -1476,64 +530,6 @@ mod tests {
         let mut buf = vec![0; len];
         acc.serialize(&mut buf, compressed, parameters).unwrap();
         (buf, acc)
-    }
-
-    fn serialize_batches<'a, C: AffineCurve, E: Engine + Sync>(
-        acc: &BatchedAccumulator<'a, E>,
-        buffer: &mut [u8],
-        batches: &[Vec<C>],
-        batch_size: usize,
-        element_type: ElementType,
-        compressed: UseCompression,
-    ) {
-        for (i, batch) in batches.iter().enumerate() {
-            let chunk_start = i * batch_size;
-            acc.write_points_chunk(&batch, buffer, chunk_start, compressed, element_type)
-                .unwrap();
-        }
-    }
-
-    fn deserialize_batches<'a, C: AffineCurve, E: Engine + Sync>(
-        acc: &BatchedAccumulator<'a, E>,
-        buffer: &[u8],
-        size: usize,
-        batch_size: usize,
-        element_type: ElementType,
-        compressed: UseCompression,
-    ) -> Vec<Vec<C>> {
-        let div = size / batch_size;
-        let remainder = size % batch_size;
-        let mut deserialized_batches: Vec<Vec<C>> = Vec::new();
-        for i in 0..div {
-            let chunk_start = i * batch_size;
-            let batch: Vec<C> = acc
-                .read_points_chunk(
-                    &buffer,
-                    chunk_start,
-                    batch_size,
-                    element_type,
-                    compressed,
-                    CheckForCorrectness::Yes,
-                )
-                .unwrap();
-            deserialized_batches.push(batch);
-        }
-        if remainder > 0 {
-            let chunk_start = div * batch_size;
-            let batch: Vec<C> = acc
-                .read_points_chunk(
-                    &buffer,
-                    chunk_start,
-                    remainder,
-                    element_type,
-                    compressed,
-                    CheckForCorrectness::Yes,
-                )
-                .unwrap();
-            deserialized_batches.push(batch);
-        }
-
-        deserialized_batches
     }
 
     fn generate_input<E: Engine>(

@@ -67,13 +67,6 @@ impl<E> CurveParams<E> {
             ElementType::BetaG2 | ElementType::TauG2 => self.g2_size(compression),
         }
     }
-
-    pub fn get_sizes(&self, compression: UseCompression) -> (usize, usize) {
-        (
-            self.get_size(ElementType::TauG1, compression),
-            self.get_size(ElementType::TauG2, compression),
-        )
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

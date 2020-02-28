@@ -50,7 +50,7 @@ pub fn print_hash(hash: &[u8]) {
 
 /// Exponentiate a large number of points, with an optional coefficient to be applied to the
 /// exponent.
-pub(crate) fn batch_exp<C: AffineCurve>(
+pub fn batch_exp<C: AffineCurve>(
     bases: &mut [C],
     exps: &[C::ScalarField],
     coeff: Option<&C::ScalarField>,

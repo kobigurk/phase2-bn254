@@ -34,6 +34,18 @@ thiserror = "1.0.11"
 [dev-dependencies]
 criterion = "0.3"
 
+# add this to compare performance with old accumulators
+[dev-dependencies.powersoftau_v1]
+package = "powersoftau"
+git = "https://github.com/celo-org/snark-setup"
+rev = "22b4de9087768c0ab6a628270d207e43482c9922"
+
 [[bench]]
-name = "powersoftau"
+name = "math"
+harness = false
+[[bench]]
+name = "accumulator"
+harness = false
+[[bench]]
+name = "io"
 harness = false

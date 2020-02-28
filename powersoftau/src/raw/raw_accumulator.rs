@@ -1,5 +1,5 @@
 //! Accumulator which operates on batches of data
-use super::chunk::{buffer_size, Deserializer, Serializer};
+use super::chunk::{buffer_size, Deserializer, ParBatchDeserializer, Serializer};
 use crate::{
     keypair::{PrivateKey, PublicKey},
     parameters::{CeremonyParams, ElementType, Error, UseCompression, VerificationError},
@@ -130,7 +130,7 @@ fn check_power_ratios<C: PairingCurve>(
 ) -> Result<()> {
     let size = buffer_size::<C>(compression);
     buffer[start * size..end * size]
-        .read_batch_preallocated(&mut elements[0..end - start], compression)?;
+        .par_read_batch_preallocated(&mut elements[0..end - start], compression)?;
     check_same_ratio(&power_pairs(&elements[..end - start]), check, "Power pairs")?;
     Ok(())
 }
@@ -139,7 +139,7 @@ fn check_power_ratios<C: PairingCurve>(
 fn read_initial_elements<C: AffineCurve>(buf: &[u8], compressed: UseCompression) -> Result<Vec<C>> {
     let batch = 2;
     let size = buffer_size::<C>(compressed);
-    let ret = buf[0..batch * size].read_batch(compressed)?;
+    let ret = buf[0..batch * size].par_read_batch(compressed)?;
     if ret.len() != batch {
         return Err(Error::InvalidLength {
             expected: batch,
@@ -206,8 +206,8 @@ pub fn verify<E: PairingEngine>(
             (in_alpha_g1, alpha_g1, alpha_g2_check),
             (in_beta_g1, beta_g1, beta_g2_check),
         ] {
-            before.read_batch_preallocated(&mut before_g1, compressed_input)?;
-            after.read_batch_preallocated(&mut after_g1, compressed_output)?;
+            before.par_read_batch_preallocated(&mut before_g1, compressed_input)?;
+            after.par_read_batch_preallocated(&mut after_g1, compressed_output)?;
             check_same_ratio(
                 &(before_g1[0], after_g1[0]),
                 check,
@@ -325,10 +325,10 @@ pub fn deserialize<E: PairingEngine>(
         split(&input, parameters, compressed);
 
     // deserialize each part of the buffer separately
-    let tau_g1 = in_tau_g1.read_batch(compressed)?;
-    let tau_g2 = in_tau_g2.read_batch(compressed)?;
-    let alpha_g1 = in_alpha_g1.read_batch(compressed)?;
-    let beta_g1 = in_beta_g1.read_batch(compressed)?;
+    let tau_g1 = in_tau_g1.par_read_batch(compressed)?;
+    let tau_g2 = in_tau_g2.par_read_batch(compressed)?;
+    let alpha_g1 = in_alpha_g1.par_read_batch(compressed)?;
+    let beta_g1 = in_beta_g1.par_read_batch(compressed)?;
     let beta_g2 = in_beta_g2.read_element(compressed)?;
 
     Ok((tau_g1, tau_g2, alpha_g1, beta_g1, beta_g2))
@@ -504,7 +504,8 @@ fn decompress_buffer<C: AffineCurve>(
     let in_size = buffer_size::<C>(UseCompression::Yes);
     let out_size = buffer_size::<C>(UseCompression::No);
     // read the compressed input
-    let elements = input[start * in_size..end * in_size].read_batch::<C>(UseCompression::Yes)?;
+    let elements =
+        input[start * in_size..end * in_size].par_read_batch::<C>(UseCompression::Yes)?;
     // write it back uncompressed
     output[start * out_size..end * out_size].write_batch(&elements, UseCompression::No)?;
 
@@ -539,7 +540,7 @@ mod tests {
         let mut out = vec![0; len];
         // perform the decompression
         decompress_buffer::<C>(&mut out, &input, (0, num_els)).unwrap();
-        let deserialized = out.read_batch::<C>(UseCompression::No).unwrap();
+        let deserialized = out.par_read_batch::<C>(UseCompression::No).unwrap();
         // ensure they match
         assert_eq!(deserialized, elements);
     }
@@ -558,7 +559,7 @@ fn apply_powers<C: AffineCurve>(
     let out_size = buffer_size::<C>(output_compressed);
     // read the input
     let mut elements =
-        &mut input[start * in_size..end * in_size].read_batch::<C>(input_compressed)?;
+        &mut input[start * in_size..end * in_size].par_read_batch::<C>(input_compressed)?;
     // calculate the powers
     batch_exp(&mut elements, &powers[..end - start], coeff)?;
     // write back

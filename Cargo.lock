@@ -783,6 +783,31 @@ dependencies = [
 [[package]]
 name = "powersoftau"
 version = "0.2.0"
+source = "git+https://github.com/celo-org/snark-setup?rev=22b4de9087768c0ab6a628270d207e43482c9922#22b4de9087768c0ab6a628270d207e43482c9922"
+dependencies = [
+ "algebra",
+ "blake2",
+ "byteorder",
+ "crossbeam 0.3.2",
+ "generic-array",
+ "gumdrop",
+ "hex-literal",
+ "itertools",
+ "log",
+ "memmap",
+ "num_cpus",
+ "parking_lot",
+ "rand 0.7.3",
+ "rand_chacha",
+ "rayon",
+ "rust-crypto",
+ "thiserror",
+ "typenum",
+]
+
+[[package]]
+name = "powersoftau"
+version = "0.2.0"
 dependencies = [
  "algebra",
  "blake2",
@@ -797,6 +822,7 @@ dependencies = [
  "memmap",
  "num_cpus",
  "parking_lot",
+ "powersoftau 0.2.0 (git+https://github.com/celo-org/snark-setup?rev=22b4de9087768c0ab6a628270d207e43482c9922)",
  "rand 0.7.3",
  "rand_chacha",
  "rayon",

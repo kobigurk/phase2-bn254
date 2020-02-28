@@ -218,6 +218,15 @@ pub enum ElementType {
     BetaG2,
 }
 
+impl fmt::Display for UseCompression {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            UseCompression::Yes => write!(f, "Yes"),
+            UseCompression::No => write!(f, "No"),
+        }
+    }
+}
+
 impl fmt::Display for ElementType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

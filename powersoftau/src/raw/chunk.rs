@@ -12,11 +12,8 @@ pub fn buffer_size<C: AffineCurve>(compression: UseCompression) -> usize {
         }
 }
 
-/// Used for reading elements from a serialized buffer
-pub trait Deserializer<T: Sync>: ParallelSlice<T> + Sync + core::fmt::Debug
-where
-    [T]: Deserializer<T>,
-{
+/// Used for reading 1 group element from a serialized buffer
+pub trait Deserializer {
     /// Reads 1 compressed or uncompressed element
     fn read_element<G: AffineCurve>(&self, compression: UseCompression) -> Result<G>;
 
@@ -26,9 +23,28 @@ where
         el: &mut G,
         compression: UseCompression,
     ) -> Result<()>;
+}
 
+/// Used for reading multiple group elements from a serialized buffer serially
+pub trait BatchDeserializer {
+    /// Reads multiple elements from the buffer
+    fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>>;
+
+    /// Reads multiple elements from the buffer to a preallocated array of Group elements
+    fn read_batch_preallocated<G: AffineCurve>(
+        &self,
+        elements: &mut [G],
+        compression: UseCompression,
+    ) -> Result<()>;
+}
+
+/// Used for reading multiple group elements from a serialized buffer in parallel
+pub trait ParBatchDeserializer<T: Sync>: ParallelSlice<T> + Sync
+where
+    [T]: Deserializer,
+{
     /// Reads multiple elements from the buffer. Internally calls `read_element`
-    fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
+    fn par_read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
         let size = buffer_size::<G>(compression);
         // reads from the buffer in `size` chunks
         // note: it might be the case that running this in parallel incurs
@@ -40,6 +56,34 @@ where
     }
 
     /// Reads multiple elements from the buffer to a preallocated array of Group elements
+    fn par_read_batch_preallocated<G: AffineCurve>(
+        &self,
+        elements: &mut [G],
+        compression: UseCompression,
+    ) -> Result<()> {
+        let element_size = buffer_size::<G>(compression);
+        let buf = self.as_parallel_slice();
+        elements
+            .par_iter_mut()
+            .enumerate()
+            .map(|(i, el)| {
+                Ok(buf[i * element_size..(i + 1) * element_size]
+                    .read_element_preallocated(el, compression)?)
+            })
+            .collect()
+    }
+}
+
+impl ParBatchDeserializer<u8> for [u8] {}
+
+impl BatchDeserializer for [u8] {
+    fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
+        let size = buffer_size::<G>(compression);
+        self.chunks(size)
+            .map(|buf| buf.read_element(compression))
+            .collect()
+    }
+
     fn read_batch_preallocated<G: AffineCurve>(
         &self,
         elements: &mut [G],
@@ -48,7 +92,7 @@ where
         let element_size = buffer_size::<G>(compression);
         let buf = self.as_parallel_slice();
         elements
-            .into_par_iter()
+            .iter_mut()
             .enumerate()
             .map(|(i, el)| {
                 Ok(buf[i * element_size..(i + 1) * element_size]
@@ -127,7 +171,7 @@ impl Serializer<u8> for [u8] {
     }
 }
 
-impl Deserializer<u8> for [u8] {
+impl Deserializer for [u8] {
     fn read_element<G: AffineCurve>(&self, compression: UseCompression) -> Result<G> {
         Ok(match compression {
             UseCompression::Yes => G::deserialize(self, &mut [])?,
@@ -227,8 +271,10 @@ mod tests {
         let len = buffer_size::<E>(compression) * num_els;
         let mut buf = vec![0; len];
         buf.write_batch(&elements, compression).unwrap();
-        let deserialized: Vec<E> = buf.read_batch(compression).unwrap();
-        assert_eq!(elements, deserialized);
+        let deserialized1: Vec<E> = buf.par_read_batch(compression).unwrap();
+        let deserialized2: Vec<E> = buf.read_batch(compression).unwrap();
+        assert_eq!(elements, deserialized1);
+        assert_eq!(elements, deserialized2);
     }
 
     fn read_write_batch_element_preallocated<E: AffineCurve>(compression: UseCompression) {
@@ -241,8 +287,12 @@ mod tests {
         let mut buf = vec![0; len];
         buf.write_batch(&elements, compression).unwrap();
         let mut prealloc: Vec<E> = random_point_vec(num_els, &mut rng);
-        buf.read_batch_preallocated(&mut prealloc, compression)
+        let mut prealloc2: Vec<E> = random_point_vec(num_els, &mut rng);
+        buf.par_read_batch_preallocated(&mut prealloc, compression)
+            .unwrap();
+        buf.read_batch_preallocated(&mut prealloc2, compression)
             .unwrap();
         assert_eq!(elements, prealloc);
+        assert_eq!(elements, prealloc2);
     }
 }

@@ -67,6 +67,13 @@ impl<E> CurveParams<E> {
             ElementType::BetaG2 | ElementType::TauG2 => self.g2_size(compression),
         }
     }
+
+    pub fn get_sizes(&self, compression: UseCompression) -> (usize, usize) {
+        (
+            self.get_size(ElementType::TauG1, compression),
+            self.get_size(ElementType::TauG2, compression),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,10 +161,18 @@ impl<E: PairingEngine> CeremonyParams<E> {
             powers_g1_length,
         }
     }
+
+    /// Returns the length of the serialized accumulator depending on if it's compressed or not
+    pub fn get_length(&self, compressed: UseCompression) -> usize {
+        match compressed {
+            UseCompression::Yes => self.contribution_size - self.public_key_size,
+            UseCompression::No => self.accumulator_size,
+        }
+    }
 }
 
 /// Determines if point compression should be used.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum UseCompression {
     Yes,
     No,

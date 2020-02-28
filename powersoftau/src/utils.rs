@@ -19,20 +19,20 @@ use zexe_algebra::{
     PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
 
+/// A convenience result type for returning errors
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Generate the powers by raising the key's `tau` to all powers
 /// belonging to this chunk
 pub fn generate_powers_of_tau<E: PairingEngine>(
     tau: &E::Fr,
     start: usize,
-    size: usize,
+    end: usize,
 ) -> Vec<E::Fr> {
     // Uh no better way to do this, this should never fail
     let start: u64 = start.try_into().expect("could not convert to u64");
-    let size: u64 = size.try_into().expect("could not convert to u64");
-    (start..start + size)
-        .into_par_iter()
-        .map(|i| tau.pow([i]))
-        .collect()
+    let end: u64 = end.try_into().expect("could not convert to u64");
+    (start..end).into_par_iter().map(|i| tau.pow([i])).collect()
 }
 
 pub fn print_hash(hash: &[u8]) {
@@ -54,7 +54,7 @@ pub(crate) fn batch_exp<C: AffineCurve>(
     bases: &mut [C],
     exps: &[C::ScalarField],
     coeff: Option<&C::ScalarField>,
-) -> Result<(), Error> {
+) -> Result<()> {
     if bases.len() != exps.len() {
         return Err(Error::InvalidLength {
             expected: bases.len(),
@@ -351,9 +351,9 @@ pub fn check_same_ratio<G: PairingCurve>(
     g1: &(G, G),
     g2: &(G::PairWith, G::PairWith),
     err: &'static str,
-) -> Result<(), VerificationError> {
+) -> Result<()> {
     if g1.0.pairing_with(&g2.1) != g1.1.pairing_with(&g2.0) {
-        return Err(VerificationError::InvalidRatio(err));
+        return Err(VerificationError::InvalidRatio(err).into());
     }
     Ok(())
 }
@@ -365,7 +365,7 @@ pub fn compute_g2_s<E: PairingEngine>(
     g1_s: &E::G1Affine,
     g1_s_x: &E::G1Affine,
     personalization: u8,
-) -> Result<E::G2Affine, Error> {
+) -> Result<E::G2Affine> {
     let mut h = Blake2b::default();
     h.input(&[personalization]);
     h.input(digest);

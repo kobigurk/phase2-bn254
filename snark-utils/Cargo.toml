@@ -1,0 +1,34 @@
+[package]
+name = "snark-utils"
+version = "0.1.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1.0.11"
+zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel"] }
+rayon = "1.3.0"
+
+# crypto lower-level crates
+rand = "0.7.3"
+rand_chacha = "0.2.1"
+typenum = "1.9.0"
+rust-crypto = "0.2"
+blake2 = "0.6.1"
+generic-array = "0.8.3"
+crossbeam = "0.7.3"
+num_cpus = "1.12.0"
+
+[dev-dependencies]
+criterion = "0.3.1"
+test-helpers = { path = "../test-helpers" }
+zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
+
+[[bench]]
+name = "math"
+harness = false
+[[bench]]
+name = "io"
+harness = false

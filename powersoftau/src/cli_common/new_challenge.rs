@@ -1,6 +1,6 @@
 use crate::batched_accumulator::BatchedAccumulator;
-use crate::parameters::{CeremonyParams, UseCompression};
-use crate::utils::{blank_hash, calculate_hash, print_hash};
+use crate::parameters::CeremonyParams;
+use snark_utils::{blank_hash, calculate_hash, print_hash, UseCompression};
 
 use memmap::*;
 use std::fs::OpenOptions;

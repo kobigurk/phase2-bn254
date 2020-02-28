@@ -1,14 +1,13 @@
 //! Accumulator which operates on batches of data
-use super::chunk::{buffer_size, Deserializer, ParBatchDeserializer, Serializer};
+
 use crate::{
     keypair::{PrivateKey, PublicKey},
-    parameters::{CeremonyParams, ElementType, Error, UseCompression, VerificationError},
-    utils::{
-        batch_exp, check_same_ratio, compute_g2_s, generate_powers_of_tau, power_pairs, Result,
-    },
+    parameters::CeremonyParams,
 };
 use itertools::{Itertools, MinMaxResult};
-use zexe_algebra::{AffineCurve, PairingCurve, PairingEngine, ProjectiveCurve, Zero};
+use snark_utils::*;
+use snark_utils::{Deserializer, Serializer};
+use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
 
 /// Mutable buffer, compression
 type Output<'a> = (&'a mut [u8], UseCompression);
@@ -119,19 +118,35 @@ fn compute_g2_s_key<E: PairingEngine>(
     ])
 }
 
-/// Reads a list of elements from the buffer to the provided `elements` slice
+/// Reads a list of G1 elements from the buffer to the provided `elements` slice
 /// and then checks that their powers pairs ratio matches the one from the
 /// provided `check` pair
-fn check_power_ratios<C: PairingCurve>(
+fn check_power_ratios<E: PairingEngine>(
     (buffer, compression): (&[u8], UseCompression),
     (start, end): (usize, usize),
-    elements: &mut [C],
-    check: &(C::PairWith, C::PairWith),
+    elements: &mut [E::G1Affine],
+    check: &(E::G2Affine, E::G2Affine),
 ) -> Result<()> {
-    let size = buffer_size::<C>(compression);
+    let size = buffer_size::<E::G1Affine>(compression);
     buffer[start * size..end * size]
         .par_read_batch_preallocated(&mut elements[0..end - start], compression)?;
-    check_same_ratio(&power_pairs(&elements[..end - start]), check, "Power pairs")?;
+    check_same_ratio::<E>(&power_pairs(&elements[..end - start]), check, "Power pairs")?;
+    Ok(())
+}
+
+/// Reads a list of G2 elements from the buffer to the provided `elements` slice
+/// and then checks that their powers pairs ratio matches the one from the
+/// provided `check` pair
+fn check_power_ratios_g2<E: PairingEngine>(
+    (buffer, compression): (&[u8], UseCompression),
+    (start, end): (usize, usize),
+    elements: &mut [E::G2Affine],
+    check: &(E::G1Affine, E::G1Affine),
+) -> Result<()> {
+    let size = buffer_size::<E::G2Affine>(compression);
+    buffer[start * size..end * size]
+        .par_read_batch_preallocated(&mut elements[0..end - start], compression)?;
+    check_same_ratio::<E>(check, &power_pairs(&elements[..end - start]), "Power pairs")?;
     Ok(())
 }
 
@@ -171,7 +186,7 @@ pub fn verify<E: PairingEngine>(
         (key.beta_g1, beta_g2_check, "Beta G1<>G2"),
     ];
     for (a, b, err) in check_ratios {
-        check_same_ratio(a, b, err)?;
+        check_same_ratio::<E>(a, b, err)?;
     }
 
     // Split the buffers
@@ -197,7 +212,7 @@ pub fn verify<E: PairingEngine>(
         let g2_check = (after_g2[0], after_g2[1]);
 
         // Check TauG1 -> TauG2
-        check_same_ratio(
+        check_same_ratio::<E>(
             &(before_g1[1], after_g1[1]),
             tau_g2_check,
             "Before-After: Tau [1] G1<>G2",
@@ -208,16 +223,16 @@ pub fn verify<E: PairingEngine>(
         ] {
             before.par_read_batch_preallocated(&mut before_g1, compressed_input)?;
             after.par_read_batch_preallocated(&mut after_g1, compressed_output)?;
-            check_same_ratio(
+            check_same_ratio::<E>(
                 &(before_g1[0], after_g1[0]),
                 check,
                 "Before-After: Alpha[0] G1<>G2",
             )?;
         }
 
-        let before_beta_g2 = in_beta_g2.read_element(compressed_input)?;
-        let after_beta_g2 = beta_g2.read_element(compressed_output)?;
-        check_same_ratio(
+        let before_beta_g2 = in_beta_g2.read_element::<E::G2Affine>(compressed_input)?;
+        let after_beta_g2 = beta_g2.read_element::<E::G2Affine>(compressed_output)?;
+        check_same_ratio::<E>(
             &(before_g1[0], after_g1[0]),
             &(before_beta_g2, after_beta_g2),
             "Before-After: Other[0] G1<>G2",
@@ -233,7 +248,7 @@ pub fn verify<E: PairingEngine>(
         rayon::scope(|t| {
             t.spawn(|_| {
                 let mut g1 = vec![E::G1Affine::zero(); parameters.batch_size];
-                check_power_ratios::<E::G1Affine>(
+                check_power_ratios::<E>(
                     (tau_g1, compressed_output),
                     (start, end),
                     &mut g1,
@@ -255,7 +270,7 @@ pub fn verify<E: PairingEngine>(
                 rayon::scope(|t| {
                     t.spawn(|_| {
                         let mut g2 = vec![E::G2Affine::zero(); parameters.batch_size];
-                        check_power_ratios::<E::G2Affine>(
+                        check_power_ratios_g2::<E>(
                             (tau_g2, compressed_output),
                             (start, end),
                             &mut g2,
@@ -266,7 +281,7 @@ pub fn verify<E: PairingEngine>(
 
                     t.spawn(|_| {
                         let mut g1 = vec![E::G1Affine::zero(); parameters.batch_size];
-                        check_power_ratios::<E::G1Affine>(
+                        check_power_ratios::<E>(
                             (alpha_g1, compressed_output),
                             (start, end),
                             &mut g1,
@@ -277,7 +292,7 @@ pub fn verify<E: PairingEngine>(
 
                     t.spawn(|_| {
                         let mut g1 = vec![E::G1Affine::zero(); parameters.batch_size];
-                        check_power_ratios::<E::G1Affine>(
+                        check_power_ratios::<E>(
                             (beta_g1, compressed_output),
                             (start, end),
                             &mut g1,
@@ -515,9 +530,9 @@ fn decompress_buffer<C: AffineCurve>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::test_helpers::random_point_vec;
     use rand::thread_rng;
-    use zexe_algebra::curves::bls12_377::Bls12_377;
+    use test_helpers::random_point_vec;
+    use zexe_algebra::bls12_377::Bls12_377;
 
     #[test]
     fn test_decompress_buffer() {

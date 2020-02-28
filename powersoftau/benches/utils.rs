@@ -3,15 +3,16 @@ use generic_array::GenericArray;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::*,
-    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
-    raw::chunk::{buffer_size, Serializer},
-    utils::*,
+    parameters::{CeremonyParams, CheckForCorrectness},
 };
 use rand::{thread_rng, Rng};
+use snark_utils::*;
 use typenum::U64;
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
 
 use powersoftau_v1::parameters::UseCompression as UseCompressionV1;
+use snark_utils::{buffer_size, Serializer, UseCompression};
+
 // Unfortunately we need to convert datatypes from the current version
 // to be compatible to the imported version
 pub fn compat(compression: UseCompression) -> UseCompressionV1 {
@@ -76,36 +77,4 @@ pub fn generate_output<E: PairingEngine>(
 ) -> Vec<u8> {
     let expected_response_length = parameters.get_length(compressed);
     vec![0; expected_response_length]
-}
-
-pub fn random_point<C: AffineCurve>(rng: &mut impl Rng) -> C {
-    C::Projective::rand(rng).into_affine()
-}
-
-pub fn random_point_vec<C: AffineCurve>(size: usize, rng: &mut impl Rng) -> Vec<C> {
-    (0..size).map(|_| random_point(rng)).collect()
-}
-
-pub fn random_vec_buf<C: AffineCurve>(
-    size: usize,
-    compression: UseCompression,
-) -> (Vec<C>, Vec<u8>) {
-    let mut rng = thread_rng();
-    let elements: Vec<C> = random_point_vec(size, &mut rng);
-    let len = buffer_size::<C>(compression) * size;
-    let mut buf = vec![0; len];
-    buf.write_batch(&elements, compression).unwrap();
-    (elements, buf)
-}
-
-// same as above but does not write
-pub fn random_vec_empty_buf<C: AffineCurve>(
-    size: usize,
-    compression: UseCompression,
-) -> (Vec<C>, Vec<u8>) {
-    let mut rng = thread_rng();
-    let elements: Vec<C> = random_point_vec(size, &mut rng);
-    let len = buffer_size::<C>(compression) * size;
-    let buf = vec![0; len];
-    (elements, buf)
 }

@@ -1,16 +1,15 @@
 use generic_array::GenericArray;
 /// Memory constrained accumulator that checks parts of the initial information in parts that fit to memory
 /// and then contributes to entropy in parts as well
-use log::info;
 use typenum::consts::U64;
 use zexe_algebra::PairingEngine as Engine;
 
 use super::{
     keypair::{PrivateKey, PublicKey},
-    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
+    parameters::{CeremonyParams, CheckForCorrectness},
     raw::raw_accumulator,
-    utils::{blank_hash, Result},
 };
+use snark_utils::{blank_hash, Result, UseCompression};
 /// The `BatchedAccumulator` is an object that participants of the ceremony contribute
 /// randomness to. This object contains powers of trapdoor `tau` in G1 and in G2 over
 /// fixed generators, and additionally in G1 over two other generators of exponents
@@ -73,7 +72,6 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
             key,
             parameters,
         )?;
-        info!("Contributed to the accumulator!");
         Ok(())
     }
 
@@ -152,14 +150,10 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{
-        batch_exp, calculate_hash, generate_powers_of_tau,
-        test_helpers::{random_point, random_point_vec},
-    };
     use rand::thread_rng;
-    use zexe_algebra::curves::{
-        bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6, AffineCurve, ProjectiveCurve,
-    };
+    use snark_utils::{batch_exp, calculate_hash, generate_powers_of_tau};
+    use test_helpers::{random_point, random_point_vec};
+    use zexe_algebra::{AffineCurve, Bls12_377, Bls12_381, ProjectiveCurve, SW6};
 
     #[test]
     fn serialize_multiple_batches() {

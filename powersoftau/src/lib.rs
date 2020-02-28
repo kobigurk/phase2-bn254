@@ -3,4 +3,3 @@ pub mod cli_common;
 pub mod keypair;
 pub mod parameters;
 pub mod raw;
-pub mod utils;

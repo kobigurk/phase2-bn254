@@ -3,13 +3,10 @@ use powersoftau::cli_common::{
     contribute, new_challenge, transform, Command, CurveKind, PowersOfTauOpts,
 };
 use powersoftau::parameters::CeremonyParams;
-use powersoftau::utils::{beacon_randomness, get_rng, user_system_randomness};
+use snark_utils::{beacon_randomness, get_rng, user_system_randomness};
 
 use std::process;
-use zexe_algebra::{
-    curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6},
-    PairingEngine as Engine,
-};
+use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine as Engine, SW6};
 
 #[macro_use]
 extern crate hex_literal;

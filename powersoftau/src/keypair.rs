@@ -1,8 +1,8 @@
 use rand::Rng;
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
 
-use super::parameters::{CeremonyParams, Error, UseCompression};
-use super::utils::compute_g2_s;
+use super::parameters::CeremonyParams;
+use snark_utils::{compute_g2_s, Error, UseCompression};
 
 /// Contains terms of the form (s<sub>1</sub>, s<sub>1</sub><sup>x</sup>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub><sup>x</sup>)
 /// for all x in τ, α and β, and some s chosen randomly by its creator. The function H "hashes into" the group G2. No points in the public key may be the identity.
@@ -239,12 +239,11 @@ fn read_elements<G: AffineCurve>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        parameters::{CurveParams, ElementType},
-        utils::test_helpers::random_point_vec,
-    };
+    use crate::parameters::CurveParams;
     use rand::{thread_rng, Rng};
-    use zexe_algebra::curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
+    use snark_utils::ElementType;
+    use test_helpers::random_point_vec;
+    use zexe_algebra::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
 
     #[test]
     fn test_pubkey_serialization_bls12_381() {

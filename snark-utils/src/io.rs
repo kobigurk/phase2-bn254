@@ -1,5 +1,5 @@
 //! Utilities for writing and reading group elements to buffers in parallel
-use crate::{parameters::UseCompression, utils::Result};
+use crate::{Result, UseCompression};
 use rayon::prelude::*;
 use zexe_algebra::AffineCurve;
 
@@ -195,9 +195,9 @@ impl Deserializer for [u8] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::test_helpers::random_point_vec;
+    use crate::helpers::test_helpers::random_point_vec;
     use rand::thread_rng;
-    use zexe_algebra::curves::bls12_377::{G1Affine, G2Affine};
+    use zexe_algebra::bls12_377::{G1Affine, G2Affine};
 
     #[test]
     fn read_write_single() {

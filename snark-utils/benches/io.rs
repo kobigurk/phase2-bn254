@@ -1,10 +1,12 @@
 #![allow(clippy::unit_arg)]
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use powersoftau::{parameters::*, raw::chunk::*, utils::*};
-use zexe_algebra::{curves::bls12_377::Bls12_377, AffineCurve, PairingEngine};
+use zexe_algebra::{AffineCurve, Bls12_377, PairingEngine};
 
-mod utils;
-use utils::*;
+use snark_utils::{
+    buffer_size, BatchDeserializer, ParBatchDeserializer, Result, Serializer, UseCompression,
+};
+
+use test_helpers::*;
 
 /// Benchmark comparing reading compressed/uncompressed points in parallel & serial
 /// with preallocated vectors and allocating new vectors each time.

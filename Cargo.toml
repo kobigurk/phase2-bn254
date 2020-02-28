@@ -1,8 +1,11 @@
 [workspace]
 members = [
     "./powersoftau",
-    "./phase2"
+    "./phase2",
+    "./snark-utils",
+    "./test-helpers",
 ]
 
 [patch.crates-io]
 bellman_ce = { git = "https://github.com/matter-labs/bellman", branch = "master"  }
+algebra = { package = "algebra", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }

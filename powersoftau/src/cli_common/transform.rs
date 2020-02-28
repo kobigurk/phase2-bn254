@@ -1,10 +1,10 @@
 use crate::{
     batched_accumulator::BatchedAccumulator,
     keypair::PublicKey,
-    parameters::{CeremonyParams, CheckForCorrectness, UseCompression},
-    utils::{calculate_hash, print_hash},
+    parameters::{CeremonyParams, CheckForCorrectness},
 };
 use memmap::*;
+use snark_utils::{calculate_hash, print_hash, UseCompression};
 use std::fs::OpenOptions;
 use zexe_algebra::PairingEngine as Engine;
 

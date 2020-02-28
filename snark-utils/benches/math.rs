@@ -1,14 +1,13 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-
-use powersoftau::utils::{batch_exp, dense_multiexp, generate_powers_of_tau};
 use rand::Rng;
+use snark_utils::{batch_exp, dense_multiexp, generate_powers_of_tau};
 use std::ops::MulAssign;
 use zexe_algebra::{
-    curves::bls12_377::{Bls12_377, G1Affine},
+    bls12_377::{Bls12_377, G1Affine},
     AffineCurve, Field, PairingEngine, PrimeField, UniformRand, Zero,
 };
-mod utils;
-use utils::random_point_vec;
+
+use test_helpers::random_point_vec;
 
 // This was the previous implementation using chunks, we keep it here to compare performance
 // against the Rayon implementation
@@ -24,7 +23,7 @@ pub fn generate_powers_of_tau_crossbeam<E: PairingEngine>(
     // Construct exponents in parallel chunks
     crossbeam::scope(|scope| {
         for (i, taupowers) in taupowers.chunks_mut(chunk_size).enumerate() {
-            scope.spawn(move || {
+            scope.spawn(move |_| {
                 let mut acc = tau.pow(&[(start + i * chunk_size) as u64]);
 
                 for t in taupowers {
@@ -33,7 +32,8 @@ pub fn generate_powers_of_tau_crossbeam<E: PairingEngine>(
                 }
             });
         }
-    });
+    })
+    .unwrap();
     taupowers
 }
 

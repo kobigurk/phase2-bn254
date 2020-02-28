@@ -3,8 +3,7 @@ use generic_array::GenericArray;
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 
-use super::parameters::Error;
-use super::parameters::VerificationError;
+use crate::errors::{Error, VerificationError};
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
 use rayon::prelude::*;
@@ -15,8 +14,8 @@ use std::ops::Mul;
 use std::sync::Arc;
 use typenum::consts::U64;
 use zexe_algebra::{
-    AffineCurve, BigInteger, CanonicalSerialize, Field, One, PairingCurve, PairingEngine,
-    PrimeField, ProjectiveCurve, UniformRand, Zero,
+    AffineCurve, BigInteger, CanonicalSerialize, Field, One, PairingEngine, PrimeField,
+    ProjectiveCurve, UniformRand, Zero,
 };
 
 /// A convenience result type for returning errors
@@ -153,6 +152,7 @@ pub fn get_rng(digest: &[u8]) -> impl Rng {
     ChaChaRng::from_seed(seed)
 }
 
+/// Gets the number of bits of the provided type
 pub const fn num_bits<T>() -> usize {
     std::mem::size_of::<T>() * 8
 }
@@ -231,11 +231,8 @@ fn from_slice(bytes: &[u8]) -> [u8; 32] {
 mod tests {
     use super::*;
     use zexe_algebra::{
-        curves::{
-            bls12_377::Bls12_377,
-            bls12_381::{Bls12_381, G1Affine, G2Affine},
-        },
-        fields::bls12_381::Fr,
+        bls12_377::Bls12_377,
+        bls12_381::{Bls12_381, Fr, G1Affine, G2Affine},
     };
 
     #[test]
@@ -276,8 +273,8 @@ mod tests {
         let g1_s = g1.mul(s).into_affine();
         let g2_s = g2.mul(s).into_affine();
 
-        assert!(same_ratio(&(g1, g1_s), &(g2, g2_s)));
-        assert!(!same_ratio(&(g1_s, g1), &(g2, g2_s)));
+        assert!(same_ratio::<Bls12_381>(&(g1, g1_s), &(g2, g2_s)));
+        assert!(!same_ratio::<Bls12_381>(&(g1_s, g1), &(g2, g2_s)));
     }
 
     #[test]
@@ -295,14 +292,14 @@ mod tests {
 
         let gx = G2Affine::prime_subgroup_generator().mul(x).into_affine();
 
-        assert!(same_ratio(
+        assert!(same_ratio::<Bls12_381>(
             &power_pairs(&v),
             &(G2Affine::prime_subgroup_generator(), gx)
         ));
 
         v[1] = v[1].mul(Fr::rand(rng)).into_affine();
 
-        assert!(!same_ratio(
+        assert!(!same_ratio::<Bls12_381>(
             &power_pairs(&v),
             &(G2Affine::prime_subgroup_generator(), gx)
         ));
@@ -343,16 +340,19 @@ pub fn reduced_hash(old_power: u8, new_power: u8) -> GenericArray<u8, U64> {
 /// Checks if pairs have the same ratio.
 /// Under the hood uses pairing to check
 /// x1/x2 = y1/y2 => x1*y2 = x2*y1
-pub fn same_ratio<G: PairingCurve>(g1: &(G, G), g2: &(G::PairWith, G::PairWith)) -> bool {
-    g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
+pub fn same_ratio<E: PairingEngine>(
+    g1: &(E::G1Affine, E::G1Affine),
+    g2: &(E::G2Affine, E::G2Affine),
+) -> bool {
+    E::pairing(g1.0, g2.1) == E::pairing(g1.1, g2.0)
 }
 
-pub fn check_same_ratio<G: PairingCurve>(
-    g1: &(G, G),
-    g2: &(G::PairWith, G::PairWith),
+pub fn check_same_ratio<E: PairingEngine>(
+    g1: &(E::G1Affine, E::G1Affine),
+    g2: &(E::G2Affine, E::G2Affine),
     err: &'static str,
 ) -> Result<()> {
-    if g1.0.pairing_with(&g2.1) != g1.1.pairing_with(&g2.0) {
+    if E::pairing(g1.0, g2.1) != E::pairing(g1.1, g2.0) {
         return Err(VerificationError::InvalidRatio(err).into());
     }
     Ok(())
@@ -415,7 +415,7 @@ fn dense_multiexp_inner<G: AffineCurve>(
             for (base, exp) in bases.chunks(chunk).zip(exponents.chunks(chunk)) {
                 let this_region_rwlock = arc.clone();
                 // let handle =
-                scope.spawn(move || {
+                scope.spawn(move |_| {
                     let mut buckets = vec![<G as AffineCurve>::Projective::zero(); (1 << c) - 1];
                     // Accumulate the result
                     let mut acc = G::Projective::zero();
@@ -459,7 +459,8 @@ fn dense_multiexp_inner<G: AffineCurve>(
                     (*guard).add_assign(&acc);
                 });
             }
-        });
+        })
+        .expect("dense_multiexp failed");
 
         let this_region = Arc::try_unwrap(arc).unwrap();
 

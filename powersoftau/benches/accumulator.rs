@@ -1,9 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use powersoftau::{
-    batched_accumulator::BatchedAccumulator as RawAccumulator, keypair::*, parameters::*, utils::*,
+    batched_accumulator::BatchedAccumulator as RawAccumulator, keypair::*, parameters::*,
 };
 use rand::thread_rng;
-use zexe_algebra::curves::bls12_377::Bls12_377;
+use snark_utils::*;
+use zexe_algebra::Bls12_377;
 
 use powersoftau_v1::{
     batched_accumulator::BatchedAccumulator,
@@ -77,11 +78,6 @@ fn contribute_benchmark(c: &mut Criterion) {
             &size,
             |b, size| {
                 let batch = if (batch as u32) >= 2 * 2u32.pow(*size as u32) {
-                    log::error!(
-                        "Batch {} too large for buggy `contribute`, using {} instead",
-                        batch,
-                        batch / 2
-                    );
                     2u32.pow(*size as u32) as usize
                 } else {
                     batch
@@ -157,10 +153,7 @@ fn verify_benchmark(c: &mut Criterion) {
                 setup_verify(*compressed_input, *compressed_output, &parameters);
 
             group.bench_with_input(
-                format!(
-                    "serial_{}_{}_{}",
-                    power, compressed_input, compressed_output
-                ),
+                format!("serial_{}_{}", compressed_input, compressed_output),
                 &power,
                 |b, power| {
                     let parameters_v1 = CeremonyParamsV1::<Bls12_377>::new(*power, batch);
@@ -190,10 +183,7 @@ fn verify_benchmark(c: &mut Criterion) {
             );
 
             group.bench_with_input(
-                format!(
-                    "parallel_{}_{}_{}",
-                    power, compressed_input, compressed_output
-                ),
+                format!("parallel_{}_{}", compressed_input, compressed_output),
                 &power,
                 |b, _power| {
                     b.iter(|| {

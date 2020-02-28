@@ -1,8 +1,6 @@
-use std::fmt;
-use std::io;
+use snark_utils::{ElementType, UseCompression};
 use std::marker::PhantomData;
-use thiserror::Error;
-use zexe_algebra::{CanonicalSerialize, PairingEngine, SerializationError, Zero};
+use zexe_algebra::{CanonicalSerialize, PairingEngine, Zero};
 
 /// The sizes of the group elements of a curve
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
@@ -164,13 +162,6 @@ impl<E: PairingEngine> CeremonyParams<E> {
     }
 }
 
-/// Determines if point compression should be used.
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum UseCompression {
-    Yes,
-    No,
-}
-
 /// Determines if points should be checked for correctness during deserialization.
 /// This is not necessary for participants, because a transcript verifier can
 /// check this theirself.
@@ -180,69 +171,10 @@ pub enum CheckForCorrectness {
     No,
 }
 
-/// Errors that might occur during deserialization.
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Disk IO error: {0}")]
-    IoError(#[from] io::Error),
-    #[error("Serialization error in Zexe: {0}")]
-    ZexeSerializationError(#[from] SerializationError),
-    #[error("Got point at infinity")]
-    PointAtInfinity,
-    #[error("Index of {0} must not exceed {1} (got {2}.")]
-    PositionError(ElementType, usize, usize),
-    #[error("Error during verification: {0}")]
-    VerificationError(#[from] VerificationError),
-    #[error("Invalid variable length: expected {expected}, got {got}")]
-    InvalidLength { expected: usize, got: usize },
-    #[error("Chunk does not have a min and max")]
-    InvalidChunk,
-}
-
-#[derive(Debug, Error)]
-pub enum VerificationError {
-    #[error("Invalid ratio! Context: {0}")]
-    /// The ratio check via the pairing of the provided elements failed
-    InvalidRatio(&'static str),
-    #[error("Invalid generator for {0} powers")]
-    /// The first power of Tau was not the generator of that group
-    InvalidGenerator(ElementType),
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ElementType {
-    TauG1,
-    TauG2,
-    AlphaG1,
-    BetaG1,
-    BetaG2,
-}
-
-impl fmt::Display for UseCompression {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            UseCompression::Yes => write!(f, "Yes"),
-            UseCompression::No => write!(f, "No"),
-        }
-    }
-}
-
-impl fmt::Display for ElementType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ElementType::TauG1 => write!(f, "TauG1"),
-            ElementType::TauG2 => write!(f, "TauG2"),
-            ElementType::AlphaG1 => write!(f, "AlphaG1"),
-            ElementType::BetaG1 => write!(f, "BetaG1"),
-            ElementType::BetaG2 => write!(f, "BetaG2"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zexe_algebra::curves::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
+    use zexe_algebra::{Bls12_377, Bls12_381, SW6};
 
     #[test]
     fn params_sizes() {

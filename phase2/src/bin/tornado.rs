@@ -19,8 +19,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 fn main() {
-    //let url = "https://ceremony.tornado.cash";
-    let url = "http://localhost:3000/api";
+    let url = "https://ceremony.tornado.cash";
     println!("Welcome to Tornado Cash Trusted Setup ceremony");
 
     // Ask the user to provide some information for additional entropy

@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/rust
+    environment:
+      CARGO_HOME: /home/circleci/.cargo
+    steps:
+      - checkout
+      - run:
+          name: Install Dependencies
+          command: |
+            cargo install cargo-audit
+            rustup component add clippy
+      - run:
+          name: Build
+          command: cargo build --all-features --all-targets
+      - run:
+          name: Test
+          command: cargo test --all --all-features
+      - run:
+          name: Check Style
+          command: |
+            cargo fmt --all -- --check
+            cargo clippy --all-targets --all-features -- -D warnings
+      - run:
+          name: Audit Dependencies
+          command: cargo audit

@@ -1,11 +1,10 @@
-use blake2::{Blake2b, Digest};
-use generic_array::GenericArray;
+use crate::errors::{Error, VerificationError};
+use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
+use crypto::digest::Digest as CryptoDigest;
+use crypto::sha2::Sha256;
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 
-use crate::errors::{Error, VerificationError};
-use crypto::digest::Digest as CryptoDigest;
-use crypto::sha2::Sha256;
 use rayon::prelude::*;
 use std::convert::TryInto;
 use std::io::{self, Write};

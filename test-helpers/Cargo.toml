@@ -11,6 +11,5 @@ snark-utils = { path = "../snark-utils" }
 zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel"] }
 
 rand = "0.7.3"
-typenum = "1.9.0"
+typenum = "1.11.2"
 rust-crypto = "0.2"
-generic-array = "0.8.3"

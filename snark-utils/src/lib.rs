@@ -14,3 +14,7 @@ pub use helpers::*;
 
 mod io;
 pub use io::{buffer_size, BatchDeserializer, Deserializer, ParBatchDeserializer, Serializer};
+
+// Re-exports for handling hashes
+pub use blake2::digest::generic_array::GenericArray;
+pub use typenum::U64;

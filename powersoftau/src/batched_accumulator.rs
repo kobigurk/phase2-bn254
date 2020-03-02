@@ -1,7 +1,5 @@
-use generic_array::GenericArray;
 /// Memory constrained accumulator that checks parts of the initial information in parts that fit to memory
 /// and then contributes to entropy in parts as well
-use typenum::consts::U64;
 use zexe_algebra::PairingEngine as Engine;
 
 use super::{
@@ -9,7 +7,7 @@ use super::{
     parameters::{CeremonyParams, CheckForCorrectness},
     raw::raw_accumulator,
 };
-use snark_utils::{blank_hash, Result, UseCompression};
+use snark_utils::{blank_hash, GenericArray, Result, UseCompression, U64};
 /// The `BatchedAccumulator` is an object that participants of the ceremony contribute
 /// randomness to. This object contains powers of trapdoor `tau` in G1 and in G2 over
 /// fixed generators, and additionally in G1 over two other generators of exponents

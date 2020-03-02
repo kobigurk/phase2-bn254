@@ -23,7 +23,7 @@ pub enum Error {
     InvalidChunk,
 }
 
-// todo: make this more detailed so that we can know which 
+// todo: make this more detailed so that we can know which
 // exact pairing ratio check failed
 #[derive(Debug, Error)]
 pub enum VerificationError {

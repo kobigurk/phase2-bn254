@@ -1,17 +1,14 @@
-#![allow(unused)]
-use generic_array::GenericArray;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::*,
     parameters::{CeremonyParams, CheckForCorrectness},
 };
-use rand::{thread_rng, Rng};
+use rand::thread_rng;
 use snark_utils::*;
-use typenum::U64;
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
+use zexe_algebra::PairingEngine;
 
 use powersoftau_v1::parameters::UseCompression as UseCompressionV1;
-use snark_utils::{buffer_size, Serializer, UseCompression};
+use snark_utils::UseCompression;
 
 // Unfortunately we need to convert datatypes from the current version
 // to be compatible to the imported version

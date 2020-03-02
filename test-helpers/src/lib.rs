@@ -1,9 +1,6 @@
 //! Helpers crate to be consumed in tests and benchmarks
-#![allow(unused)]
-use generic_array::GenericArray;
 use rand::{thread_rng, Rng};
-use typenum::U64;
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
+use zexe_algebra::{AffineCurve, ProjectiveCurve, UniformRand};
 
 use snark_utils::{buffer_size, Serializer, UseCompression};
 

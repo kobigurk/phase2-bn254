@@ -3,7 +3,7 @@
 [[package]]
 name = "algebra"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#71ce227d778ccbfdda05a24a43d35ec9a8b36a61"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
 dependencies = [
  "algebra-core",
 ]
@@ -11,7 +11,7 @@ dependencies = [
 [[package]]
 name = "algebra-core"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#71ce227d778ccbfdda05a24a43d35ec9a8b36a61"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
 dependencies = [
  "derivative",
  "num-traits",

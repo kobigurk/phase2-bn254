@@ -30,7 +30,7 @@ fn main() {
         .expect("expected to read some random text from the user");
 
     println!("Downloading challenge...");
-    let mut resp = reqwest::blocking::get(&*format!("{}/challenge", url)).unwrap();
+    let mut resp = reqwest::blocking::get(&*format!("{}/api/challenge", url)).unwrap();
     if !resp.status().is_success() {
         println!("Cannot download challenge");
         std::process::exit(1);
@@ -84,7 +84,7 @@ fn main() {
 
     let part = multipart::Part::bytes(response).file_name("response").mime_str("application/octet-stream").unwrap();
     let client = reqwest::blocking::Client::new();
-    let resp = client.post(&*format!("{}/response", url))
+    let resp = client.post(&*format!("{}/api/response", url))
         .multipart(multipart::Form::new().part("response", part))
         .timeout(Duration::from_secs(300))
         .send()

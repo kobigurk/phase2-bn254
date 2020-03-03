@@ -1,10 +1,9 @@
 use cfg_if::cfg_if;
 
-pub mod hash_writer;
-pub mod keypair;
-pub mod keypair_assembly;
+mod keypair;
+
 pub mod parameters;
-pub mod utils;
+mod polynomial;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {

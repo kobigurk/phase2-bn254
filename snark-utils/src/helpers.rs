@@ -1,5 +1,5 @@
 use crate::errors::{Error, VerificationError};
-use crate::{buffer_size, Serializer, UseCompression};
+use crate::{buffer_size, Deserializer, Serializer, UseCompression};
 use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
@@ -7,9 +7,9 @@ use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use std::convert::TryInto;
-use std::io::{self, Write};
-use std::ops::AddAssign;
-use std::ops::Mul;
+use std::io::{self, Read, Write};
+use std::ops::{AddAssign, Mul};
+
 use std::sync::Arc;
 use typenum::consts::U64;
 use zexe_algebra::{
@@ -19,6 +19,23 @@ use zexe_algebra::{
 
 /// A convenience result type for returning errors
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Allocates a buffer to read the bytes from the provided reader
+/// and then reads the element from the buffer
+// TODO: Make this not do 2 allocations
+pub fn read_element<C: AffineCurve, R: Read>(
+    reader: &mut R,
+    compression: UseCompression,
+) -> Result<C> {
+    let mut buf = vec![0; buffer_size::<C>(compression)];
+    reader.read_exact(&mut buf)?;
+    let element = buf.read_element::<C>(compression)?;
+    // reject points at infinity
+    if element.is_zero() {
+        return Err(Error::PointAtInfinity);
+    }
+    Ok(element)
+}
 
 /// Allocates a buffer to serialize the provided element
 /// and then writes that buffer to the provided reader
@@ -202,6 +219,15 @@ pub fn log_2(x: usize) -> usize {
 pub struct HashWriter<W: Write> {
     writer: W,
     hasher: Blake2b,
+}
+
+impl Clone for HashWriter<io::Sink> {
+    fn clone(&self) -> HashWriter<io::Sink> {
+        HashWriter {
+            writer: io::sink(),
+            hasher: self.hasher.clone(),
+        }
+    }
 }
 
 impl<W: Write> HashWriter<W> {

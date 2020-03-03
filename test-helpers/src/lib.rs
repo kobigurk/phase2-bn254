@@ -2,6 +2,9 @@
 mod accumulator_helpers;
 pub use accumulator_helpers::{generate_input, generate_output, setup_verify};
 
+mod fixtures;
+pub use fixtures::TestCircuit;
+
 use rand::{thread_rng, Rng};
 use zexe_algebra::{AffineCurve, ProjectiveCurve, UniformRand};
 

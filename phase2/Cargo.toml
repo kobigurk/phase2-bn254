@@ -13,31 +13,19 @@ repository = "https://github.com/ebfull/phase2"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]
-rand = "0.4"
-byteorder = "1"
-exitcode = "1.1.2"
-blake2-rfc = "0.2"
-blake2 = "0.8.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-num-bigint = "0.2.3"
-num-traits = "0.2.8"
-itertools = "0.8.1"
-hex = "0.4.0"
-cfg-if = "0.1.10"
-bellman_ce = { version = "0.3.2", default-features = false } # active features depend on build type
+snark-utils = { path = "../snark-utils" }
+zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
+zexe_groth16 = { package = "groth16", version = "0.1.0", features = ["parallel"] }
+zexe_r1cs_core = { package = "r1cs-core", version = "0.1.0" }
 
-# needed for native only but don't break wasm if present
+
+rand = "0.7.3"
+cfg-if = "0.1.10"
 num_cpus = "1"
 crossbeam = "0.3"
-rust-crypto = { version = "0.2", optional = true }
+byteorder = "1.3.4"
+rayon = "1.3.0"
 
-# needed for wasm only
-wasm-bindgen = { version = "0.2.58", optional = true }
-js-sys = { version = "0.3.35", optional = true }
-web-sys = { version = "0.3.35", features = ["console"], optional = true }
-console_error_panic_hook = { version = "0.1.6", optional = true }
-
-[features]
-default = ["bellman_ce/multicore", "rust-crypto"]
-wasm = ["wasm-bindgen", "js-sys", "web-sys", "console_error_panic_hook", "bellman_ce/wasm"]
+[dev-dependencies]
+powersoftau = { path = "../powersoftau" }
+test-helpers = { path = "../test-helpers" }

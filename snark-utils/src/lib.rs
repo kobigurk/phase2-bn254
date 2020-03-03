@@ -4,7 +4,7 @@
 //! Provides traits for batched writing and reading Group Elements
 //! to buffers.
 pub mod errors;
-pub use errors::{Error, VerificationError};
+pub use errors::{Error, InvariantKind, Phase2Error, VerificationError};
 
 mod groth16_utils;
 pub use groth16_utils::Groth16Params;

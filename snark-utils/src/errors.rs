@@ -24,6 +24,50 @@ pub enum Error {
     InvalidChunk,
     #[error("R1CS Error: {0}")]
     SynthesisError(#[from] SynthesisError),
+    #[error("Phase 2 Error: {0}")]
+    Phase2Error(#[from] Phase2Error),
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum Phase2Error {
+    #[error("Parameter should not change: {0}")]
+    BrokenInvariant(InvariantKind),
+    #[error("Length should not change")]
+    InvalidLength,
+    #[error("There were no contributions found")]
+    NoContributions,
+    #[error("The Transcript was not consistent")]
+    InvalidTranscript,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum InvariantKind {
+    Contributions,
+    CsHash,
+    AlphaG1,
+    BetaG1,
+    BetaG2,
+    GammaAbcG1,
+    GammaG2,
+    DeltaG1,
+    Transcript,
+}
+
+use std::fmt;
+impl fmt::Display for InvariantKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            InvariantKind::Contributions => write!(f, "Contributions"),
+            InvariantKind::CsHash => write!(f, "CsHash"),
+            InvariantKind::AlphaG1 => write!(f, "AlphaG1"),
+            InvariantKind::BetaG1 => write!(f, "BetaG1"),
+            InvariantKind::BetaG2 => write!(f, "BetaG2"),
+            InvariantKind::GammaAbcG1 => write!(f, "GammaAbcG1"),
+            InvariantKind::GammaG2 => write!(f, "GammaG2"),
+            InvariantKind::DeltaG1 => write!(f, "DeltaG1"),
+            InvariantKind::Transcript => write!(f, "Transcript"),
+        }
+    }
 }
 
 // todo: make this more detailed so that we can know which

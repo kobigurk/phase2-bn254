@@ -3,7 +3,7 @@
 [[package]]
 name = "algebra"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
 dependencies = [
  "algebra-core",
 ]
@@ -11,7 +11,7 @@ dependencies = [
 [[package]]
 name = "algebra-core"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
 dependencies = [
  "derivative",
  "num-traits",
@@ -41,6 +41,11 @@ name = "autocfg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
+
+[[package]]
+name = "bench-utils"
+version = "0.1.0"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
 
 [[package]]
 name = "bitflags"
@@ -350,7 +355,7 @@ checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 [[package]]
 name = "ff-fft"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
 dependencies = [
  "algebra-core",
  "rand 0.7.3",
@@ -397,6 +402,20 @@ dependencies = [
  "cfg-if",
  "libc",
  "wasi",
+]
+
+[[package]]
+name = "groth16"
+version = "0.1.0"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
+dependencies = [
+ "algebra-core",
+ "bench-utils",
+ "ff-fft",
+ "r1cs-core",
+ "rand 0.7.3",
+ "rayon",
+ "smallvec",
 ]
 
 [[package]]
@@ -613,6 +632,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "phase2"
+version = "0.2.2"
+dependencies = [
+ "algebra",
+ "byteorder",
+ "cfg-if",
+ "crossbeam 0.3.2",
+ "groth16",
+ "num_cpus",
+ "powersoftau 0.2.0",
+ "r1cs-core",
+ "rand 0.7.3",
+ "rayon",
+ "snark-utils",
+ "test-helpers",
+]
+
+[[package]]
 name = "plotters"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -726,7 +763,7 @@ dependencies = [
 [[package]]
 name = "r1cs-core"
 version = "0.1.0"
-source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#7bf39f97cbff7ea3f3390f0cfeedc958d0308138"
 dependencies = [
  "algebra-core",
  "smallvec",
@@ -1032,7 +1069,9 @@ name = "test-helpers"
 version = "0.1.0"
 dependencies = [
  "algebra",
+ "groth16",
  "powersoftau 0.2.0",
+ "r1cs-core",
  "rand 0.7.3",
  "rust-crypto",
  "snark-utils",

@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "./powersoftau",
-    # "./phase2", # temporarily disabled
+    "./phase2",
     "./snark-utils",
     "./test-helpers",
 ]
@@ -9,3 +9,5 @@ members = [
 [patch.crates-io]
 algebra = { package = "algebra", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }
 ff-fft = { package = "ff-fft", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }
+groth16 = { package = "groth16", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }
+r1cs-core = { package = "r1cs-core", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }

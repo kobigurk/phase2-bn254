@@ -8,3 +8,4 @@ members = [
 
 [patch.crates-io]
 algebra = { package = "algebra", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }
+ff-fft = { package = "ff-fft", git = "https://github.com/gakonst/zexe", branch = "serde-uncompressed" }

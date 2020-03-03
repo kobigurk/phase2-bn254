@@ -1,4 +1,3 @@
-#![allow(clippy::unit_arg)]
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use zexe_algebra::{AffineCurve, Bls12_377, PairingEngine};
 

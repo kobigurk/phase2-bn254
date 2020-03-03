@@ -1,23 +1,12 @@
 use powersoftau::{
-    batched_accumulator::BatchedAccumulator,
     keypair::*,
     parameters::{CeremonyParams, CheckForCorrectness},
+    BatchedAccumulator,
 };
 use rand::thread_rng;
+use snark_utils::UseCompression;
 use snark_utils::*;
 use zexe_algebra::PairingEngine;
-
-use powersoftau_v1::parameters::UseCompression as UseCompressionV1;
-use snark_utils::UseCompression;
-
-// Unfortunately we need to convert datatypes from the current version
-// to be compatible to the imported version
-pub fn compat(compression: UseCompression) -> UseCompressionV1 {
-    match compression {
-        UseCompression::Yes => UseCompressionV1::Yes,
-        UseCompression::No => UseCompressionV1::No,
-    }
-}
 
 // helper for testing verification of a transformation
 // it creates an initial accumulator and contributes to it
@@ -53,6 +42,7 @@ pub fn setup_verify<E: PairingEngine>(
     (input, output, pubkey, current_accumulator_hash)
 }
 
+/// helper to initialize an accumulator and return both the struct and its serialized form
 pub fn generate_input<E: PairingEngine>(
     parameters: &CeremonyParams<E>,
     compressed: UseCompression,
@@ -62,12 +52,11 @@ pub fn generate_input<E: PairingEngine>(
     BatchedAccumulator::generate_initial(&mut output, compressed, &parameters).unwrap();
     let mut input = vec![0; len];
     input.copy_from_slice(&output);
-    let before =
-        BatchedAccumulator::deserialize(&output, CheckForCorrectness::Yes, compressed, &parameters)
-            .unwrap();
+    let before = BatchedAccumulator::deserialize(&output, compressed, &parameters).unwrap();
     (input, before)
 }
 
+/// helper to initialize an empty output accumulator, to be used for contributions
 pub fn generate_output<E: PairingEngine>(
     parameters: &CeremonyParams<E>,
     compressed: UseCompression,

@@ -3,6 +3,7 @@ use thiserror::Error;
 use zexe_algebra::SerializationError;
 
 use crate::ElementType;
+use zexe_r1cs_core::SynthesisError;
 
 /// Errors that might occur during deserialization.
 #[derive(Debug, Error)]
@@ -21,6 +22,8 @@ pub enum Error {
     InvalidLength { expected: usize, got: usize },
     #[error("Chunk does not have a min and max")]
     InvalidChunk,
+    #[error("R1CS Error: {0}")]
+    SynthesisError(#[from] SynthesisError),
 }
 
 // todo: make this more detailed so that we can know which

@@ -6,6 +6,9 @@
 pub mod errors;
 pub use errors::{Error, VerificationError};
 
+mod groth16_utils;
+pub use groth16_utils::Groth16Params;
+
 mod elements;
 pub use elements::{ElementType, UseCompression};
 

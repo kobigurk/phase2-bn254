@@ -1,8 +1,12 @@
 //! Helpers crate to be consumed in tests and benchmarks
+mod accumulator_helpers;
+pub use accumulator_helpers::{generate_input, generate_output, setup_verify};
+
 use rand::{thread_rng, Rng};
 use zexe_algebra::{AffineCurve, ProjectiveCurve, UniformRand};
 
-use snark_utils::{buffer_size, Serializer, UseCompression};
+pub use snark_utils::UseCompression;
+use snark_utils::{buffer_size, Serializer}; // re-export for testing reasons
 
 /// returns a random affine curve point from the provided rng
 pub fn random_point<C: AffineCurve>(rng: &mut impl Rng) -> C {

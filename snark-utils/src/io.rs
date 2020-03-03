@@ -195,8 +195,8 @@ impl Deserializer for [u8] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::test_helpers::random_point_vec;
     use rand::thread_rng;
+    use test_helpers::random_point_vec;
     use zexe_algebra::bls12_377::{G1Affine, G2Affine};
 
     #[test]

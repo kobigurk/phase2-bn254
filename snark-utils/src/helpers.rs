@@ -1,10 +1,10 @@
 use crate::errors::{Error, VerificationError};
+use crate::{buffer_size, Serializer, UseCompression};
 use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-
 use rayon::prelude::*;
 use std::convert::TryInto;
 use std::io::{self, Write};
@@ -19,6 +19,30 @@ use zexe_algebra::{
 
 /// A convenience result type for returning errors
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Allocates a buffer to serialize the provided element
+/// and then writes that buffer to the provided reader
+pub fn write_element<C: AffineCurve, W: Write>(
+    writer: &mut W,
+    element: &C,
+    compression: UseCompression,
+) -> Result<()> {
+    let mut buf = vec![0; buffer_size::<C>(compression)];
+    buf.write_element(element, compression)?;
+    writer.write_all(&buf)?;
+    Ok(())
+}
+
+pub fn write_elements<C: AffineCurve, W: Write>(
+    writer: &mut W,
+    elements: &[C],
+    compression: UseCompression,
+) -> Result<()> {
+    let mut buf = vec![0; elements.len() * buffer_size::<C>(compression)];
+    buf.write_batch(&elements, compression)?;
+    writer.write_all(&buf)?;
+    Ok(())
+}
 
 /// Generate the powers by raising the key's `tau` to all powers
 /// belonging to this chunk
@@ -44,6 +68,19 @@ pub fn print_hash(hash: &[u8]) {
         }
         println!();
     }
+}
+
+/// Multiply a large number of points by a scalar
+pub fn batch_mul<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField) -> Result<()> {
+    let coeff = coeff.into_repr();
+    let mut points: Vec<_> = bases.par_iter().map(|base| base.mul(coeff)).collect();
+    C::Projective::batch_normalization(&mut points);
+    bases
+        .par_iter_mut()
+        .zip(points)
+        .for_each(|(base, proj)| *base = proj.into_affine());
+
+    Ok(())
 }
 
 /// Exponentiate a large number of points, with an optional coefficient to be applied to the
@@ -156,9 +193,9 @@ pub const fn num_bits<T>() -> usize {
     std::mem::size_of::<T>() * 8
 }
 
-pub fn log_2(x: u64) -> u32 {
+pub fn log_2(x: usize) -> usize {
     assert!(x > 0);
-    num_bits::<u64>() as u32 - x.leading_zeros() - 1
+    num_bits::<usize>() - (x.leading_zeros() as usize) - 1
 }
 
 /// Abstraction over a writer which hashes the data being written.
@@ -305,7 +342,7 @@ mod tests {
     }
 }
 
-fn merge_pairs<G: AffineCurve>(v1: &[G], v2: &[G]) -> (G, G) {
+pub fn merge_pairs<G: AffineCurve>(v1: &[G], v2: &[G]) -> (G, G) {
     assert_eq!(v1.len(), v2.len());
     let rng = &mut thread_rng();
 
@@ -481,35 +518,5 @@ fn dense_multiexp_inner<G: AffineCurve>(
         next_region.add_assign(&this);
 
         next_region
-    }
-}
-
-#[cfg(test)]
-pub mod test_helpers {
-    use super::*;
-    pub fn random_point<C: AffineCurve>(rng: &mut impl Rng) -> C {
-        C::Projective::rand(rng).into_affine()
-    }
-
-    pub fn random_point_vec<C: AffineCurve>(size: usize, rng: &mut impl Rng) -> Vec<C> {
-        (0..size).map(|_| random_point(rng)).collect()
-    }
-
-    pub fn random_point_vec_batched<C: AffineCurve>(
-        size: usize,
-        batch_size: usize,
-        rng: &mut impl Rng,
-    ) -> Vec<Vec<C>> {
-        let mut batches = Vec::new();
-        let div = size / batch_size;
-        for _ in 0..div {
-            batches.push(random_point_vec(batch_size, rng));
-        }
-        let remainder = size % batch_size;
-        if remainder > 0 {
-            batches.push(random_point_vec(remainder, rng));
-        }
-
-        batches
     }
 }

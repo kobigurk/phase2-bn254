@@ -348,6 +348,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 
 [[package]]
+name = "ff-fft"
+version = "0.1.0"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+dependencies = [
+ "algebra-core",
+ "rand 0.7.3",
+ "rayon",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -714,6 +724,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "r1cs-core"
+version = "0.1.0"
+source = "git+https://github.com/gakonst/zexe?branch=serde-uncompressed#b54ec63f921092f2482f32bed128b453995ab55b"
+dependencies = [
+ "algebra-core",
+ "smallvec",
+]
+
+[[package]]
 name = "rand"
 version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -961,7 +980,10 @@ dependencies = [
  "blake2 0.8.1",
  "criterion",
  "crossbeam 0.7.3",
+ "ff-fft",
  "num_cpus",
+ "powersoftau 0.2.0",
+ "r1cs-core",
  "rand 0.7.3",
  "rand_chacha",
  "rayon",
@@ -1010,6 +1032,7 @@ name = "test-helpers"
 version = "0.1.0"
 dependencies = [
  "algebra",
+ "powersoftau 0.2.0",
  "rand 0.7.3",
  "rust-crypto",
  "snark-utils",

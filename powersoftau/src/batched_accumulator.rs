@@ -117,7 +117,6 @@ impl<'a, E: Engine + Sync> BatchedAccumulator<'a, E> {
 
     pub fn deserialize(
         input: &[u8],
-        _check_input_for_correctness: CheckForCorrectness,
         compression: UseCompression,
         parameters: &'a CeremonyParams<E>,
     ) -> Result<BatchedAccumulator<'a, E>> {
@@ -230,13 +229,8 @@ mod tests {
         )
         .unwrap();
 
-        let deserialized = BatchedAccumulator::deserialize(
-            &output,
-            CheckForCorrectness::Yes,
-            compressed_output,
-            &parameters,
-        )
-        .unwrap();
+        let deserialized =
+            BatchedAccumulator::deserialize(&output, compressed_output, &parameters).unwrap();
 
         let taupowers = generate_powers_of_tau::<E>(&privkey.tau, 0, parameters.powers_g1_length);
         batch_exp(
@@ -420,23 +414,12 @@ mod tests {
             .unwrap();
 
         // deserializes the decompressed output
-        let deserialized = BatchedAccumulator::deserialize(
-            &output,
-            CheckForCorrectness::Yes,
-            UseCompression::No,
-            &parameters,
-        )
-        .unwrap();
+        let deserialized =
+            BatchedAccumulator::deserialize(&output, UseCompression::No, &parameters).unwrap();
         assert_eq!(deserialized, before);
 
         // trying to deserialize it as compressed should obviously fail
-        BatchedAccumulator::deserialize(
-            &output,
-            CheckForCorrectness::Yes,
-            UseCompression::Yes,
-            &parameters,
-        )
-        .unwrap_err();
+        BatchedAccumulator::deserialize(&output, UseCompression::Yes, &parameters).unwrap_err();
     }
 
     fn generate_initial_test_curve<E: Engine>(
@@ -453,13 +436,8 @@ mod tests {
         let mut output = vec![0; expected_challenge_length];
         BatchedAccumulator::generate_initial(&mut output, compression, &parameters).unwrap();
 
-        let deserialized = BatchedAccumulator::deserialize(
-            &output,
-            CheckForCorrectness::Yes,
-            compression,
-            &parameters,
-        )
-        .unwrap();
+        let deserialized =
+            BatchedAccumulator::deserialize(&output, compression, &parameters).unwrap();
 
         let g1_zero = E::G1Affine::prime_subgroup_generator();
         let g2_zero = E::G2Affine::prime_subgroup_generator();
@@ -491,13 +469,7 @@ mod tests {
         // create a small accumulator with some random state
         let parameters = CeremonyParams::<E>::new(size, batch);
         let (buffer, accumulator) = generate_random_accumulator(&parameters, compress);
-        let deserialized = BatchedAccumulator::deserialize(
-            &buffer,
-            CheckForCorrectness::Yes,
-            compress,
-            &parameters,
-        )
-        .unwrap();
+        let deserialized = BatchedAccumulator::deserialize(&buffer, compress, &parameters).unwrap();
         assert_eq!(deserialized, accumulator);
     }
 
@@ -533,13 +505,7 @@ mod tests {
         BatchedAccumulator::generate_initial(&mut output, compressed, &parameters).unwrap();
         let mut input = vec![0; len];
         input.copy_from_slice(&output);
-        let before = BatchedAccumulator::deserialize(
-            &output,
-            CheckForCorrectness::Yes,
-            compressed,
-            &parameters,
-        )
-        .unwrap();
+        let before = BatchedAccumulator::deserialize(&output, compressed, &parameters).unwrap();
         (input, before)
     }
 

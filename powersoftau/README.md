@@ -1,85 +1,76 @@
 # Powers of Tau
 
-## Original story
+Distributed generation of powers of tau for Phase 1 of [BGM17](https://eprint.iacr.org/2017/1050). 
 
-This is a [multi-party computation](https://en.wikipedia.org/wiki/Secure_multi-party_computation) (MPC) ceremony which constructs partial zk-SNARK parameters for _all_ circuits up to a depth of 2<sup>21</sup>. It works by taking a step that is performed by all zk-SNARK MPCs and performing it in just one single ceremony. This makes individual zk-SNARK MPCs much cheaper and allows them to scale to practically unbounded numbers of participants.
+Also contains a binary which converts the Powers of Tau to Lagrange Coefficients and produces the H query for the Groth16 SNARK.
 
-This protocol is described in a [forthcoming paper](https://eprint.iacr.org/2017/1050). It produces parameters for an adaptation of [Jens Groth's 2016 pairing-based proving system](https://eprint.iacr.org/2016/260) using the [BLS12-381](https://github.com/ebfull/pairing/tree/master/src/bls12_381) elliptic curve construction. The security proof relies on a randomness beacon being applied at the end of the ceremony.
+- Utilizes [Zexe's algebra crate](https://github.com/scipr-lab/zexe), meaning we support all available curves:
+    - SW6
+    - Bls 12-381
+    - Bls 12-377
+    - ...
+- Memory footprint can be configured by adjusting `batch-size` via CLI and via environment variable [`RAYON_NUM_THREADS`](https://github.com/rayon-rs/rayon/blob/master/FAQ.md#how-many-threads-will-rayon-spawn).
 
-## Contributions
+You can see an E2E demo with 3 participants and the beacon at the end by running `test.sh`.
 
-Extended to support Ethereum's BN256 curve and made it easier to change size of the ceremony. In addition proof generation process can be done in memory constrained environments now. Benchmark is around `1.3 Gb` of memory and `3 hours` for a `2^26` power of tau on BN256 curve on my personal laptop
+## CLI Guide
 
-## Instructions
+### Powers of Tau
 
-Instructions for a planned ceremony will be posted when everything is tested and finalized.
+Coordinators run:
+1. `new` to create a new accumulator
+1. `verify-and-transform` after receiving a contribution to the previous challenge, to produce a new challenge for the next contribution
+1. `beacon` at the end of the ceremony (optional, as the security proof [does not require it](https://electriccoin.co/blog/reinforcing-the-security-of-the-sapling-mpc/))
 
----
-## To run the ceremony on your laptop:
-
-1. Preparation:
-
-```
-rustup update # tested on rustup 1.17.0
-cargo build
-```
-
-2. Put `response` file from the previous ceremony to root directory.
-3. To generate `new_challenge` run:
+Users should only care about the `contribute` option.
 
 ```
-cargo run --release --bin verify_transform_constrained # this will generate new_challenge from response file
+$ ./powersoftau --help
+Usage: ./powersoftau [OPTIONS]
+
+Optional arguments:
+  -h, --help
+  -c, --curve-kind CURVE-KIND
+                     the elliptic curve to use (default: bls12_381)
+  -p, --proving-system PROVING-SYSTEM
+                     the proving system to use (default: groth16)
+  -b, --batch-size BATCH-SIZE
+                     the size of batches to process (default: 256)
+  -P, --power POWER  the circuit power (circuit size will be 2^{power}) (default: 21)
+
+Available commands:
+
+  new                   creates a new challenge for the ceremony
+  contribute            contribute to ceremony by producing a response to a challenge (or create a new challenge if this is the first contribution)
+  beacon                contribute randomness via a random beacon (e.g. a bitcoin block header hash)
+  verify-and-transform  verify the contributions so far and generate a new challenge
 ```
 
-4. Backup old files and replace `challenge` file:
+### Prepare Phase 2
+
+This binary will only be run by the coordinator after Phase 1 has been executed.
+Note that the parameters produced are **only for the Groth16 SNARK**.
 
 ```
-mv challenge challenge_old
-mv response response_old
-mv new_challenge challenge
+./prepare_phase2 --help
+Usage: ./prepare_phase2 [OPTIONS]
+
+Optional arguments:
+  -h, --help
+  -p, --phase2-fname PHASE2-FNAME
+                             the file which will contain the FFT coefficients processed for Phase 2 of the setup
+  -r, --response-fname RESPONSE-FNAME
+                             the response file which will be processed for the specialization (phase 2) of the setup
+  -c, --curve-kind CURVE-KIND
+                             the elliptic curve to use (default: bls12_377)
+  -P, --proving-system PROVING-SYSTEM
+                             the proving system to use (default: groth16)
+  -b, --batch-size BATCH-SIZE
+                             the size of batches to process (default: 256)
+  --power POWER              the number of powers used for phase 1 (circuit size will be 2^{power}) (default: 21)
+  --phase2-size PHASE2-SIZE  the size of the phase 2 circuit (default: 21
 ```
 
-5. Run ceremony:
+## Disclaimer
 
-```
-cargo run --release --bin compute_constrained # generate response file
-```
-
-Put your hash from output response to private gist (example: https://gist.github.com/skywinder/c35ab03c66c6b200b33ea2f388a6df89)
-
-6. Reboot laptop to clean up toxic waste.
-
-7. Save `response` file and give it to the next participant.
-
-## Recommendations from original ceremony
-
-Participants of the ceremony sample some randomness, perform a computation, and then destroy the randomness. **Only one participant needs to do this successfully to ensure the final parameters are secure.** In order to see that this randomness is truly destroyed, participants may take various kinds of precautions:
-
-* putting the machine in a Faraday cage
-* destroying the machine afterwards
-* running the software on secure hardware
-* not connecting the hardware to any networks
-* using multiple machines and randomly picking the result of one of them to use
-* using different code than what we have provided
-* using a secure operating system
-* using an operating system that nobody would expect you to use (Rust can compile to Mac OS X and Windows)
-* using an unusual Rust toolchain or [alternate rust compiler](https://github.com/thepowersgang/mrustc)
-* lots of other ideas we can't think of
-
-It is totally up to the participants. In general, participants should beware of side-channel attacks and assume that remnants of the randomness will be in RAM after the computation has finished.
-
-## License
-
-Licensed under either of
-
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
-conditions.
+This is a fork of a [fork](https://github.com/kobigurk/phase2-bn254/) of a [fork](https://github.com/matter-labs/powersoftau). Credits go to the corresponding authors for producing the original implementations.

@@ -3,7 +3,6 @@
 rm challenge*
 rm response*
 rm transcript
-rm phase1radix*
 rm tmp_*
 
 set -e

@@ -1,3 +1,5 @@
 # Test Helpers
 
-Various utility methods used in tests and benchmarks across the other crates
+## **Do not publish this crate**
+
+Various utility methods used in tests and benchmarks across the other crates.

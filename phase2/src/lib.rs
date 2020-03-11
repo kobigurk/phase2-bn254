@@ -12,6 +12,7 @@ extern crate num_bigint;
 extern crate num_traits;
 extern crate cfg_if;
 extern crate itertools;
+extern crate blake2;
 
 use cfg_if::cfg_if;
 
@@ -29,7 +30,6 @@ cfg_if! {
         extern crate web_sys;
         extern crate wasm_bindgen;
         extern crate console_error_panic_hook;
-        extern crate itertools;
 
         use wasm_bindgen::prelude::*;
         use itertools::Itertools;
@@ -44,12 +44,34 @@ cfg_if! {
         }
 
         #[wasm_bindgen]
-        pub fn contribute(params: Vec<u8>) -> Result<Vec<u8>, JsValue> {
+        pub fn contribute(params: Vec<u8>, entropy: Vec<u8>) -> Result<Vec<u8>, JsValue> {
             console_error_panic_hook::set_once();
             let disallow_points_at_infinity = false;
 
             log!("Initializing phase2");
-            let mut rng = &mut rand::XorShiftRng::new_unseeded(); // TODO: change this unsafe unseeded random (!)
+            // Create an RNG based on provided randomness
+            let mut rng = {
+                use byteorder::{BigEndian, ReadBytesExt};
+                use blake2::{Blake2b, Digest};
+                use rand::{SeedableRng};
+                use rand::chacha::ChaChaRng;
+                
+                let h = {
+                    let mut h = Blake2b::default();
+                    h.input(&*entropy);
+                    h.result()
+                };
+                let mut digest = &h[..];
+                
+                // Interpret the first 32 bytes of the digest as 8 32-bit words
+                let mut seed = [0u32; 8];
+                for i in 0..8 {
+                    seed[i] = digest.read_u32::<BigEndian>().expect("digest is large enough for this to work");
+                }
+                
+                ChaChaRng::from_seed(&seed)
+            };
+        
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
 
             log!("Contributing...");

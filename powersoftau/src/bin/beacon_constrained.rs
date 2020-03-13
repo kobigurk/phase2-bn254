@@ -40,8 +40,8 @@ fn main() {
         use crypto::sha2::Sha256;
         use crypto::digest::Digest;
 
-        // Place block hash here (block number #564321)
-        let mut cur_hash: [u8; 32] = hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
+        // Place the random beacon value (e.g. iterated SHA256 hashes of a VDF output on a block hash)
+        let mut cur_hash: [u8; 32] = hex!("6ea6c8a9ec47f7e4bfb60697fb411cc81188fe5794c07244cfe76f5a3c7a7a40");
 
         // Performs 2^n hash iterations over it
         const N: usize = 10;

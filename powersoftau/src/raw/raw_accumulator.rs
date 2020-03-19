@@ -4,10 +4,11 @@ use crate::{
     keypair::{PrivateKey, PublicKey},
     parameters::CeremonyParams,
 };
-use itertools::{Itertools, MinMaxResult};
 use snark_utils::*;
 use snark_utils::{Deserializer, Serializer};
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
+
+use itertools::{Itertools, MinMaxResult};
 
 /// Mutable buffer, compression
 type Output<'a> = (&'a mut [u8], UseCompression);
@@ -129,7 +130,7 @@ fn check_power_ratios<E: PairingEngine>(
 ) -> Result<()> {
     let size = buffer_size::<E::G1Affine>(compression);
     buffer[start * size..end * size]
-        .par_read_batch_preallocated(&mut elements[0..end - start], compression)?;
+        .read_batch_preallocated(&mut elements[0..end - start], compression)?;
     check_same_ratio::<E>(&power_pairs(&elements[..end - start]), check, "Power pairs")?;
     Ok(())
 }
@@ -145,7 +146,7 @@ fn check_power_ratios_g2<E: PairingEngine>(
 ) -> Result<()> {
     let size = buffer_size::<E::G2Affine>(compression);
     buffer[start * size..end * size]
-        .par_read_batch_preallocated(&mut elements[0..end - start], compression)?;
+        .read_batch_preallocated(&mut elements[0..end - start], compression)?;
     check_same_ratio::<E>(check, &power_pairs(&elements[..end - start]), "Power pairs")?;
     Ok(())
 }
@@ -154,7 +155,7 @@ fn check_power_ratios_g2<E: PairingEngine>(
 fn read_initial_elements<C: AffineCurve>(buf: &[u8], compressed: UseCompression) -> Result<Vec<C>> {
     let batch = 2;
     let size = buffer_size::<C>(compressed);
-    let ret = buf[0..batch * size].par_read_batch(compressed)?;
+    let ret = buf[0..batch * size].read_batch(compressed)?;
     if ret.len() != batch {
         return Err(Error::InvalidLength {
             expected: batch,
@@ -221,8 +222,8 @@ pub fn verify<E: PairingEngine>(
             (in_alpha_g1, alpha_g1, alpha_g2_check),
             (in_beta_g1, beta_g1, beta_g2_check),
         ] {
-            before.par_read_batch_preallocated(&mut before_g1, compressed_input)?;
-            after.par_read_batch_preallocated(&mut after_g1, compressed_output)?;
+            before.read_batch_preallocated(&mut before_g1, compressed_input)?;
+            after.read_batch_preallocated(&mut after_g1, compressed_output)?;
             check_same_ratio::<E>(
                 &(before_g1[0], after_g1[0]),
                 check,
@@ -340,10 +341,10 @@ pub fn deserialize<E: PairingEngine>(
         split(&input, parameters, compressed);
 
     // deserialize each part of the buffer separately
-    let tau_g1 = in_tau_g1.par_read_batch(compressed)?;
-    let tau_g2 = in_tau_g2.par_read_batch(compressed)?;
-    let alpha_g1 = in_alpha_g1.par_read_batch(compressed)?;
-    let beta_g1 = in_beta_g1.par_read_batch(compressed)?;
+    let tau_g1 = in_tau_g1.read_batch(compressed)?;
+    let tau_g2 = in_tau_g2.read_batch(compressed)?;
+    let alpha_g1 = in_alpha_g1.read_batch(compressed)?;
+    let beta_g1 = in_beta_g1.read_batch(compressed)?;
     let beta_g2 = in_beta_g2.read_element(compressed)?;
 
     Ok((tau_g1, tau_g2, alpha_g1, beta_g1, beta_g2))
@@ -444,66 +445,70 @@ pub fn contribute<E: PairingEngine>(
 
     // load `batch_size` chunks on each iteration and perform the transformation
     iter_chunk(&parameters, |start, end| {
-        // generate powers from `start` to `end` (e.g. [0,4) then [4, 8) etc.)
-        let powers = generate_powers_of_tau::<E>(&key.tau, start, end);
-
-        // raise each element from the input buffer to the powers of tau
-        // and write the updated value (without allocating) to the
-        // output buffer
         rayon::scope(|t| {
             t.spawn(|_| {
-                apply_powers::<E::G1Affine>(
-                    (tau_g1, compressed_output),
-                    (in_tau_g1, compressed_input),
-                    (start, end),
-                    &powers,
-                    None,
-                )
-                .expect("could not apply powers of tau to the TauG1 elements")
-            });
-            if start < parameters.powers_length {
-                // if the `end` would be out of bounds, then just process until
-                // the end (this is necessary in case the last batch would try to
-                // process more elements than available)
-                let end = if start + parameters.batch_size > parameters.powers_length {
-                    parameters.powers_length
-                } else {
-                    end
-                };
+                // generate powers from `start` to `end` (e.g. [0,4) then [4, 8) etc.)
+                let powers = generate_powers_of_tau::<E>(&key.tau, start, end);
 
+                // raise each element from the input buffer to the powers of tau
+                // and write the updated value (without allocating) to the
+                // output buffer
                 rayon::scope(|t| {
                     t.spawn(|_| {
-                        apply_powers::<E::G2Affine>(
-                            (tau_g2, compressed_output),
-                            (in_tau_g2, compressed_input),
+                        apply_powers::<E::G1Affine>(
+                            (tau_g1, compressed_output),
+                            (in_tau_g1, compressed_input),
                             (start, end),
                             &powers,
                             None,
                         )
-                        .expect("could not apply powers of tau to the TauG2 elements")
+                        .expect("could not apply powers of tau to the TauG1 elements")
                     });
-                    t.spawn(|_| {
-                        apply_powers::<E::G1Affine>(
-                            (alpha_g1, compressed_output),
-                            (in_alpha_g1, compressed_input),
-                            (start, end),
-                            &powers,
-                            Some(&key.alpha),
-                        )
-                        .expect("could not apply powers of tau to the AlphaG1 elements")
-                    });
-                    t.spawn(|_| {
-                        apply_powers::<E::G1Affine>(
-                            (beta_g1, compressed_output),
-                            (in_beta_g1, compressed_input),
-                            (start, end),
-                            &powers,
-                            Some(&key.beta),
-                        )
-                        .expect("could not apply powers of tau to the BetaG1 elements")
-                    });
+                    if start < parameters.powers_length {
+                        // if the `end` would be out of bounds, then just process until
+                        // the end (this is necessary in case the last batch would try to
+                        // process more elements than available)
+                        let end = if start + parameters.batch_size > parameters.powers_length {
+                            parameters.powers_length
+                        } else {
+                            end
+                        };
+
+                        rayon::scope(|t| {
+                            t.spawn(|_| {
+                                apply_powers::<E::G2Affine>(
+                                    (tau_g2, compressed_output),
+                                    (in_tau_g2, compressed_input),
+                                    (start, end),
+                                    &powers,
+                                    None,
+                                )
+                                .expect("could not apply powers of tau to the TauG2 elements")
+                            });
+                            t.spawn(|_| {
+                                apply_powers::<E::G1Affine>(
+                                    (alpha_g1, compressed_output),
+                                    (in_alpha_g1, compressed_input),
+                                    (start, end),
+                                    &powers,
+                                    Some(&key.alpha),
+                                )
+                                .expect("could not apply powers of tau to the AlphaG1 elements")
+                            });
+                            t.spawn(|_| {
+                                apply_powers::<E::G1Affine>(
+                                    (beta_g1, compressed_output),
+                                    (in_beta_g1, compressed_input),
+                                    (start, end),
+                                    &powers,
+                                    Some(&key.beta),
+                                )
+                                .expect("could not apply powers of tau to the BetaG1 elements")
+                            });
+                        });
+                    }
                 });
-            }
+            });
         });
 
         Ok(())
@@ -519,8 +524,7 @@ fn decompress_buffer<C: AffineCurve>(
     let in_size = buffer_size::<C>(UseCompression::Yes);
     let out_size = buffer_size::<C>(UseCompression::No);
     // read the compressed input
-    let elements =
-        input[start * in_size..end * in_size].par_read_batch::<C>(UseCompression::Yes)?;
+    let elements = input[start * in_size..end * in_size].read_batch::<C>(UseCompression::Yes)?;
     // write it back uncompressed
     output[start * out_size..end * out_size].write_batch(&elements, UseCompression::No)?;
 
@@ -555,7 +559,7 @@ mod tests {
         let mut out = vec![0; len];
         // perform the decompression
         decompress_buffer::<C>(&mut out, &input, (0, num_els)).unwrap();
-        let deserialized = out.par_read_batch::<C>(UseCompression::No).unwrap();
+        let deserialized = out.read_batch::<C>(UseCompression::No).unwrap();
         // ensure they match
         assert_eq!(deserialized, elements);
     }
@@ -574,7 +578,7 @@ fn apply_powers<C: AffineCurve>(
     let out_size = buffer_size::<C>(output_compressed);
     // read the input
     let mut elements =
-        &mut input[start * in_size..end * in_size].par_read_batch::<C>(input_compressed)?;
+        &mut input[start * in_size..end * in_size].read_batch::<C>(input_compressed)?;
     // calculate the powers
     batch_exp(&mut elements, &powers[..end - start], coeff)?;
     // write back

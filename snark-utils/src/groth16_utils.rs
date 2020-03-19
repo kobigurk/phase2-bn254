@@ -1,14 +1,14 @@
 /// Utilities to read/write and convert the Powers of Tau from Phase 1
 /// to Phase 2-compatible Lagrange Coefficients.
-use crate::{
-    buffer_size, write_element, write_elements, Deserializer, ParBatchDeserializer, Result,
-    UseCompression,
-};
-use rayon::prelude::*;
+use crate::{buffer_size, write_element, write_elements, Deserializer, Result, UseCompression};
 use std::fmt::Debug;
 use std::io::Write;
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
 use zexe_fft::EvaluationDomain;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+use zexe_fft::{cfg_into_iter, cfg_iter};
 
 #[derive(Debug)]
 pub struct Groth16Params<E: PairingEngine> {
@@ -51,7 +51,7 @@ where
             .collect::<Vec<_>>(),
     );
     C::Projective::batch_normalization(&mut coeffs);
-    coeffs.par_iter().map(|p| p.into_affine()).collect()
+    cfg_iter!(coeffs).map(|p| p.into_affine()).collect()
 }
 
 /// H query used in Groth16
@@ -59,8 +59,7 @@ where
 /// x^(i + m) - x^i for i in 0..=(m-2)
 /// for radix2 evaluation domains
 fn h_query_groth16<C: AffineCurve>(powers: Vec<C>, degree: usize) -> Vec<C> {
-    (0..degree - 1)
-        .into_par_iter()
+    cfg_into_iter!(0..degree - 1)
         .map(|i| powers[i + degree] + powers[i].neg())
         .collect()
 }
@@ -164,12 +163,12 @@ impl<E: PairingEngine> Groth16Params<E> {
         let alpha_g1 = in_alpha_g1.read_element::<E::G1Affine>(compressed)?;
         let beta_g1 = in_beta_g1.read_element::<E::G1Affine>(compressed)?;
         let beta_g2 = in_beta_g2.read_element::<E::G2Affine>(compressed)?;
-        let coeffs_g1 = in_coeffs_g1.par_read_batch::<E::G1Affine>(compressed)?;
-        let coeffs_g2 = in_coeffs_g2.par_read_batch::<E::G2Affine>(compressed)?;
-        let alpha_coeffs_g1 = in_alpha_coeffs_g1.par_read_batch::<E::G1Affine>(compressed)?;
-        let beta_coeffs_g1 = in_beta_coeffs_g1.par_read_batch::<E::G1Affine>(compressed)?;
+        let coeffs_g1 = in_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
+        let coeffs_g2 = in_coeffs_g2.read_batch::<E::G2Affine>(compressed)?;
+        let alpha_coeffs_g1 = in_alpha_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
+        let beta_coeffs_g1 = in_beta_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
         // H query points for Groth 16 should be already processed
-        let h_g1 = in_h_g1.par_read_batch::<E::G1Affine>(compressed)?;
+        let h_g1 = in_h_g1.read_batch::<E::G1Affine>(compressed)?;
 
         Ok(Groth16Params {
             alpha_g1,

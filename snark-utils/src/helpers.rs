@@ -5,7 +5,6 @@ use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rayon::prelude::*;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use std::ops::{AddAssign, Mul};
@@ -16,6 +15,11 @@ use zexe_algebra::{
     AffineCurve, BigInteger, CanonicalSerialize, Field, One, PairingEngine, PrimeField,
     ProjectiveCurve, UniformRand, Zero,
 };
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
+use zexe_fft::{cfg_into_iter, cfg_iter, cfg_iter_mut};
 
 /// A convenience result type for returning errors
 pub type Result<T> = std::result::Result<T, Error>;
@@ -71,7 +75,7 @@ pub fn generate_powers_of_tau<E: PairingEngine>(
     // Uh no better way to do this, this should never fail
     let start: u64 = start.try_into().expect("could not convert to u64");
     let end: u64 = end.try_into().expect("could not convert to u64");
-    (start..end).into_par_iter().map(|i| tau.pow([i])).collect()
+    cfg_into_iter!(start..end).map(|i| tau.pow([i])).collect()
 }
 
 pub fn print_hash(hash: &[u8]) {
@@ -90,10 +94,9 @@ pub fn print_hash(hash: &[u8]) {
 /// Multiply a large number of points by a scalar
 pub fn batch_mul<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField) -> Result<()> {
     let coeff = coeff.into_repr();
-    let mut points: Vec<_> = bases.par_iter().map(|base| base.mul(coeff)).collect();
+    let mut points: Vec<_> = cfg_iter!(bases).map(|base| base.mul(coeff)).collect();
     C::Projective::batch_normalization(&mut points);
-    bases
-        .par_iter_mut()
+    cfg_iter_mut!(bases)
         .zip(points)
         .for_each(|(base, proj)| *base = proj.into_affine());
 
@@ -115,8 +118,7 @@ pub fn batch_exp<C: AffineCurve>(
     }
     // raise the base to the exponent and assign it back to the base
     // this will return the points as projective
-    let mut points: Vec<_> = bases
-        .par_iter_mut()
+    let mut points: Vec<_> = cfg_iter_mut!(bases)
         .zip(exps)
         .map(|(base, exp)| {
             // If a coefficient was provided, multiply the exponent
@@ -135,8 +137,7 @@ pub fn batch_exp<C: AffineCurve>(
     // we do not use Zexe's batch_normalization_into_affine because it allocates
     // a new vector
     C::Projective::batch_normalization(&mut points);
-    bases
-        .par_iter_mut()
+    cfg_iter_mut!(bases)
         .zip(points)
         .for_each(|(base, proj)| *base = proj.into_affine());
 

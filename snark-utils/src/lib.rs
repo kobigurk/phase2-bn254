@@ -16,8 +16,10 @@ mod helpers;
 pub use helpers::*;
 
 mod io;
-pub use io::{buffer_size, BatchDeserializer, Deserializer, ParBatchDeserializer, Serializer};
+pub use io::{buffer_size, Deserializer, Serializer};
 
 // Re-exports for handling hashes
 pub use blake2::digest::generic_array::GenericArray;
 pub use typenum::U64;
+
+pub use zexe_fft::{cfg_chunks, cfg_into_iter, cfg_iter_mut};

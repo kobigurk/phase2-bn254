@@ -1,6 +1,5 @@
 //! Utilities for writing and reading group elements to buffers in parallel
 use crate::{Result, UseCompression};
-use rayon::prelude::*;
 use zexe_algebra::AffineCurve;
 
 pub fn buffer_size<C: AffineCurve>(compression: UseCompression) -> usize {
@@ -11,6 +10,10 @@ pub fn buffer_size<C: AffineCurve>(compression: UseCompression) -> usize {
             1
         }
 }
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+use zexe_fft::{cfg_chunks, cfg_chunks_mut, cfg_iter_mut};
 
 /// Used for reading 1 group element from a serialized buffer
 pub trait Deserializer {
@@ -23,10 +26,7 @@ pub trait Deserializer {
         el: &mut G,
         compression: UseCompression,
     ) -> Result<()>;
-}
 
-/// Used for reading multiple group elements from a serialized buffer serially
-pub trait BatchDeserializer {
     /// Reads multiple elements from the buffer
     fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>>;
 
@@ -36,139 +36,6 @@ pub trait BatchDeserializer {
         elements: &mut [G],
         compression: UseCompression,
     ) -> Result<()>;
-}
-
-/// Used for reading multiple group elements from a serialized buffer in parallel
-pub trait ParBatchDeserializer<T: Sync>: ParallelSlice<T> + Sync
-where
-    [T]: Deserializer,
-{
-    /// Reads multiple elements from the buffer. Internally calls `read_element`
-    fn par_read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
-        let size = buffer_size::<G>(compression);
-        // reads from the buffer in `size` chunks
-        // note: it might be the case that running this in parallel incurs
-        // performance overhead instead of gain if the buffer's length is not
-        // big enough
-        self.par_chunks(size)
-            .map(|buf| buf.read_element(compression))
-            .collect()
-    }
-
-    /// Reads multiple elements from the buffer to a preallocated array of Group elements
-    fn par_read_batch_preallocated<G: AffineCurve>(
-        &self,
-        elements: &mut [G],
-        compression: UseCompression,
-    ) -> Result<()> {
-        let element_size = buffer_size::<G>(compression);
-        let buf = self.as_parallel_slice();
-        elements
-            .par_iter_mut()
-            .enumerate()
-            .map(|(i, el)| {
-                Ok(buf[i * element_size..(i + 1) * element_size]
-                    .read_element_preallocated(el, compression)?)
-            })
-            .collect()
-    }
-}
-
-impl ParBatchDeserializer<u8> for [u8] {}
-
-impl BatchDeserializer for [u8] {
-    fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
-        let size = buffer_size::<G>(compression);
-        self.chunks(size)
-            .map(|buf| buf.read_element(compression))
-            .collect()
-    }
-
-    fn read_batch_preallocated<G: AffineCurve>(
-        &self,
-        elements: &mut [G],
-        compression: UseCompression,
-    ) -> Result<()> {
-        let element_size = buffer_size::<G>(compression);
-        let buf = self.as_parallel_slice();
-        elements
-            .iter_mut()
-            .enumerate()
-            .map(|(i, el)| {
-                Ok(buf[i * element_size..(i + 1) * element_size]
-                    .read_element_preallocated(el, compression)?)
-            })
-            .collect()
-    }
-}
-
-/// Used for writing elements to a buffer directly
-pub trait Serializer<T: Send + Sync>: ParallelSliceMut<T>
-where
-    [T]: Serializer<T>,
-{
-    /// Initializes the buffer with the provided element
-    fn init_element(
-        &mut self,
-        element: &impl AffineCurve,
-        element_size: usize,
-        compression: UseCompression,
-    ) -> Result<()>;
-
-    /// Writes a compressed or uncompressed element to the buffer
-    fn write_element(
-        &mut self,
-        element: &impl AffineCurve,
-        compression: UseCompression,
-    ) -> Result<()>;
-
-    /// Writes multiple elements to the buffer. Internally calls `write_element`
-    fn write_batch<G: AffineCurve>(
-        &mut self,
-        elements: &[G],
-        compression: UseCompression,
-    ) -> Result<()> {
-        let element_size = buffer_size::<G>(compression);
-        self.par_chunks_mut(element_size)
-            .zip(elements)
-            .map(|(buf, element)| {
-                (&mut buf[0..element_size]).write_element(element, compression)?;
-                Ok(())
-            })
-            .collect()
-    }
-}
-
-impl Serializer<u8> for [u8] {
-    fn init_element(
-        &mut self,
-        element: &impl AffineCurve,
-        element_size: usize,
-        compression: UseCompression,
-    ) -> Result<()> {
-        // writes to the buffer in `element_size` chunks
-        // note: it might be the case that running this in parallel incurs
-        // performance overhead instead of gain if the buffer's length is not
-        // big enough
-        self.par_chunks_mut(element_size)
-            .map(|buf| {
-                (&mut buf[0..element_size]).write_element(element, compression)?;
-                Ok(())
-            })
-            .collect::<Result<()>>()
-    }
-
-    fn write_element(
-        &mut self,
-        element: &impl AffineCurve,
-        compression: UseCompression,
-    ) -> Result<()> {
-        match compression {
-            UseCompression::Yes => element.serialize(&[], self)?,
-            UseCompression::No => element.serialize_uncompressed(self)?,
-        };
-        Ok(())
-    }
 }
 
 impl Deserializer for [u8] {
@@ -189,6 +56,101 @@ impl Deserializer for [u8] {
             UseCompression::No => G::deserialize_uncompressed(self)?,
         };
         Ok(())
+    }
+
+    fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>> {
+        let size = buffer_size::<G>(compression);
+        cfg_chunks!(self, size)
+            .map(|buf| buf.read_element(compression))
+            .collect()
+    }
+
+    fn read_batch_preallocated<G: AffineCurve>(
+        &self,
+        elements: &mut [G],
+        compression: UseCompression,
+    ) -> Result<()> {
+        let element_size = buffer_size::<G>(compression);
+        cfg_iter_mut!(elements)
+            .enumerate()
+            .map(|(i, el)| {
+                Ok(self[i * element_size..(i + 1) * element_size]
+                    .read_element_preallocated(el, compression)?)
+            })
+            .collect()
+    }
+}
+
+/// Used for writing elements to a buffer directly
+pub trait Serializer {
+    /// Initializes the buffer with the provided element
+    fn init_element(
+        &mut self,
+        element: &impl AffineCurve,
+        element_size: usize,
+        compression: UseCompression,
+    ) -> Result<()>;
+
+    /// Writes a compressed or uncompressed element to the buffer
+    fn write_element(
+        &mut self,
+        element: &impl AffineCurve,
+        compression: UseCompression,
+    ) -> Result<()>;
+
+    /// Writes multiple elements to the buffer. Internally calls `write_element`
+    fn write_batch<G: AffineCurve>(
+        &mut self,
+        elements: &[G],
+        compression: UseCompression,
+    ) -> Result<()>;
+}
+
+impl Serializer for [u8] {
+    fn write_element(
+        &mut self,
+        element: &impl AffineCurve,
+        compression: UseCompression,
+    ) -> Result<()> {
+        match compression {
+            UseCompression::Yes => element.serialize(&[], self)?,
+            UseCompression::No => element.serialize_uncompressed(self)?,
+        };
+        Ok(())
+    }
+
+    fn init_element(
+        &mut self,
+        element: &impl AffineCurve,
+        element_size: usize,
+        compression: UseCompression,
+    ) -> Result<()> {
+        // writes to the buffer in `element_size` chunks
+        // note: it might be the case that running this in parallel incurs
+        // performance overhead instead of gain if the buffer's length is not
+        // big enough
+        cfg_chunks_mut!(self, element_size)
+            .map(|buf| {
+                (&mut buf[0..element_size]).write_element(element, compression)?;
+                Ok(())
+            })
+            .collect::<Result<()>>()
+    }
+
+    /// Writes multiple elements to the buffer. Internally calls `write_element`
+    fn write_batch<G: AffineCurve>(
+        &mut self,
+        elements: &[G],
+        compression: UseCompression,
+    ) -> Result<()> {
+        let element_size = buffer_size::<G>(compression);
+        cfg_chunks_mut!(self, element_size)
+            .zip(elements)
+            .map(|(buf, element)| {
+                (&mut buf[0..element_size]).write_element(element, compression)?;
+                Ok(())
+            })
+            .collect()
     }
 }
 
@@ -271,7 +233,7 @@ mod tests {
         let len = buffer_size::<E>(compression) * num_els;
         let mut buf = vec![0; len];
         buf.write_batch(&elements, compression).unwrap();
-        let deserialized1: Vec<E> = buf.par_read_batch(compression).unwrap();
+        let deserialized1: Vec<E> = buf.read_batch(compression).unwrap();
         let deserialized2: Vec<E> = buf.read_batch(compression).unwrap();
         assert_eq!(elements, deserialized1);
         assert_eq!(elements, deserialized2);
@@ -288,7 +250,7 @@ mod tests {
         buf.write_batch(&elements, compression).unwrap();
         let mut prealloc: Vec<E> = random_point_vec(num_els, &mut rng);
         let mut prealloc2: Vec<E> = random_point_vec(num_els, &mut rng);
-        buf.par_read_batch_preallocated(&mut prealloc, compression)
+        buf.read_batch_preallocated(&mut prealloc, compression)
             .unwrap();
         buf.read_batch_preallocated(&mut prealloc2, compression)
             .unwrap();

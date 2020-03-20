@@ -1,48 +1,84 @@
-extern crate powersoftau;
-extern crate rand;
-extern crate blake2;
-extern crate byteorder;
-extern crate bellman_ce;
-
-use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
-use powersoftau::small_bn256::{Bn256CeremonyParameters};
+use bellman_ce::pairing::{CurveAffine, CurveProjective};
 use powersoftau::batched_accumulator::*;
-use powersoftau::accumulator::HashWriter;
+use powersoftau::parameters::CeremonyParams;
 use powersoftau::*;
 
-use crate::utils::*;
-use crate::parameters::*;
 use crate::keypair::*;
+use crate::parameters::*;
+use crate::utils::*;
 
-use bellman_ce::multicore::Worker;
 use bellman_ce::domain::{EvaluationDomain, Point};
+use bellman_ce::multicore::Worker;
 
+use std::fs::{remove_file, OpenOptions};
+use std::io::{self, BufWriter, Read, Write};
 use std::path::Path;
-use std::fs::{OpenOptions, remove_file};
-use std::io::{self, Read, BufWriter, Write};
+
+use blake2::{Blake2b, Digest};
+use generic_array::GenericArray;
+use typenum::U64;
 
 use memmap::*;
 
-const fn num_bits<T>() -> usize { std::mem::size_of::<T>() * 8 }
+const fn num_bits<T>() -> usize {
+    std::mem::size_of::<T>() * 8
+}
 
 fn log_2(x: u64) -> u32 {
     assert!(x > 0);
     num_bits::<u64>() as u32 - x.leading_zeros() - 1
 }
 
+/// Abstraction over a writer which hashes the data being written.
+pub struct HashWriter<W: Write> {
+    writer: W,
+    hasher: Blake2b,
+}
+
+impl<W: Write> HashWriter<W> {
+    /// Construct a new `HashWriter` given an existing `writer` by value.
+    pub fn new(writer: W) -> Self {
+        HashWriter {
+            writer,
+            hasher: Blake2b::default(),
+        }
+    }
+
+    /// Destroy this writer and return the hash of what was written.
+    pub fn into_hash(self) -> GenericArray<u8, U64> {
+        self.hasher.result()
+    }
+}
+
+impl<W: Write> Write for HashWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes = self.writer.write(buf)?;
+
+        if bytes > 0 {
+            self.hasher.input(&buf[0..bytes]);
+        }
+
+        Ok(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.writer.flush()
+    }
+}
+
 // Computes the hash of the challenge file for the player,
 // given the current state of the accumulator and the last
 // response file hash.
-fn get_challenge_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
+fn get_challenge_file_hash<E: Engine>(
+    acc: &mut BatchedAccumulator<E>,
     last_response_file_hash: &[u8; 64],
     is_initial: bool,
-) -> [u8; 64]
-{
+) -> [u8; 64] {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
+    let parameters = acc.parameters;
 
     let file_name = "tmp_challenge_file_hash";
 
@@ -57,19 +93,28 @@ fn get_challenge_file_hash(
             .open(file_name)
             .expect("unable to create temporary tmp_challenge_file_hash");
 
-        writer.set_len(Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE as u64).expect("must make output file large enough");
-        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+        writer
+            .set_len(parameters.accumulator_size as u64)
+            .expect("must make output file large enough");
+        let mut writable_map = unsafe {
+            MmapOptions::new()
+                .map_mut(&writer)
+                .expect("unable to create a memory map for output")
+        };
 
-        (&mut writable_map[0..]).write(&last_response_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        (&mut writable_map[0..])
+            .write_all(&last_response_file_hash[..])
+            .expect("unable to write a default hash to mmap");
+        writable_map
+            .flush()
+            .expect("unable to write blank hash to challenge file");
 
         if is_initial {
-            BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
+            BatchedAccumulator::generate_initial(&mut writable_map, UseCompression::No, parameters)
+                .expect("generation of initial accumulator is successful");
         } else {
-            acc.serialize(
-                &mut writable_map,
-                UseCompression::No
-            ).unwrap();
+            acc.serialize(&mut writable_map, UseCompression::No, parameters)
+                .unwrap();
         }
 
         writable_map.flush().expect("must flush the memory map");
@@ -77,13 +122,13 @@ fn get_challenge_file_hash(
 
     let mut challenge_reader = OpenOptions::new()
         .read(true)
-        .open(file_name).expect("unable to open temporary tmp_challenge_file_hash");
+        .open(file_name)
+        .expect("unable to open temporary tmp_challenge_file_hash");
 
     let mut contents = vec![];
     challenge_reader.read_to_end(&mut contents).unwrap();
 
-    sink.write_all(&contents)
-        .unwrap();
+    sink.write_all(&contents).unwrap();
 
     let mut tmp = [0; 64];
     tmp.copy_from_slice(sink.into_hash().as_slice());
@@ -91,17 +136,19 @@ fn get_challenge_file_hash(
     tmp
 }
 
+use bellman_ce::pairing::Engine;
+
 // Computes the hash of the response file, given the new
 // accumulator, the player's public key, and the challenge
 // file's hash.
-fn get_response_file_hash(
-    acc: &mut BachedAccumulator::<Bn256, Bn256CeremonyParameters>,
-    pubkey: &PublicKey::<Bn256>,
-    last_challenge_file_hash: &[u8; 64]
-) -> [u8; 64]
-{
+fn get_response_file_hash<E: Engine>(
+    acc: &mut BatchedAccumulator<E>,
+    pubkey: &PublicKey<E>,
+    last_challenge_file_hash: &[u8; 64],
+) -> [u8; 64] {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
+    let parameters = acc.parameters;
 
     let file_name = "tmp_response_file_hash";
     if Path::new(file_name).exists() {
@@ -115,31 +162,40 @@ fn get_response_file_hash(
             .open(file_name)
             .expect("unable to create temporary tmp_response_file_hash");
 
-        writer.set_len(Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE as u64).expect("must make output file large enough");
-        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+        writer
+            .set_len(parameters.contribution_size as u64)
+            .expect("must make output file large enough");
+        let mut writable_map = unsafe {
+            MmapOptions::new()
+                .map_mut(&writer)
+                .expect("unable to create a memory map for output")
+        };
 
-        (&mut writable_map[0..]).write(&last_challenge_file_hash[..]).expect("unable to write a default hash to mmap");
-        writable_map.flush().expect("unable to write blank hash to `./challenge`");
+        (&mut writable_map[0..])
+            .write_all(&last_challenge_file_hash[..])
+            .expect("unable to write a default hash to mmap");
+        writable_map
+            .flush()
+            .expect("unable to write blank hash to challenge file");
 
-        acc.serialize(
-            &mut writable_map,
-            UseCompression::Yes
-        ).unwrap();
+        acc.serialize(&mut writable_map, UseCompression::Yes, parameters)
+            .unwrap();
 
-        pubkey.write::<Bn256CeremonyParameters>(&mut writable_map, UseCompression::Yes).expect("unable to write public key");
+        pubkey
+            .write(&mut writable_map, UseCompression::Yes, parameters)
+            .expect("unable to write public key");
         writable_map.flush().expect("must flush the memory map");
     }
 
     let mut challenge_reader = OpenOptions::new()
         .read(true)
-        .open(file_name).expect("unable to open temporary tmp_response_file_hash");
+        .open(file_name)
+        .expect("unable to open temporary tmp_response_file_hash");
 
     let mut contents = vec![];
     challenge_reader.read_to_end(&mut contents).unwrap();
 
-    sink.write_all(&contents)
-        .unwrap();
-
+    sink.write_all(&contents).unwrap();
 
     let mut tmp = [0; 64];
     tmp.copy_from_slice(sink.into_hash().as_slice());
@@ -147,7 +203,7 @@ fn get_response_file_hash(
     tmp
 }
 
-fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParameters> {
+fn new_accumulator_for_verify(parameters: &CeremonyParams<Bn256>) -> BatchedAccumulator<Bn256> {
     let file_name = "tmp_initial_challenge";
     {
         if Path::new(file_name).exists() {
@@ -155,43 +211,74 @@ fn new_accumulator_for_verify() -> BachedAccumulator<Bn256, Bn256CeremonyParamet
         }
 
         let file = OpenOptions::new()
-                                .read(true)
-                                .write(true)
-                                .create_new(true)
-                                .open(file_name).expect("unable to create `./tmp_initial_challenge`");
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(file_name)
+            .expect("unable to create `./tmp_initial_challenge`");
 
-        let expected_challenge_length = Bn256CeremonyParameters::ACCUMULATOR_BYTE_SIZE;
-        file.set_len(expected_challenge_length as u64).expect("unable to allocate large enough file");
+        let expected_challenge_length = parameters.accumulator_size;
+        file.set_len(expected_challenge_length as u64)
+            .expect("unable to allocate large enough file");
 
-        let mut writable_map = unsafe { MmapOptions::new().map_mut(&file).expect("unable to create a memory map") };
-        BachedAccumulator::<Bn256, Bn256CeremonyParameters>::generate_initial(&mut writable_map, UseCompression::No).expect("generation of initial accumulator is successful");
-        writable_map.flush().expect("unable to flush memmap to disk");
+        let mut writable_map = unsafe {
+            MmapOptions::new()
+                .map_mut(&file)
+                .expect("unable to create a memory map")
+        };
+        BatchedAccumulator::generate_initial(&mut writable_map, UseCompression::No, &parameters)
+            .expect("generation of initial accumulator is successful");
+        writable_map
+            .flush()
+            .expect("unable to flush memmap to disk");
     }
 
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open(file_name)
-                            .expect("unable open `./transcript` in this directory");
-    let readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
-    let initial_accumulator = BachedAccumulator::deserialize(
+        .read(true)
+        .open(file_name)
+        .expect("unable open transcript file in this directory");
+
+    let readable_map = unsafe {
+        MmapOptions::new()
+            .map(&reader)
+            .expect("unable to create a memory map for input")
+    };
+
+    BatchedAccumulator::deserialize(
         &readable_map,
         CheckForCorrectness::Yes,
         UseCompression::No,
-    ).expect("unable to read uncompressed accumulator");
-
-    initial_accumulator
+        &parameters,
+    )
+    .expect("unable to read uncompressed accumulator")
 }
 
 fn main() {
-    // Try to load `./transcript` from disk.
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 4 {
+        println!("Usage: \n<transcript_file> <circuit_power> <batch_size>");
+        std::process::exit(exitcode::USAGE);
+    }
+    let transcript_filename = &args[1];
+    let circuit_power = args[2].parse().expect("could not parse circuit power");
+    let batch_size = args[3].parse().expect("could not parse batch size");
+
+    let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
+
+    // Try to load transcript file from disk.
     let reader = OpenOptions::new()
-                            .read(true)
-                            .open("transcript")
-                            .expect("unable open `./transcript` in this directory");
-    let transcript_readable_map = unsafe { MmapOptions::new().map(&reader).expect("unable to create a memory map for input") };
+        .read(true)
+        .open(transcript_filename)
+        .expect("unable open transcript file in this directory");
+
+    let transcript_readable_map = unsafe {
+        MmapOptions::new()
+            .map(&reader)
+            .expect("unable to create a memory map for input")
+    };
 
     // Initialize the accumulator
-    let mut current_accumulator = new_accumulator_for_verify();
+    let mut current_accumulator = new_accumulator_for_verify(&parameters);
 
     // The "last response file hash" is just a blank BLAKE2b hash
     // at the beginning of the hash chain.
@@ -208,7 +295,9 @@ fn main() {
             remove_file(file_name).unwrap();
         }
 
-        let memory_slice = transcript_readable_map.get(i*Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE..(i+1)*Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE).expect("must read point data from file");
+        let memory_slice = transcript_readable_map
+            .get(i * parameters.contribution_size..(i + 1) * parameters.contribution_size)
+            .expect("must read point data from file");
         let writer = OpenOptions::new()
             .read(true)
             .write(true)
@@ -216,39 +305,49 @@ fn main() {
             .open(file_name)
             .expect("unable to create temporary tmp_response");
 
-        writer.set_len(Bn256CeremonyParameters::CONTRIBUTION_BYTE_SIZE as u64).expect("must make output file large enough");
-        let mut writable_map = unsafe { MmapOptions::new().map_mut(&writer).expect("unable to create a memory map for output") };
+        writer
+            .set_len(parameters.contribution_size as u64)
+            .expect("must make output file large enough");
+        let mut writable_map = unsafe {
+            MmapOptions::new()
+                .map_mut(&writer)
+                .expect("unable to create a memory map for output")
+        };
 
-        (&mut writable_map[0..]).write(&memory_slice[..]).expect("unable to write a default hash to mmap");
+        (&mut writable_map[0..])
+            .write_all(&memory_slice[..])
+            .expect("unable to write a default hash to mmap");
         writable_map.flush().expect("must flush the memory map");
 
-        let response_readable_map = writable_map.make_read_only().expect("must make a map readonly");
+        let response_readable_map = writable_map
+            .make_read_only()
+            .expect("must make a map readonly");
 
-        let last_challenge_file_hash = get_challenge_file_hash(
-            &mut current_accumulator,
-            &last_response_file_hash,
-            i == 0,
-        );
+        let last_challenge_file_hash =
+            get_challenge_file_hash(&mut current_accumulator, &last_response_file_hash, i == 0);
 
         // Deserialize the accumulator provided by the player in
         // their response file. It's stored in the transcript in
         // uncompressed form so that we can more efficiently
         // deserialize it.
 
-        let mut response_file_accumulator = BachedAccumulator::deserialize(
+        let mut response_file_accumulator = BatchedAccumulator::deserialize(
             &response_readable_map,
             CheckForCorrectness::Yes,
             UseCompression::Yes,
-        ).expect("unable to read uncompressed accumulator");
+            &parameters,
+        )
+        .expect("unable to read uncompressed accumulator");
 
-        let response_file_pubkey = PublicKey::<Bn256>::read::<Bn256CeremonyParameters>(&response_readable_map, UseCompression::Yes).unwrap();
+        let response_file_pubkey =
+            PublicKey::read(&response_readable_map, UseCompression::Yes, &parameters).unwrap();
         // Compute the hash of the response file. (we had it in uncompressed
         // form in the transcript, but the response file is compressed to save
         // participants bandwidth.)
         last_response_file_hash = get_response_file_hash(
             &mut response_file_accumulator,
             &response_file_pubkey,
-            &last_challenge_file_hash
+            &last_challenge_file_hash,
         );
 
         // Verify the transformation from the previous accumulator to the new
@@ -258,13 +357,12 @@ fn main() {
             &current_accumulator,
             &response_file_accumulator,
             &response_file_pubkey,
-            &last_challenge_file_hash
-        )
-        {
+            &last_challenge_file_hash,
+        ) {
             println!(" ... FAILED");
             panic!("INVALID RESPONSE FILE!");
         } else {
-            println!("");
+            println!();
         }
 
         current_accumulator = response_file_accumulator;
@@ -276,35 +374,43 @@ fn main() {
 
     // Create the parameters for various 2^m circuit depths.
     let max_degree = log_2(current_accumulator.tau_powers_g2.len() as u64);
-    for m in 0..max_degree+1 {
+    for m in 0..=max_degree {
         let paramname = format!("phase1radix2m{}", m);
         println!("Creating {}", paramname);
 
         let degree = 1 << m;
 
         let mut g1_coeffs = EvaluationDomain::from_coeffs(
-            current_accumulator.tau_powers_g1[0..degree].iter()
+            current_accumulator.tau_powers_g1[0..degree]
+                .iter()
                 .map(|e| Point(e.into_projective()))
-                .collect()
-        ).unwrap();
+                .collect(),
+        )
+        .unwrap();
 
         let mut g2_coeffs = EvaluationDomain::from_coeffs(
-            current_accumulator.tau_powers_g2[0..degree].iter()
+            current_accumulator.tau_powers_g2[0..degree]
+                .iter()
                 .map(|e| Point(e.into_projective()))
-                .collect()
-        ).unwrap();
+                .collect(),
+        )
+        .unwrap();
 
         let mut g1_alpha_coeffs = EvaluationDomain::from_coeffs(
-            current_accumulator.alpha_tau_powers_g1[0..degree].iter()
+            current_accumulator.alpha_tau_powers_g1[0..degree]
+                .iter()
                 .map(|e| Point(e.into_projective()))
-                .collect()
-        ).unwrap();
+                .collect(),
+        )
+        .unwrap();
 
         let mut g1_beta_coeffs = EvaluationDomain::from_coeffs(
-            current_accumulator.beta_tau_powers_g1[0..degree].iter()
+            current_accumulator.beta_tau_powers_g1[0..degree]
+                .iter()
                 .map(|e| Point(e.into_projective()))
-                .collect()
-        ).unwrap();
+                .collect(),
+        )
+        .unwrap();
 
         // This converts all of the elements into Lagrange coefficients
         // for later construction of interpolation polynomials
@@ -325,21 +431,13 @@ fn main() {
 
         // Remove the Point() wrappers
 
-        let mut g1_coeffs = g1_coeffs.into_iter()
-            .map(|e| e.0)
-            .collect::<Vec<_>>();
+        let mut g1_coeffs = g1_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
-        let mut g2_coeffs = g2_coeffs.into_iter()
-            .map(|e| e.0)
-            .collect::<Vec<_>>();
+        let mut g2_coeffs = g2_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
-        let mut g1_alpha_coeffs = g1_alpha_coeffs.into_iter()
-            .map(|e| e.0)
-            .collect::<Vec<_>>();
+        let mut g1_alpha_coeffs = g1_alpha_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
-        let mut g1_beta_coeffs = g1_beta_coeffs.into_iter()
-            .map(|e| e.0)
-            .collect::<Vec<_>>();
+        let mut g1_beta_coeffs = g1_beta_coeffs.into_iter().map(|e| e.0).collect::<Vec<_>>();
 
         // Batch normalize
         G1::batch_normalization(&mut g1_coeffs);
@@ -352,7 +450,7 @@ fn main() {
         // x^(i + m) - x^i for i in 0..=(m-2)
         // for radix2 evaluation domains
         let mut h = Vec::with_capacity(degree - 1);
-        for i in 0..(degree-1) {
+        for i in 0..(degree - 1) {
             let mut tmp = current_accumulator.tau_powers_g1[i + degree].into_projective();
             let mut tmp2 = current_accumulator.tau_powers_g1[i].into_projective();
             tmp2.negate();
@@ -366,39 +464,41 @@ fn main() {
 
         // Create the parameter file
         let writer = OpenOptions::new()
-                            .read(false)
-                            .write(true)
-                            .create_new(true)
-                            .open(paramname)
-                            .expect("unable to create parameter file in this directory");
+            .read(false)
+            .write(true)
+            .create_new(true)
+            .open(paramname)
+            .expect("unable to create parameter file in this directory");
 
         let mut writer = BufWriter::new(writer);
 
         // Write alpha (in g1)
         // Needed by verifier for e(alpha, beta)
         // Needed by prover for A and C elements of proof
-        writer.write_all(
-            current_accumulator.alpha_tau_powers_g1[0]
-                .into_uncompressed()
-                .as_ref()
-        ).unwrap();
+        writer
+            .write_all(
+                current_accumulator.alpha_tau_powers_g1[0]
+                    .into_uncompressed()
+                    .as_ref(),
+            )
+            .unwrap();
 
         // Write beta (in g1)
         // Needed by prover for C element of proof
-        writer.write_all(
-            current_accumulator.beta_tau_powers_g1[0]
-                .into_uncompressed()
-                .as_ref()
-        ).unwrap();
+        writer
+            .write_all(
+                current_accumulator.beta_tau_powers_g1[0]
+                    .into_uncompressed()
+                    .as_ref(),
+            )
+            .unwrap();
 
         // Write beta (in g2)
         // Needed by verifier for e(alpha, beta)
         // Needed by prover for B element of proof
-        writer.write_all(
-            current_accumulator.beta_g2
-                .into_uncompressed()
-                .as_ref()
-        ).unwrap();
+        writer
+            .write_all(current_accumulator.beta_g2.into_uncompressed().as_ref())
+            .unwrap();
 
         // Lagrange coefficients in G1 (for constructing
         // LC/IC queries and precomputing polynomials for A)
@@ -406,10 +506,9 @@ fn main() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 
-            writer.write_all(
-                coeff.into_uncompressed()
-                    .as_ref()
-            ).unwrap();
+            writer
+                .write_all(coeff.into_uncompressed().as_ref())
+                .unwrap();
         }
 
         // Lagrange coefficients in G2 (for precomputing
@@ -418,10 +517,9 @@ fn main() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 
-            writer.write_all(
-                coeff.into_uncompressed()
-                    .as_ref()
-            ).unwrap();
+            writer
+                .write_all(coeff.into_uncompressed().as_ref())
+                .unwrap();
         }
 
         // Lagrange coefficients in G1 with alpha (for
@@ -430,10 +528,9 @@ fn main() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 
-            writer.write_all(
-                coeff.into_uncompressed()
-                    .as_ref()
-            ).unwrap();
+            writer
+                .write_all(coeff.into_uncompressed().as_ref())
+                .unwrap();
         }
 
         // Lagrange coefficients in G1 with beta (for
@@ -442,10 +539,9 @@ fn main() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 
-            writer.write_all(
-                coeff.into_uncompressed()
-                    .as_ref()
-            ).unwrap();
+            writer
+                .write_all(coeff.into_uncompressed().as_ref())
+                .unwrap();
         }
 
         // Bases for H polynomial computation
@@ -453,10 +549,9 @@ fn main() {
             // Was normalized earlier in parallel
             let coeff = coeff.into_affine();
 
-            writer.write_all(
-                coeff.into_uncompressed()
-                    .as_ref()
-            ).unwrap();
+            writer
+                .write_all(coeff.into_uncompressed().as_ref())
+                .unwrap();
         }
     }
 }

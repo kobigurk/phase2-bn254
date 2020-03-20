@@ -21,7 +21,7 @@ fn main() {
         std::process::exit(exitcode::USAGE);
     }
     if args.len() == 6 && args[4] != "-v" {
-        println!("Usage: \n<in_params.params> <in_str_entropy> <out_params.params> -v <progress_interval>");
+        println!("Usage: \n<in_params.params> <out_params.params> <in_str_entropy> -v <progress_interval>");
         std::process::exit(exitcode::USAGE);
     }
     let in_params_filename = &args[1];

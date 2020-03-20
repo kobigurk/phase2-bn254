@@ -15,17 +15,24 @@ use std::fs::OpenOptions;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 && args.len() != 5 {
+    if args.len() != 4 && args.len() != 6 {
         println!("Usage: \n<in_params.params> <in_str_entropy> <out_params.params>");
+        std::process::exit(exitcode::USAGE);
+    }
+    if args.len() == 6 && args[4] != "-v" {
+        println!("Usage: \n<in_params.params> <in_str_entropy> <out_params.params> -v <progress_interval>");
         std::process::exit(exitcode::USAGE);
     }
     let in_params_filename = &args[1];
     let entropy = &args[2];
     let out_params_filename = &args[3];
+    let print_progress = args.len() == 6 && args[4] == "-v";
 
     let disallow_points_at_infinity = false;
 
-    println!("starting");
+    if print_progress {
+        println!("starting");
+    }
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
         use byteorder::{ReadBytesExt, BigEndian};
@@ -67,8 +74,8 @@ fn main() {
 
     println!("Contributing to {}...", in_params_filename);
     let mut progress_update_interval: u32 = 0;
-    if args.len() == 5 {
-        let parsed = args[4].parse::<u32>();
+    if print_progress {
+        let parsed = args[5].parse::<u32>();
         if !parsed.is_err() {
             progress_update_interval = parsed.unwrap();
         }
@@ -79,5 +86,7 @@ fn main() {
     println!("Writing parameters to {}.", out_params_filename);
     let mut f = File::create(out_params_filename).unwrap();
     params.write(&mut f).expect("failed to write updated parameters");
-    println!("wrote");
+    if print_progress {
+        println!("wrote");
+    }
 }

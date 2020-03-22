@@ -15,16 +15,16 @@ npx circom circuit.circom -o circuit.json && npx snarkjs info -c circuit.json
 # npx snarkjs info -c circuit.json
 
 # initialize ceremony
-cargo run --release --bin new circuit.json circom1.params
+cargo run --release --bin new circuit.json circom1.params ./
 
 cargo run --release --bin contribute circom1.params circom2.params asdajdzixcjlzxjczxlkcjzxlkcj
-cargo run --release --bin verify_contribution circuit.json circom1.params circom2.params
+cargo run --release --bin verify_contribution circuit.json circom1.params circom2.params ./
 
 cargo run --release --bin contribute circom2.params circom3.params dsfjkshdfakjhsdf
-cargo run --release --bin verify_contribution circuit.json circom2.params circom3.params
+cargo run --release --bin verify_contribution circuit.json circom2.params circom3.params ./
 
 cargo run --release --bin contribute circom3.params circom4.params askldfjklasdf
-cargo run --release --bin verify_contribution circuit.json circom3.params circom4.params
+cargo run --release --bin verify_contribution circuit.json circom3.params circom4.params ./
 
 # create dummy keys in circom format
 echo "Generating dummy key files..."

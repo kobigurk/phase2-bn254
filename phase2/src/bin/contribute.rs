@@ -16,16 +16,24 @@ use phase2::parameters::MPCParameters;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
+    if args.len() != 4 && args.len() != 6 {
         println!("Usage: \n<in_params.params> <out_params.params> <in_str_entropy>");
+        std::process::exit(exitcode::USAGE);
+    }
+    if args.len() == 6 && args[4] != "-v" {
+        println!("Usage: \n<in_params.params> <out_params.params> <in_str_entropy> -v <progress_interval>");
         std::process::exit(exitcode::USAGE);
     }
     let in_params_filename = &args[1];
     let out_params_filename = &args[2];
     let entropy = &args[3];
+    let print_progress = args.len() == 6 && args[4] == "-v";
 
     let disallow_points_at_infinity = false;
 
+    if print_progress {
+        println!("starting");
+    }
     // Create an RNG based on a mixture of system randomness and user provided randomness
     let mut rng = {
         use byteorder::{ReadBytesExt, BigEndian};
@@ -66,10 +74,20 @@ fn main() {
     let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
-    let hash = params.contribute(&mut rng);
+    let mut progress_update_interval: u32 = 0;
+    if print_progress {
+        let parsed = args[5].parse::<u32>();
+        if !parsed.is_err() {
+            progress_update_interval = parsed.unwrap();
+        }
+    }
+    let hash = params.contribute(&mut rng, &progress_update_interval);
     println!("Contribution hash: 0x{:02x}", hash.iter().format(""));
 
     println!("Writing parameters to {}.", out_params_filename);
     let mut f = File::create(out_params_filename).unwrap();
     params.write(&mut f).expect("failed to write updated parameters");
+    if print_progress {
+        println!("wrote");
+    }
 }

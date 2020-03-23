@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use zexe_algebra::{AffineCurve, Bls12_377, PairingEngine};
 
-use snark_utils::{Deserializer, Serializer, UseCompression};
+use snark_utils::{BatchDeserializer, BatchSerializer, UseCompression};
 
 use test_helpers::*;
 
@@ -18,29 +18,28 @@ use test_helpers::*;
 fn read<C: AffineCurve>(c: &mut Criterion, el_type: &str) {
     let mut group = c.benchmark_group(format!("read_batched_{}", el_type));
     group.sample_size(10);
-    let els = (8..11)
+    let els = (10..14)
         .map(|i| 2u32.pow(i) as usize)
         .collect::<Vec<usize>>();
 
-    for compression in &[UseCompression::Yes] {
-        // , UseCompression::No] {
+    for compression in &[UseCompression::Yes, UseCompression::No] {
         for num_els in &els {
             group.throughput(Throughput::Elements(*num_els as u64));
 
+            let (_, buf) = random_vec_buf::<C>(*num_els, *compression);
             group.bench_with_input(
                 format!("normal_{}", compression),
                 &num_els,
                 |b, _num_els| {
-                    let (_, buf) = random_vec_buf::<C>(*num_els, *compression);
                     b.iter(|| buf.read_batch::<C>(*compression).unwrap());
                 },
             );
 
+            let (mut elements, buf) = random_vec_buf(*num_els, *compression);
             group.bench_with_input(
                 format!("preallocated_{}", compression),
                 &num_els,
                 |b, _num_els| {
-                    let (mut elements, buf) = random_vec_buf(*num_els, *compression);
                     b.iter(|| {
                         buf.read_batch_preallocated::<C>(&mut elements, *compression)
                             .unwrap()
@@ -57,12 +56,11 @@ fn read<C: AffineCurve>(c: &mut Criterion, el_type: &str) {
 /// We observe that after ~512 element buffers, the parallel version starts to take over
 fn write<C: AffineCurve>(c: &mut Criterion, el_type: &str) {
     let mut group = c.benchmark_group(format!("write_batched_{}", el_type));
-    let els = (8..11)
+    let els = (10..14)
         .map(|i| 2u32.pow(i) as usize)
         .collect::<Vec<usize>>();
     group.sample_size(10);
-    for compression in &[UseCompression::Yes] {
-        // , UseCompression::No] {
+    for compression in &[UseCompression::Yes, UseCompression::No] {
         for num_els in &els {
             let (elements, mut buf) = random_vec_empty_buf(*num_els, *compression);
 

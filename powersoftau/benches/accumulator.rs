@@ -4,46 +4,24 @@ use rand::thread_rng;
 use snark_utils::*;
 use zexe_algebra::Bls12_377;
 
-use powersoftau_v1::{
-    batched_accumulator::BatchedAccumulator,
-    keypair::{PrivateKey as PrivateKeyV1, PublicKey as PublicKeyV1},
-    parameters::{
-        CeremonyParams as CeremonyParamsV1, CheckForCorrectness as CheckForCorrectnessV1,
-    },
-};
-
 use test_helpers::{generate_input, setup_verify};
 
 // Benchmark comparing the generation of the iterator in parallel chunks
 // Parallel generation is strictly better
 fn generate_initial_benchmark(c: &mut Criterion) {
-    let batch = 256;
-    let mut group = c.benchmark_group(format!("generate_initial_{}", batch));
+    let mut group = c.benchmark_group("generate_initial");
     for compression in &[UseCompression::Yes, UseCompression::No] {
-        for power in 2..14 {
+        for power in 10..14 {
             // large powers take too long
             if power > 8 {
                 group.sample_size(10);
             }
-            let parameters = CeremonyParams::<Bls12_377>::new(power, batch);
-            let parameters_v1 = CeremonyParamsV1::<Bls12_377>::new(power, batch);
-
+            let parameters = CeremonyParams::<Bls12_377>::new(power, power);
             let expected_challenge_length = parameters.get_length(*compression);
 
             // count in `other` powers (G1 will be 2x that)
             group.throughput(Throughput::Elements(power as u64));
-
-            group.bench_with_input(format!("Serial_{}", compression), &power, |b, _power| {
-                let mut output = vec![0; expected_challenge_length];
-                b.iter(|| {
-                    BatchedAccumulator::generate_initial(
-                        &mut output,
-                        compat(*compression),
-                        &parameters_v1,
-                    )
-                })
-            });
-            group.bench_with_input(format!("Parallel_{}", compression), &power, |b, _power| {
+            group.bench_with_input(format!("{}", compression), &power, |b, _power| {
                 let mut output = vec![0; expected_challenge_length];
                 b.iter(|| RawAccumulator::generate_initial(&mut output, *compression, &parameters))
             });
@@ -71,37 +49,7 @@ fn contribute_benchmark(c: &mut Criterion) {
             .expect("could not generate keypair");
 
         group.bench_with_input(
-            format!("Serial_{}_{}", in_compressed, out_compressed),
-            &size,
-            |b, size| {
-                let batch = if (batch as u32) >= 2 * 2u32.pow(*size as u32) {
-                    2u32.pow(*size as u32) as usize
-                } else {
-                    batch
-                };
-                let parameters = CeremonyParamsV1::<Bls12_377>::new(*size, batch);
-                let privkey = PrivateKeyV1 {
-                    tau: privkey.tau,
-                    alpha: privkey.alpha,
-                    beta: privkey.beta,
-                };
-                b.iter(|| {
-                    BatchedAccumulator::contribute(
-                        &input,
-                        &mut output,
-                        compat(in_compressed),
-                        compat(out_compressed),
-                        CheckForCorrectnessV1::Yes,
-                        &privkey,
-                        &parameters,
-                    )
-                    .unwrap()
-                })
-            },
-        );
-
-        group.bench_with_input(
-            format!("Parallel_{}_{}", in_compressed, out_compressed),
+            format!("{}_{}", in_compressed, out_compressed),
             &size,
             |b, _size| {
                 b.iter(|| {
@@ -126,7 +74,6 @@ fn contribute_benchmark(c: &mut Criterion) {
 // modes of operation
 fn verify_benchmark(c: &mut Criterion) {
     let correctness = CheckForCorrectness::No;
-    let correctness_v1 = CheckForCorrectnessV1::No;
 
     // Iterate over all combinations of the following parameters
     let compression = &[
@@ -150,37 +97,7 @@ fn verify_benchmark(c: &mut Criterion) {
                 setup_verify(*compressed_input, *compressed_output, &parameters);
 
             group.bench_with_input(
-                format!("serial_{}_{}", compressed_input, compressed_output),
-                &power,
-                |b, power| {
-                    let parameters_v1 = CeremonyParamsV1::<Bls12_377>::new(*power, batch);
-                    let pubkey_v1 = PublicKeyV1 {
-                        tau_g1: pubkey.tau_g1,
-                        alpha_g1: pubkey.alpha_g1,
-                        beta_g1: pubkey.beta_g1,
-                        tau_g2: pubkey.tau_g2,
-                        alpha_g2: pubkey.alpha_g2,
-                        beta_g2: pubkey.beta_g2,
-                    };
-                    b.iter(|| {
-                        BatchedAccumulator::verify_transformation(
-                            &input,
-                            &output,
-                            &pubkey_v1,
-                            &current_accumulator_hash,
-                            compat(*compressed_input),
-                            compat(*compressed_output),
-                            correctness_v1,
-                            correctness_v1,
-                            &parameters_v1,
-                        )
-                        .unwrap()
-                    })
-                },
-            );
-
-            group.bench_with_input(
-                format!("parallel_{}_{}", compressed_input, compressed_output),
+                format!("{}_{}", compressed_input, compressed_output),
                 &power,
                 |b, _power| {
                     b.iter(|| {
@@ -200,16 +117,6 @@ fn verify_benchmark(c: &mut Criterion) {
                 },
             );
         }
-    }
-}
-
-use powersoftau_v1::parameters::UseCompression as UseCompressionV1;
-// Unfortunately we need to convert datatypes from the current version
-// to be compatible to the imported version
-pub fn compat(compression: UseCompression) -> UseCompressionV1 {
-    match compression {
-        UseCompression::Yes => UseCompressionV1::Yes,
-        UseCompression::No => UseCompressionV1::No,
     }
 }
 

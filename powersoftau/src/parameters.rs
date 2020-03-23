@@ -1,6 +1,6 @@
 use snark_utils::{ElementType, UseCompression};
 use std::marker::PhantomData;
-use zexe_algebra::{CanonicalSerialize, PairingEngine, Zero};
+use zexe_algebra::{ConstantSerializedSize, PairingEngine};
 
 /// The sizes of the group elements of a curve
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
@@ -18,19 +18,11 @@ pub struct CurveParams<E> {
 
 impl<E: PairingEngine> CurveParams<E> {
     pub fn new() -> CurveParams<E> {
-        let g1 = <E as PairingEngine>::G1Affine::zero();
-        let mut g1_bytes_compressed = vec![0; <E as PairingEngine>::G1Affine::buffer_size()];
-        g1.serialize(&[], &mut g1_bytes_compressed)
-            .expect("could not serialize G1 element");
-        let g1_compressed = g1_bytes_compressed.len();
-        let g1_size = 2 * g1_compressed;
+        let g1_compressed = <E as PairingEngine>::G1Affine::SERIALIZED_SIZE;
+        let g1_size = <E as PairingEngine>::G1Affine::UNCOMPRESSED_SIZE;
 
-        let g2 = <E as PairingEngine>::G2Affine::zero();
-        let mut g2_bytes_compressed = vec![0; <E as PairingEngine>::G2Affine::buffer_size()];
-        g2.serialize(&[], &mut g2_bytes_compressed)
-            .expect("could not serialize G2 element");
-        let g2_compressed = g2_bytes_compressed.len();
-        let g2_size = 2 * g2_compressed;
+        let g2_compressed = <E as PairingEngine>::G2Affine::SERIALIZED_SIZE;
+        let g2_size = <E as PairingEngine>::G2Affine::UNCOMPRESSED_SIZE;
 
         CurveParams {
             g1: g1_size,

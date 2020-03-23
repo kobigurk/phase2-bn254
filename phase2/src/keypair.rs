@@ -3,7 +3,7 @@
 //! A Groth16 keypair. Generate one with the Keypair::new method.
 //! Dispose of the private key ASAP once it's been used.
 use rand::Rng;
-use snark_utils::{hash_to_g2, read_element, write_element, HashWriter, Result, UseCompression};
+use snark_utils::{hash_to_g2, Deserializer, HashWriter, Result, Serializer, UseCompression};
 use std::fmt;
 use std::io::{self, Read, Write};
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
@@ -51,10 +51,10 @@ impl<E: PairingEngine> PublicKey<E> {
     /// Serializes the key's **uncompressed** points to the provided
     /// writer
     pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        write_element(writer, &self.delta_after, UseCompression::No)?;
-        write_element(writer, &self.s, UseCompression::No)?;
-        write_element(writer, &self.s_delta, UseCompression::No)?;
-        write_element(writer, &self.r_delta, UseCompression::No)?;
+        writer.write_element(&self.delta_after, UseCompression::No)?;
+        writer.write_element(&self.s, UseCompression::No)?;
+        writer.write_element(&self.s_delta, UseCompression::No)?;
+        writer.write_element(&self.r_delta, UseCompression::No)?;
         writer.write_all(&self.transcript)?;
         Ok(())
     }
@@ -62,10 +62,10 @@ impl<E: PairingEngine> PublicKey<E> {
     /// Reads the key's **uncompressed** points from the provided
     /// reader
     pub fn read<R: Read>(reader: &mut R) -> Result<PublicKey<E>> {
-        let delta_after = read_element(reader, UseCompression::No)?;
-        let s = read_element(reader, UseCompression::No)?;
-        let s_delta = read_element(reader, UseCompression::No)?;
-        let r_delta = read_element(reader, UseCompression::No)?;
+        let delta_after = reader.read_element(UseCompression::No)?;
+        let s = reader.read_element(UseCompression::No)?;
+        let s_delta = reader.read_element(UseCompression::No)?;
+        let r_delta = reader.read_element(UseCompression::No)?;
         let mut transcript = [0u8; 64];
         reader.read_exact(&mut transcript)?;
 
@@ -141,8 +141,8 @@ pub fn hash_cs_pubkeys<E: PairingEngine>(
             pubkey.write(&mut sink).unwrap();
         }
         // Write s and s_delta!
-        write_element(&mut sink, &s, UseCompression::Yes).unwrap();
-        write_element(&mut sink, &s_delta, UseCompression::Yes).unwrap();
+        sink.write_element(&s, UseCompression::Yes).unwrap();
+        sink.write_element(&s_delta, UseCompression::Yes).unwrap();
         sink.into_hash()
     };
     // This avoids making a weird assumption about the hash into the

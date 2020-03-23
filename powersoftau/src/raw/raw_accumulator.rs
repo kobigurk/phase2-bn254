@@ -5,7 +5,7 @@ use crate::{
     parameters::CeremonyParams,
 };
 use snark_utils::*;
-use snark_utils::{Deserializer, Serializer};
+use snark_utils::{BatchDeserializer, BatchSerializer, Deserializer, Serializer};
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
 
 use itertools::{Itertools, MinMaxResult};
@@ -73,34 +73,32 @@ pub fn init<'a, E: PairingEngine>(
     compressed: UseCompression,
 ) {
     let (tau_g1, tau_g2, alpha_g1, beta_g1, beta_g2) = split_mut(output, parameters, compressed);
-    let g1_size = buffer_size::<E::G1Affine>(compressed);
-    let g2_size = buffer_size::<E::G2Affine>(compressed);
     let g1_one = &E::G1Affine::prime_subgroup_generator();
     let g2_one = &E::G2Affine::prime_subgroup_generator();
     rayon::scope(|s| {
         s.spawn(|_| {
             tau_g1
-                .init_element(g1_one, g1_size, compressed)
+                .init_element(g1_one, compressed)
                 .expect("could not initialize TauG1 elements")
         });
         s.spawn(|_| {
             tau_g2
-                .init_element(g2_one, g2_size, compressed)
+                .init_element(g2_one, compressed)
                 .expect("could not initialize TauG2 elements")
         });
         s.spawn(|_| {
             alpha_g1
-                .init_element(g1_one, g1_size, compressed)
+                .init_element(g1_one, compressed)
                 .expect("could not initialize Alpha G1 elements")
         });
         s.spawn(|_| {
             beta_g1
-                .init_element(g1_one, g1_size, compressed)
+                .init_element(g1_one, compressed)
                 .expect("could not initialize Beta G1 elements")
         });
         s.spawn(|_| {
             beta_g2
-                .init_element(g2_one, g2_size, compressed)
+                .init_element(g2_one, compressed)
                 .expect("could not initialize the Beta G2 element")
         });
     });
@@ -231,8 +229,8 @@ pub fn verify<E: PairingEngine>(
             )?;
         }
 
-        let before_beta_g2 = in_beta_g2.read_element::<E::G2Affine>(compressed_input)?;
-        let after_beta_g2 = beta_g2.read_element::<E::G2Affine>(compressed_output)?;
+        let before_beta_g2 = (&*in_beta_g2).read_element::<E::G2Affine>(compressed_input)?;
+        let after_beta_g2 = (&*beta_g2).read_element::<E::G2Affine>(compressed_output)?;
         check_same_ratio::<E>(
             &(before_g1[0], after_g1[0]),
             &(before_beta_g2, after_beta_g2),
@@ -345,7 +343,7 @@ pub fn deserialize<E: PairingEngine>(
     let tau_g2 = in_tau_g2.read_batch(compressed)?;
     let alpha_g1 = in_alpha_g1.read_batch(compressed)?;
     let beta_g1 = in_beta_g1.read_batch(compressed)?;
-    let beta_g2 = in_beta_g2.read_element(compressed)?;
+    let beta_g2 = (&*in_beta_g2).read_element(compressed)?;
 
     Ok((tau_g1, tau_g2, alpha_g1, beta_g1, beta_g2))
 }
@@ -359,7 +357,7 @@ pub fn decompress<E: PairingEngine>(
     let compressed_input = UseCompression::Yes;
     let compressed_output = UseCompression::No;
     // get an immutable reference to the compressed input chunks
-    let (in_tau_g1, in_tau_g2, in_alpha_g1, in_beta_g1, in_beta_g2) =
+    let (in_tau_g1, in_tau_g2, in_alpha_g1, in_beta_g1, mut in_beta_g2) =
         split(&input, parameters, compressed_input);
 
     // get mutable refs to the decompressed outputs
@@ -426,7 +424,7 @@ pub fn contribute<E: PairingEngine>(
     let (input, compressed_input) = (input.0, input.1);
     let (output, compressed_output) = (output.0, output.1);
     // get an immutable reference to the input chunks
-    let (in_tau_g1, in_tau_g2, in_alpha_g1, in_beta_g1, in_beta_g2) =
+    let (in_tau_g1, in_tau_g2, in_alpha_g1, in_beta_g1, mut in_beta_g2) =
         split(&input, parameters, compressed_input);
 
     // get mutable refs to the outputs

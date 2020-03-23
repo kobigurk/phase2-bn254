@@ -1,6 +1,9 @@
 /// Utilities to read/write and convert the Powers of Tau from Phase 1
 /// to Phase 2-compatible Lagrange Coefficients.
-use crate::{buffer_size, write_element, write_elements, Deserializer, Result, UseCompression};
+use crate::{
+    buffer_size, write_elements, BatchDeserializer, Deserializer, Result, Serializer,
+    UseCompression,
+};
 use std::fmt::Debug;
 use std::io::Write;
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
@@ -110,16 +113,16 @@ impl<E: PairingEngine> Groth16Params<E> {
         // Write alpha (in g1)
         // Needed by verifier for e(alpha, beta)
         // Needed by prover for A and C elements of proof
-        write_element(writer, &self.alpha_g1, compression)?;
+        writer.write_element(&self.alpha_g1, compression)?;
 
         // Write beta (in g1)
         // Needed by prover for C element of proof
-        write_element(writer, &self.beta_g1, compression)?;
+        writer.write_element(&self.beta_g1, compression)?;
 
         // Write beta (in g2)
         // Needed by verifier for e(alpha, beta)
         // Needed by prover for B element of proof
-        write_element(writer, &self.beta_g2, compression)?;
+        writer.write_element(&self.beta_g2, compression)?;
 
         // Lagrange coefficients in G1 (for constructing
         // LC/IC queries and precomputing polynomials for A)
@@ -160,9 +163,9 @@ impl<E: PairingEngine> Groth16Params<E> {
         ) = split_transcript::<E>(transcript, num_constraints, compressed);
 
         // Read all the necessary elements (this will load A LOT data to your memory for larger ceremonies)
-        let alpha_g1 = in_alpha_g1.read_element::<E::G1Affine>(compressed)?;
-        let beta_g1 = in_beta_g1.read_element::<E::G1Affine>(compressed)?;
-        let beta_g2 = in_beta_g2.read_element::<E::G2Affine>(compressed)?;
+        let alpha_g1 = (&*in_alpha_g1).read_element::<E::G1Affine>(compressed)?;
+        let beta_g1 = (&*in_beta_g1).read_element::<E::G1Affine>(compressed)?;
+        let beta_g2 = (&*in_beta_g2).read_element::<E::G2Affine>(compressed)?;
         let coeffs_g1 = in_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
         let coeffs_g2 = in_coeffs_g2.read_batch::<E::G2Affine>(compressed)?;
         let alpha_coeffs_g1 = in_alpha_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;

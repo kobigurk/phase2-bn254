@@ -14,9 +14,9 @@ crate-type = ["cdylib", "lib"]
 
 [dependencies]
 snark-utils = { path = "../snark-utils" }
-zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
-zexe_groth16 = { package = "groth16", version = "0.1.0", features = ["parallel"] }
-zexe_r1cs_core = { package = "r1cs-core", version = "0.1.0" }
+zexe_algebra = { git = "https://github.com/scipr-lab/zexe", package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
+zexe_groth16 = { git = "https://github.com/scipr-lab/zexe", package = "groth16", version = "0.1.0", features = ["parallel"] }
+zexe_r1cs_core = { git = "https://github.com/scipr-lab/zexe", package = "r1cs-core", version = "0.1.0" }
 
 
 rand = "0.7.3"

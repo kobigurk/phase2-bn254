@@ -5,11 +5,12 @@ authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
 edition = "2018"
 
 [dependencies]
-powersoftau = { path = "../powersoftau" }
 snark-utils = { path = "../snark-utils" }
-zexe_algebra = { package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
-zexe_groth16 = { package = "groth16", version = "0.1.0", features = ["parallel"] }
-zexe_r1cs_core = { package = "r1cs-core", version = "0.1.0" }
+powersoftau = { path = "../powersoftau" }
+
+zexe_algebra = { package = "algebra", git = "https://github.com/scipr-lab/zexe", version = "0.1.0", features = ["parallel", "full"] }
+zexe_groth16 = { package = "groth16", git = "https://github.com/scipr-lab/zexe", version = "0.1.0", features = ["parallel"] }
+zexe_r1cs_core = { package = "r1cs-core", git = "https://github.com/scipr-lab/zexe", version = "0.1.0" }
 
 rand = "0.7.3"
 typenum = "1.11.2"

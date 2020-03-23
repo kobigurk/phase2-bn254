@@ -1,12 +1,13 @@
 use gumdrop::Options;
 use powersoftau::{
-    cli_common::{curve_from_str, proving_system_from_str, CurveKind, ProvingSystem},
+    cli_common::{curve_from_str, CurveKind},
     parameters::*,
     BatchedAccumulator,
 };
 use snark_utils::{Groth16Params, Result, UseCompression};
 
-use zexe_algebra::{Bls12_377, PairingEngine};
+use std::time::Instant;
+use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, SW6};
 
 use std::fs::OpenOptions;
 
@@ -29,12 +30,6 @@ struct PreparePhase2Opts {
         parse(try_from_str = "curve_from_str")
     )]
     pub curve_kind: CurveKind,
-    #[options(
-        help = "the proving system to use",
-        default = "groth16",
-        parse(try_from_str = "proving_system_from_str")
-    )]
-    pub proving_system: ProvingSystem,
     #[options(help = "the size of batches to process", default = "256")]
     pub batch_size: usize,
     #[options(
@@ -42,33 +37,36 @@ struct PreparePhase2Opts {
         default = "21"
     )]
     pub power: usize,
-    #[options(help = "the size of the phase 2 circuit", default = "21")]
+    #[options(help = "the size (in powers) of the phase 2 circuit", default = "21")]
     pub phase2_size: usize,
 }
 
 fn main() -> Result<()> {
     let opts = PreparePhase2Opts::parse_args_default_or_exit();
 
-    let parameters = CeremonyParams::<Bls12_377>::new(opts.power, opts.batch_size);
+    let now = Instant::now();
+    match opts.curve_kind {
+        CurveKind::Bls12_381 => prepare_phase2::<Bls12_381>(&opts)?,
+        CurveKind::Bls12_377 => prepare_phase2::<Bls12_377>(&opts)?,
+        CurveKind::SW6 => prepare_phase2::<SW6>(&opts)?,
+    }
 
-    prepare_phase2(
-        &opts.response_fname,
-        &opts.phase2_fname,
-        &parameters,
-        opts.phase2_size,
-    )
+    let new_now = Instant::now();
+    println!(
+        "Executing {:?} took: {:?}",
+        opts,
+        new_now.duration_since(now)
+    );
+
+    Ok(())
 }
 
-fn prepare_phase2<E: PairingEngine + Sync>(
-    response_filename: &str,
-    phase2_filename: &str,
-    parameters: &CeremonyParams<E>,
-    phase2_size: usize,
-) -> Result<()> {
+fn prepare_phase2<E: PairingEngine + Sync>(opts: &PreparePhase2Opts) -> Result<()> {
+    let parameters = CeremonyParams::<E>::new(opts.power, opts.batch_size);
     // Try to load response file from disk.
     let reader = OpenOptions::new()
         .read(true)
-        .open(response_filename)
+        .open(&opts.response_fname)
         .expect("unable open response file in this directory");
     let response_readable_map = unsafe {
         MmapOptions::new()
@@ -81,7 +79,7 @@ fn prepare_phase2<E: PairingEngine + Sync>(
         .read(false)
         .write(true)
         .create_new(true)
-        .open(phase2_filename)
+        .open(&opts.phase2_fname)
         .expect("unable to create parameter file in this directory");
 
     // Deserialize the accumulator
@@ -91,7 +89,7 @@ fn prepare_phase2<E: PairingEngine + Sync>(
 
     // Load the elements to the Groth16 utility
     let groth16_params = Groth16Params::<E>::new(
-        phase2_size,
+        opts.phase2_size,
         current_accumulator.tau_powers_g1,
         current_accumulator.tau_powers_g2,
         current_accumulator.alpha_tau_powers_g1,

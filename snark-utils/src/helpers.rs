@@ -240,7 +240,7 @@ pub fn hash_to_g2<E: PairingEngine>(digest: &[u8]) -> E::G2Projective {
     E::G2Projective::rand(&mut rng)
 }
 
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
+pub fn from_slice(bytes: &[u8]) -> [u8; 32] {
     let mut array = [0; 32];
     let bytes = &bytes[..array.len()]; // panics if not enough data
     array.copy_from_slice(bytes);

@@ -1,0 +1,22 @@
+[package]
+name = "bls-snark-setup"
+version = "0.1.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+description = "MPC for the Celo SNARK"
+
+[dependencies]
+phase2 = { path = "../phase2" }
+snark-utils = { path = "../snark-utils" }
+
+bls-snark = { package = "epoch-snark", git = "https://github.com/celo-org/bls-zexe", branch = "calculate-constraints" }
+zexe_algebra = { package = "algebra", git = "https://github.com/scipr-lab/zexe", version = "0.1.0", features = ["parallel", "full"] }
+zexe_r1cs_std = { package = "r1cs-std", git = "https://github.com/scipr-lab/zexe", version = "0.1.0" }
+zexe_r1cs_core = { package = "r1cs-core", git = "https://github.com/scipr-lab/zexe", version = "0.1.0" }
+
+gumdrop = "0.7.0"
+hex-literal = "0.1.4"
+rand = "0.7.3"
+thiserror = "1.0.11"
+hex = "0.4.2"

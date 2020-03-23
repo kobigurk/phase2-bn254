@@ -11,6 +11,15 @@ pub trait Deserializer {
     /// Reads 1 compressed or uncompressed element
     fn read_element<G: AffineCurve>(&mut self, compression: UseCompression) -> Result<G>;
 
+    /// Reads exact number of elements
+    fn read_elements_exact<G: AffineCurve>(
+        &mut self,
+        num: usize,
+        compression: UseCompression,
+    ) -> Result<Vec<G>> {
+        (0..num).map(|_| self.read_element(compression)).collect()
+    }
+
     /// Reads 1 compressed or uncompressed element to a pre-allocated element
     fn read_element_preallocated<G: AffineCurve>(
         &mut self,
@@ -19,7 +28,6 @@ pub trait Deserializer {
     ) -> Result<()>;
 }
 
-// TODO: Implement this for `Read`
 pub trait BatchDeserializer {
     /// Reads multiple elements from the buffer
     fn read_batch<G: AffineCurve>(&self, compression: UseCompression) -> Result<Vec<G>>;

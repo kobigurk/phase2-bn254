@@ -38,7 +38,8 @@ where
 
     // read the transcript
     let mut mpc =
-        MPCParameters::<E>::new_from_buffer(c, (&transcript, compressed), phase2_size).unwrap();
+        MPCParameters::<E>::new_from_buffer(c, &mut &transcript[..], compressed, phase2_size)
+            .unwrap();
 
     let before = mpc.clone();
     // it is _not_ safe to use it yet, there must be 1 contribution

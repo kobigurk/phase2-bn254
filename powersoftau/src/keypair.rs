@@ -1,10 +1,12 @@
 use rand::Rng;
 use zexe_algebra::{
-    serialize::ConstantSerializedSize, AffineCurve, PairingEngine, ProjectiveCurve, UniformRand,
+    AffineCurve, CanonicalDeserialize, CanonicalSerialize, PairingEngine, ProjectiveCurve,
+    SerializationError, UniformRand,
 };
 
 use super::parameters::CeremonyParams;
-use snark_utils::{compute_g2_s, write_elements, BatchDeserializer, Error, UseCompression};
+use snark_utils::{compute_g2_s, Error, UseCompression};
+use std::io::{Read, Write};
 
 /// Contains terms of the form (s<sub>1</sub>, s<sub>1</sub><sup>x</sup>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub><sup>x</sup>)
 /// for all x in τ, α and β, and some s chosen randomly by its creator. The function H "hashes into" the group G2. No points in the public key may be the identity.
@@ -13,7 +15,7 @@ use snark_utils::{compute_g2_s, write_elements, BatchDeserializer, Error, UseCom
 /// knowledge of τ, α and β.
 ///
 /// It is necessary to verify `same_ratio`((s<sub>1</sub>, s<sub>1</sub><sup>x</sup>), (H(s<sub>1</sub><sup>x</sup>)<sub>2</sub>, H(s<sub>1</sub><sup>x</sup>)<sub>2</sub><sup>x</sup>)).
-#[derive(Eq, Debug)]
+#[derive(Eq, Debug, CanonicalSerialize, CanonicalDeserialize)]
 pub struct PublicKey<E: PairingEngine> {
     pub tau_g1: (E::G1Affine, E::G1Affine),
     pub alpha_g1: (E::G1Affine, E::G1Affine),
@@ -97,61 +99,7 @@ pub fn keypair<E: PairingEngine, R: Rng>(
 }
 
 impl<E: PairingEngine> PublicKey<E> {
-    /// Serialize the public key. Points are always in uncompressed form.
-    pub fn serialize(&self, writer: &mut [u8]) -> Result<(), Error> {
-        let g1_size = E::G1Affine::UNCOMPRESSED_SIZE;
-        let g1_elements = &[
-            self.tau_g1.0,
-            self.tau_g1.1,
-            self.alpha_g1.0,
-            self.alpha_g1.1,
-            self.beta_g1.0,
-            self.beta_g1.1,
-        ];
-        // Serialize the G1 elements of the key
-        write_elements(
-            &mut writer[..6 * g1_size].as_mut(),
-            g1_elements,
-            UseCompression::No,
-        )?;
-
-        let g2_elements = &[self.tau_g2, self.alpha_g2, self.beta_g2];
-        // Serialize the G2 elements of the key (note that we take the writer after the
-        // index of the 6 G1 elements)
-        write_elements(
-            &mut writer[6 * g1_size..].as_mut(),
-            g2_elements,
-            UseCompression::No,
-        )?;
-
-        Ok(())
-    }
-
-    /// Deserialize the public key. Points are always in uncompressed form, and
-    /// always checked, since there aren't very many of them. Does not allow an
-    /// points at infinity.
-    pub fn deserialize(reader: &[u8]) -> Result<PublicKey<E>, Error> {
-        let g1_size = E::G1Affine::UNCOMPRESSED_SIZE;
-        // Deserialize the first 6 G1 elements
-        let g1_els = (&reader[..6 * g1_size]).read_batch(UseCompression::No)?;
-        // Deserialize the remaining 3 G2 elements
-        let g2_els = (&reader[6 * g1_size..]).read_batch(UseCompression::No)?;
-
-        Ok(PublicKey {
-            tau_g1: (g1_els[0], g1_els[1]),
-            alpha_g1: (g1_els[2], g1_els[3]),
-            beta_g1: (g1_els[4], g1_els[5]),
-            tau_g2: g2_els[0],
-            alpha_g2: g2_els[1],
-            beta_g2: g2_els[2],
-        })
-    }
-}
-
-impl<E: PairingEngine> PublicKey<E> {
-    /// This function is intended to write the key to the memory map and calculates
-    /// a position for writing into the file itself based on information whether
-    /// contribution was output in compressed on uncompressed form
+    /// Writes the key to the memory map (takes into account offsets)
     pub fn write(
         &self,
         output_map: &mut [u8],
@@ -163,14 +111,12 @@ impl<E: PairingEngine> PublicKey<E> {
             UseCompression::No => parameters.accumulator_size,
         };
         // Write the public key after the provided position
-        self.serialize(&mut output_map[position..])?;
+        self.serialize(&mut output_map[position..].as_mut())?;
 
         Ok(())
     }
 
-    /// Deserialize the public key. Points are always in uncompressed form, and
-    /// always checked, since there aren't very many of them. Does not allow any
-    /// points at infinity.
+    /// Deserialize the public key from the memory map (takes into account offsets)
     pub fn read(
         input_map: &[u8],
         accumulator_was_compressed: UseCompression,
@@ -181,53 +127,6 @@ impl<E: PairingEngine> PublicKey<E> {
             UseCompression::No => parameters.accumulator_size,
         };
         // The public key is written after the provided position
-        PublicKey::deserialize(&input_map[position..])
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parameters::CurveParams;
-    use rand::{thread_rng, Rng};
-    use zexe_algebra::{bls12_377::Bls12_377, bls12_381::Bls12_381, sw6::SW6};
-
-    #[test]
-    fn test_pubkey_serialization_bls12_381() {
-        test_pubkey_serialization_curve::<Bls12_381>();
-    }
-
-    #[test]
-    fn test_pubkey_serialization_bls12_377() {
-        test_pubkey_serialization_curve::<Bls12_377>();
-    }
-
-    #[test]
-    fn test_pubkey_serialization_sw6() {
-        test_pubkey_serialization_curve::<SW6>();
-    }
-
-    fn test_pubkey_serialization_curve<E: PairingEngine>() {
-        let curve = CurveParams::<E>::new();
-        let public_key_size = 6 * curve.g1 + 3 * curve.g2;
-
-        // Generate a random public key
-        let rng = &mut thread_rng();
-        let digest = (0..64).map(|_| rng.gen()).collect::<Vec<_>>();
-        let err = keypair::<E, _>(rng, &[]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "Invalid variable length: expected 64, got 0"
-        );
-        let (pk, _): (PublicKey<E>, _) = keypair(rng, &digest).unwrap();
-
-        // Serialize it
-        let mut v = vec![0; public_key_size];
-        pk.serialize(&mut v).unwrap();
-        assert_eq!(v.len(), public_key_size);
-
-        // Deserialize it and check that it matches
-        let deserialized = PublicKey::<E>::deserialize(&v[..]).unwrap();
-        assert!(pk == deserialized);
+        Ok(PublicKey::deserialize(&mut &input_map[position..])?)
     }
 }

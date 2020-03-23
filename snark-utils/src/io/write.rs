@@ -15,9 +15,20 @@ pub trait Serializer {
         element: &impl AffineCurve,
         compression: UseCompression,
     ) -> Result<()>;
+
+    /// Writes a list of elements serially
+    fn write_elements_exact<G: AffineCurve>(
+        &mut self,
+        elements: &[G],
+        compression: UseCompression,
+    ) -> Result<()> {
+        elements
+            .iter()
+            .map(|el| self.write_element(el, compression))
+            .collect()
+    }
 }
 
-// TODO: Implement this for `Write`
 pub trait BatchSerializer {
     /// Initializes the buffer with the provided element
     fn init_element<G: AffineCurve>(

@@ -26,7 +26,7 @@ hex-literal = "0.1.4"
 
 [dev-dependencies]
 criterion = "0.3"
-zexe_algebra = { git = "https://github.com/scipr-lab/zexe", package = "algebra", version = "0.1.0", features = ["parallel", "full"] }
+zexe_algebra = { git = "https://github.com/scipr-lab/zexe", package = "algebra", version = "0.1.0", features = ["parallel", "full", "derive"] }
 test-helpers = { path = "../test-helpers" }
 
 [[bench]]

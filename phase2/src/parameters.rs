@@ -4,7 +4,10 @@ use snark_utils::*;
 use std::fmt;
 use std::io::{self, Read, Write};
 
-use zexe_algebra::{AffineCurve, Field, One, PairingEngine, ProjectiveCurve, Zero};
+use zexe_algebra::{
+    AffineCurve, CanonicalDeserialize, CanonicalSerialize, Field, One, PairingEngine,
+    ProjectiveCurve, Zero,
+};
 use zexe_groth16::{KeypairAssembly, Parameters, VerifyingKey};
 use zexe_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, Index, SynthesisError, Variable};
 
@@ -43,16 +46,17 @@ impl<E: PairingEngine + PartialEq> PartialEq for MPCParameters<E> {
 }
 
 impl<E: PairingEngine> MPCParameters<E> {
-    pub fn new_from_buffer<C>(
+    pub fn new_from_buffer<R: Read, C>(
         circuit: C,
-        transcript: (&[u8], UseCompression), // TODO: Replace with a Reader!
+        transcript: &mut R,
+        compressed: UseCompression,
         phase2_size: usize,
     ) -> Result<MPCParameters<E>>
     where
         C: ConstraintSynthesizer<E::Fr>,
     {
         let assembly = circuit_to_qap::<E, _>(circuit)?;
-        let params = Groth16Params::<E>::read(transcript, phase2_size)?;
+        let params = Groth16Params::<E>::read(transcript, compressed, phase2_size)?;
         Self::new(assembly, params)
     }
 
@@ -245,8 +249,7 @@ impl<E: PairingEngine> MPCParameters<E> {
     /// Serialize these parameters. The serialized parameters
     /// can be read by Zexe's Groth16 `Parameters`.
     pub fn write<W: Write>(&self, mut writer: W) -> Result<()> {
-        // TODO: This is unimplemented
-        self.params.write(&mut writer)?;
+        self.params.serialize(&mut writer)?;
         writer.write_all(&self.cs_hash)?;
 
         writer.write_u32::<BigEndian>(self.contributions.len() as u32)?;
@@ -257,11 +260,9 @@ impl<E: PairingEngine> MPCParameters<E> {
         Ok(())
     }
 
-    /// Deserialize these parameters. If `checked` is false,
-    /// we won't perform curve validity and group order
-    /// checks.
-    pub fn read<R: Read>(mut reader: R, checked: bool) -> Result<MPCParameters<E>> {
-        let params = Parameters::read(&mut reader, checked)?;
+    /// Deserialize these parameters.
+    pub fn read<R: Read>(mut reader: R) -> Result<MPCParameters<E>> {
+        let params = Parameters::deserialize(&mut reader)?;
 
         let mut cs_hash = [0u8; 64];
         reader.read_exact(&mut cs_hash)?;
@@ -414,8 +415,6 @@ mod tests {
     use zexe_algebra::Bls12_381;
 
     #[test]
-    #[ignore]
-    // temporarily ignore until read/write for Parameters is merged: https://github.com/scipr-lab/zexe/pull/109
     fn serialize_ceremony() {
         serialize_ceremony_curve::<Bls12_381>()
     }
@@ -427,7 +426,7 @@ mod tests {
         mpc.write(&mut writer).unwrap();
         let mut reader = vec![0; writer.len()];
         reader.copy_from_slice(&writer);
-        let deserialized = MPCParameters::<E>::read(&reader[..], false).unwrap();
+        let deserialized = MPCParameters::<E>::read(&reader[..]).unwrap();
         assert_eq!(deserialized, mpc)
     }
 

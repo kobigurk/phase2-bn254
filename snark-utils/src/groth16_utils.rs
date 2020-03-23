@@ -1,9 +1,6 @@
 /// Utilities to read/write and convert the Powers of Tau from Phase 1
 /// to Phase 2-compatible Lagrange Coefficients.
-use crate::{
-    buffer_size, write_elements, BatchDeserializer, Deserializer, Result, Serializer,
-    UseCompression,
-};
+use crate::{Deserializer, Result, Serializer, UseCompression};
 use std::fmt::Debug;
 use std::io::Write;
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
@@ -126,52 +123,39 @@ impl<E: PairingEngine> Groth16Params<E> {
 
         // Lagrange coefficients in G1 (for constructing
         // LC/IC queries and precomputing polynomials for A)
-        write_elements(writer, &self.coeffs_g1, compression)?;
+        writer.write_elements_exact(&self.coeffs_g1, compression)?;
 
         // Lagrange coefficients in G2 (for precomputing
         // polynomials for B)
-        write_elements(writer, &self.coeffs_g2, compression)?;
+        writer.write_elements_exact(&self.coeffs_g2, compression)?;
 
         // Lagrange coefficients in G1 with alpha (for
         // LC/IC queries)
-        write_elements(writer, &self.alpha_coeffs_g1, compression)?;
+        writer.write_elements_exact(&self.alpha_coeffs_g1, compression)?;
 
         // Lagrange coefficients in G1 with beta (for
         // LC/IC queries)
-        write_elements(writer, &self.beta_coeffs_g1, compression)?;
+        writer.write_elements_exact(&self.beta_coeffs_g1, compression)?;
 
         // Bases for H polynomial computation
-        write_elements(writer, &self.h_g1, compression)?;
+        writer.write_elements_exact(&self.h_g1, compression)?;
 
         Ok(())
     }
 
-    pub fn read(
-        (transcript, compressed): (&[u8], UseCompression),
+    pub fn read<R: std::io::Read>(
+        reader: &mut R,
+        compressed: UseCompression,
         num_constraints: usize,
     ) -> Result<Groth16Params<E>> {
-        // Split the transcript in the appropriate sections
-        let (
-            in_alpha_g1,
-            in_beta_g1,
-            in_beta_g2,
-            in_coeffs_g1,
-            in_coeffs_g2,
-            in_alpha_coeffs_g1,
-            in_beta_coeffs_g1,
-            in_h_g1,
-        ) = split_transcript::<E>(transcript, num_constraints, compressed);
-
-        // Read all the necessary elements (this will load A LOT data to your memory for larger ceremonies)
-        let alpha_g1 = (&*in_alpha_g1).read_element::<E::G1Affine>(compressed)?;
-        let beta_g1 = (&*in_beta_g1).read_element::<E::G1Affine>(compressed)?;
-        let beta_g2 = (&*in_beta_g2).read_element::<E::G2Affine>(compressed)?;
-        let coeffs_g1 = in_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
-        let coeffs_g2 = in_coeffs_g2.read_batch::<E::G2Affine>(compressed)?;
-        let alpha_coeffs_g1 = in_alpha_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
-        let beta_coeffs_g1 = in_beta_coeffs_g1.read_batch::<E::G1Affine>(compressed)?;
-        // H query points for Groth 16 should be already processed
-        let h_g1 = in_h_g1.read_batch::<E::G1Affine>(compressed)?;
+        let alpha_g1 = reader.read_element(compressed)?;
+        let beta_g1 = reader.read_element(compressed)?;
+        let beta_g2 = reader.read_element(compressed)?;
+        let coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        let coeffs_g2 = reader.read_elements_exact(num_constraints, compressed)?;
+        let alpha_coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        let beta_coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        let h_g1 = reader.read_elements_exact(num_constraints - 1, compressed)?;
 
         Ok(Groth16Params {
             alpha_g1,
@@ -184,53 +168,6 @@ impl<E: PairingEngine> Groth16Params<E> {
             h_g1,
         })
     }
-}
-
-/// Immutable slices with format [AlphaG1, BetaG1, BetaG2, CoeffsG1, CoeffsG2, AlphaCoeffsG1, BetaCoeffsG1, H_G1]
-type SplitBuf<'a> = (
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-    &'a [u8],
-);
-
-/// splits the transcript from phase 1 after it's been prepared and converted to coefficient form
-fn split_transcript<E: PairingEngine>(
-    input: &[u8],
-    size: usize,
-    compressed: UseCompression,
-) -> SplitBuf {
-    let g1_size = buffer_size::<E::G1Affine>(compressed);
-    let g2_size = buffer_size::<E::G2Affine>(compressed);
-
-    // 1 element each
-    let (alpha_g1, others) = input.split_at(g1_size);
-    let (beta_g1, others) = others.split_at(g1_size);
-    let (beta_g2, others) = others.split_at(g2_size);
-
-    // N elements per coefficient
-    let (coeffs_g1, others) = others.split_at(g1_size * size);
-    let (coeffs_g2, others) = others.split_at(g2_size * size);
-    let (alpha_coeffs_g1, others) = others.split_at(g1_size * size);
-    let (beta_coeffs_g1, others) = others.split_at(g1_size * size);
-
-    // N-1 for the h coeffs
-    let (h_coeffs, _) = others.split_at(g1_size * (size - 1));
-
-    (
-        alpha_g1,
-        beta_g1,
-        beta_g2,
-        coeffs_g1,
-        coeffs_g2,
-        alpha_coeffs_g1,
-        beta_coeffs_g1,
-        h_coeffs,
-    )
 }
 
 #[cfg(test)]
@@ -293,7 +230,7 @@ mod tests {
         let mut reader = vec![0; writer.len()];
         reader.copy_from_slice(&writer);
         let deserialized =
-            Groth16Params::<E>::read((&reader, compat(compressed)), phase2_size).unwrap();
+            Groth16Params::<E>::read(&mut &reader[..], compat(compressed), phase2_size).unwrap();
         assert_eq!(deserialized, groth_params);
     }
 

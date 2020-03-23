@@ -1,5 +1,7 @@
-use crate::errors::{Error, VerificationError};
-use crate::{buffer_size, BatchSerializer, Result, UseCompression};
+use crate::{
+    errors::{Error, VerificationError},
+    Result,
+};
 use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
 use crypto::digest::Digest as CryptoDigest;
 use crypto::sha2::Sha256;
@@ -19,18 +21,6 @@ use zexe_algebra::{
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use zexe_fft::{cfg_into_iter, cfg_iter, cfg_iter_mut};
-
-pub fn write_elements<C: AffineCurve, W: Write>(
-    writer: &mut W,
-    elements: &[C],
-    compression: UseCompression,
-) -> Result<()> {
-    // we want to write to the buffer in parallel, so we'll have to allocate here to [u8]
-    let mut buf = vec![0; elements.len() * buffer_size::<C>(compression)];
-    buf.write_batch(&elements, compression)?;
-    writer.write_all(&buf)?;
-    Ok(())
-}
 
 /// Generate the powers by raising the key's `tau` to all powers
 /// belonging to this chunk

@@ -5,6 +5,8 @@ mod keypair;
 pub mod parameters;
 mod polynomial;
 
+pub mod chunked_groth16;
+
 cfg_if! {
     if #[cfg(feature = "wasm")] {
         use wasm_bindgen::prelude::*;

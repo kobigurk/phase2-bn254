@@ -1,5 +1,3 @@
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-
 use snark_utils::*;
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -142,8 +140,8 @@ impl<E: PairingEngine> MPCParameters<E> {
         batch_mul(&mut self.params.h_query, &delta_inv)?;
 
         // Multiply the `delta_g1` and `delta_g2` elements by the private key's delta
-        self.params.delta_g1 = self.params.delta_g1.mul(private_key.delta).into_affine();
         self.params.vk.delta_g2 = self.params.vk.delta_g2.mul(private_key.delta).into_affine();
+        self.params.delta_g1 = self.params.delta_g1.mul(private_key.delta).into_affine();
         // Ensure the private key is no longer used
         drop(private_key);
         self.contributions.push(public_key.clone());
@@ -179,7 +177,7 @@ impl<E: PairingEngine> MPCParameters<E> {
                 E::G2Affine::prime_subgroup_generator(),
                 after.params.vk.delta_g2,
             ),
-            "Incosistent G2 Delta",
+            "Inconsistent G2 Delta",
         )?;
 
         // None of the previous transformations should change
@@ -248,14 +246,10 @@ impl<E: PairingEngine> MPCParameters<E> {
 
     /// Serialize these parameters. The serialized parameters
     /// can be read by Zexe's Groth16 `Parameters`.
-    pub fn write<W: Write>(&self, mut writer: W) -> Result<()> {
-        self.params.serialize(&mut writer)?;
+    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
+        self.params.serialize(writer)?;
         writer.write_all(&self.cs_hash)?;
-
-        writer.write_u32::<BigEndian>(self.contributions.len() as u32)?;
-        for pubkey in &self.contributions {
-            pubkey.write(&mut writer)?;
-        }
+        PublicKey::write_batch(writer, &self.contributions)?;
 
         Ok(())
     }
@@ -267,12 +261,7 @@ impl<E: PairingEngine> MPCParameters<E> {
         let mut cs_hash = [0u8; 64];
         reader.read_exact(&mut cs_hash)?;
 
-        let contributions_len = reader.read_u32::<BigEndian>()? as usize;
-
-        let mut contributions = vec![];
-        for _ in 0..contributions_len {
-            contributions.push(PublicKey::read(&mut reader)?);
-        }
+        let contributions = PublicKey::read_batch(&mut reader)?;
 
         Ok(MPCParameters {
             params,
@@ -352,7 +341,7 @@ fn verify_transcript<E: PairingEngine>(
         check_same_ratio::<E>(
             &(old_delta, pubkey.delta_after),
             &(r, pubkey.r_delta),
-            "Incosistent G1 Delta",
+            "Inconsistent G1 Delta",
         )?;
         old_delta = pubkey.delta_after;
 
@@ -366,8 +355,7 @@ fn verify_transcript<E: PairingEngine>(
 fn hash_params<E: PairingEngine>(params: &Parameters<E>) -> Result<[u8; 64]> {
     let sink = io::sink();
     let mut sink = HashWriter::new(sink);
-    // TODO: Re-enable this
-    // params.write(&mut sink)?;
+    params.serialize(&mut sink)?;
     let h = sink.into_hash();
     let mut cs_hash = [0; 64];
     cs_hash.copy_from_slice(h.as_ref());
@@ -408,6 +396,7 @@ pub fn circuit_to_qap<E: PairingEngine, C: ConstraintSynthesizer<E::Fr>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chunked_groth16::contribute;
     use powersoftau::{parameters::CeremonyParams, BatchedAccumulator};
     use rand::thread_rng;
     use snark_utils::{Groth16Params, UseCompression};
@@ -462,22 +451,33 @@ mod tests {
         // original
         let mpc = generate_ceremony::<E>();
 
-        // somebody contributes
+        // first contribution
         let mut contribution1 = mpc.clone();
         contribution1.contribute(rng).unwrap();
 
         // try to verify it against the previous step
         mpc.verify(&contribution1).unwrap();
 
-        // somebody else contributes
-        let mut contribution2 = contribution1.clone();
-        contribution2.contribute(rng).unwrap();
+        // second contribution via batched method
+        let mut c1_serialized = vec![];
+        contribution1.write(&mut c1_serialized).unwrap();
+        let mut c2_serialized = std::io::Cursor::new(c1_serialized);
+        contribute::<E, _, _>(&mut c2_serialized, rng, 4).unwrap();
+        c2_serialized.set_position(0); // reset cursor so that the reader starts from the beginning
+        let contribution2 = MPCParameters::<E>::read(&mut c2_serialized).unwrap();
 
-        // verification passes against the previous step
+        // it's a valid contribution against all previous steps
+        mpc.verify(&contribution2).unwrap();
         contribution1.verify(&contribution2).unwrap();
 
-        // verification passes against the initial params
-        mpc.verify(&contribution2).unwrap();
+        // third contribution
+        let mut contribution3 = contribution2.clone();
+        contribution3.contribute(rng).unwrap();
+
+        // it's a valid contribution against all previous steps
+        mpc.verify(&contribution3).unwrap();
+        contribution1.verify(&contribution3).unwrap();
+        contribution2.verify(&contribution3).unwrap();
     }
 
     // helper which generates the initial phase 2 params

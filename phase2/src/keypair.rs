@@ -2,6 +2,7 @@
 //!
 //! A Groth16 keypair. Generate one with the Keypair::new method.
 //! Dispose of the private key ASAP once it's been used.
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::Rng;
 use snark_utils::{hash_to_g2, Deserializer, HashWriter, Result, Serializer, UseCompression};
 use std::fmt;
@@ -13,6 +14,8 @@ use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
 pub struct PrivateKey<E: PairingEngine> {
     pub delta: E::Fr,
 }
+
+pub const PUBKEY_SIZE: usize = 544; // 96 * 2 + 48 * 2 * 3 + 64, assuming uncompressed elements
 
 /// This allows others to verify that you contributed. The hash produced
 /// by `MPCParameters::contribute` is just a BLAKE2b hash of this object.
@@ -46,6 +49,23 @@ impl<E: PairingEngine> PublicKey<E> {
         let mut response = [0u8; 64];
         response.copy_from_slice(h.as_ref());
         response
+    }
+
+    pub fn write_batch<W: Write>(writer: &mut W, pubkeys: &[PublicKey<E>]) -> Result<()> {
+        writer.write_u32::<BigEndian>(pubkeys.len() as u32)?;
+        for pubkey in pubkeys {
+            pubkey.write(writer)?;
+        }
+        Ok(())
+    }
+
+    pub fn read_batch<R: Read>(reader: &mut R) -> Result<Vec<Self>> {
+        let mut contributions = vec![];
+        let contributions_len = reader.read_u32::<BigEndian>()? as usize;
+        for _ in 0..contributions_len {
+            contributions.push(PublicKey::read(reader)?);
+        }
+        Ok(contributions)
     }
 
     /// Serializes the key's **uncompressed** points to the provided

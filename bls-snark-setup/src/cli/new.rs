@@ -66,7 +66,7 @@ pub fn new(opt: &NewOpts) -> Result<()> {
         .read(true)
         .open(&opt.phase1)
         .expect("could not read phase 1 transcript file");
-    let output = OpenOptions::new()
+    let mut output = OpenOptions::new()
         .read(false)
         .write(true)
         .create_new(true)
@@ -84,7 +84,7 @@ pub fn new(opt: &NewOpts) -> Result<()> {
 
     // Generate the initial transcript
     let mpc = MPCParameters::new(keypair, phase1)?;
-    mpc.write(output)?;
+    mpc.write(&mut output)?;
 
     Ok(())
 }

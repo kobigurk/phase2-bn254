@@ -2,7 +2,6 @@
 
 rm -f challenge* response* new_challenge* processed*
 
-# 3 validators and 3 epochs keep us just below 512k constraints (2^19)
 POWER=25
 NUM_VALIDATORS=100
 NUM_EPOCHS=30

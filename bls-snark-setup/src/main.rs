@@ -1,5 +1,10 @@
 use snark_utils::{beacon_randomness, from_slice, get_rng, user_system_randomness};
 
+use tracing_subscriber::{
+    filter::EnvFilter,
+    fmt::{time::ChronoUtc, Subscriber},
+};
+
 use gumdrop::Options;
 use std::{process, time::Instant};
 
@@ -7,6 +12,10 @@ mod cli;
 use cli::*;
 
 fn main() {
+    Subscriber::builder()
+        .with_timer(ChronoUtc::rfc3339())
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
     let opts = SNARKOpts::parse_args_default_or_exit();
 
     let command = opts.clone().command.unwrap_or_else(|| {

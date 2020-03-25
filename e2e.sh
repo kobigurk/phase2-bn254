@@ -3,10 +3,10 @@
 rm -f challenge* response* new_challenge* processed*
 
 # 3 validators and 3 epochs keep us just below 512k constraints (2^19)
-POWER=19
-NUM_VALIDATORS=3
-NUM_EPOCHS=3
-BATCH=100000
+POWER=25
+NUM_VALIDATORS=100
+NUM_EPOCHS=30
+BATCH=1000000
 CURVE="sw6"
 
 powersoftau="cargo run --release --bin powersoftau -- --curve-kind $CURVE --batch-size $BATCH --power $POWER"

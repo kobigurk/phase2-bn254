@@ -1,5 +1,5 @@
 use gumdrop::Options;
-use phase2::parameters::MPCParameters;
+use phase2::chunked_groth16::verify as chunked_verify;
 use snark_utils::Result;
 use std::fs::OpenOptions;
 use zexe_algebra::SW6;
@@ -12,6 +12,8 @@ pub struct VerifyOpts {
     pub before: String,
     #[options(help = "the current contribution", default = "challenge")]
     pub after: String,
+    #[options(help = "the batches which can be loaded in memory", default = "50000")]
+    pub batch: usize,
 }
 
 pub fn verify(opts: &VerifyOpts) -> Result<()> {
@@ -19,15 +21,10 @@ pub fn verify(opts: &VerifyOpts) -> Result<()> {
         .read(true)
         .open(&opts.before)
         .expect("could not read the previous participant's MPC transcript file");
-    let before = MPCParameters::<SW6>::read(&mut before)?;
-
     let mut after = OpenOptions::new()
         .read(true)
         .open(&opts.after)
         .expect("could not read the previous participant's MPC transcript file");
-    let after = MPCParameters::<SW6>::read(&mut after)?;
-
-    before.verify(&after)?;
-
+    chunked_verify::<SW6, _>(&mut before, &mut after, opts.batch)?;
     Ok(())
 }

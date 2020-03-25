@@ -180,6 +180,7 @@ dependencies = [
  "rand 0.7.3",
  "snark-utils",
  "thiserror",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -4,9 +4,10 @@
 //! utilities for operating directly on raw items which implement `Read`, `Write` and `Seek`
 //! such that contributing and verifying the MPC can be done in chunks which fit in memory.
 use crate::keypair::{Keypair, PublicKey, PUBKEY_SIZE};
+use crate::parameters::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
-use snark_utils::{batch_mul, Result};
+use snark_utils::{batch_mul, check_same_ratio, merge_pairs, InvariantKind, Phase2Error, Result};
 use std::{
     io::{Read, Seek, SeekFrom, Write},
     ops::Neg,
@@ -16,6 +17,120 @@ use zexe_algebra::{
     PairingEngine, ProjectiveCurve,
 };
 use zexe_groth16::VerifyingKey;
+
+/// Given two serialized contributions to the ceremony, this will check that `after`
+/// has been correctly calculated from `before`. Large vectors will be read in
+/// `batch_size` batches
+pub fn verify<E: PairingEngine, B: Read + Write + Seek>(
+    before: &mut B,
+    after: &mut B,
+    batch_size: usize,
+) -> Result<Vec<[u8; 64]>> {
+    let vk_before = VerifyingKey::<E>::deserialize(before)?;
+    let beta_g1_before = E::G1Affine::deserialize(before)?;
+    // we don't need the previous delta_g1 so we can skip it
+    before.seek(SeekFrom::Current(E::G1Affine::SERIALIZED_SIZE as i64))?;
+
+    let vk_after = VerifyingKey::<E>::deserialize(after)?;
+    let beta_g1_after = E::G1Affine::deserialize(after)?;
+    let delta_g1_after = E::G1Affine::deserialize(after)?;
+
+    // VK parameters remain unchanged, except for Delta G2
+    // which we check at the end of the function against the new contribution's
+    // pubkey
+    ensure_unchanged(
+        vk_before.alpha_g1,
+        vk_after.alpha_g1,
+        InvariantKind::AlphaG1,
+    )?;
+    ensure_unchanged(beta_g1_before, beta_g1_after, InvariantKind::BetaG1)?;
+    ensure_unchanged(vk_before.beta_g2, vk_after.beta_g2, InvariantKind::BetaG2)?;
+    ensure_unchanged(
+        vk_before.gamma_g2,
+        vk_after.gamma_g2,
+        InvariantKind::GammaG2,
+    )?;
+    ensure_unchanged_vec(
+        &vk_before.gamma_abc_g1,
+        &vk_after.gamma_abc_g1,
+        &InvariantKind::GammaAbcG1,
+    )?;
+
+    // Alpha G1, Beta G1/G2 queries are same
+    // (do this in chunks since the vectors may be large)
+    chunked_ensure_unchanged_vec::<E::G1Affine, _>(
+        before,
+        after,
+        batch_size,
+        &InvariantKind::AlphaG1Query,
+    )?;
+    chunked_ensure_unchanged_vec::<E::G1Affine, _>(
+        before,
+        after,
+        batch_size,
+        &InvariantKind::BetaG1Query,
+    )?;
+    chunked_ensure_unchanged_vec::<E::G2Affine, _>(
+        before,
+        after,
+        batch_size,
+        &InvariantKind::BetaG2Query,
+    )?;
+
+    // H and L queries should be updated with delta^-1
+    chunked_check_ratio::<E, _>(
+        before,
+        vk_before.delta_g2,
+        after,
+        vk_after.delta_g2,
+        batch_size,
+        "H_query ratio check failed",
+    )?;
+    chunked_check_ratio::<E, _>(
+        before,
+        vk_before.delta_g2,
+        after,
+        vk_after.delta_g2,
+        batch_size,
+        "L_query ratio check failed",
+    )?;
+
+    // cs_hash should be the same
+    let mut cs_hash_before = [0u8; 64];
+    before.read_exact(&mut cs_hash_before)?;
+    let mut cs_hash_after = [0u8; 64];
+    after.read_exact(&mut cs_hash_after)?;
+    ensure_unchanged(
+        &cs_hash_before[..],
+        &cs_hash_after[..],
+        InvariantKind::CsHash,
+    )?;
+
+    // None of the previous transformations should change
+    let contributions_before = PublicKey::<E>::read_batch(before)?;
+    let contributions_after = PublicKey::<E>::read_batch(after)?;
+    ensure_unchanged(
+        &contributions_before[..],
+        &contributions_after[0..contributions_before.len()],
+        InvariantKind::Contributions,
+    )?;
+
+    // Ensure that the new pubkey has been properly calculated
+    let pubkey = if let Some(pubkey) = contributions_after.last() {
+        pubkey
+    } else {
+        // if there were no new contributions then we should error
+        return Err(Phase2Error::NoContributions.into());
+    };
+    ensure_unchanged(pubkey.delta_after, delta_g1_after, InvariantKind::DeltaG1)?;
+    check_same_ratio::<E>(
+        &(E::G1Affine::prime_subgroup_generator(), pubkey.delta_after),
+        &(E::G2Affine::prime_subgroup_generator(), vk_after.delta_g2),
+        "Inconsistent G2 Delta",
+    )?;
+
+    verify_transcript(cs_hash_before, &contributions_after)
+}
 
 /// Given a buffer which corresponds to the format of `MPCParameters` (Groth16 Parameters
 /// followed by the contributions array and the contributions hash), this will modify the
@@ -148,4 +263,78 @@ fn mul_query<C: AffineCurve, B: Read + Write + Seek>(
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
     Ok(())
+}
+
+/// Checks that 2 vectors read from the 2 buffers are the same in chunks
+fn chunked_ensure_unchanged_vec<C: AffineCurve, B: Read + Write + Seek>(
+    before: &mut B,
+    after: &mut B,
+    batch_size: usize,
+    kind: &InvariantKind,
+) -> Result<()> {
+    // read total length
+    let len_before = u64::deserialize(before)? as usize;
+    let len_after = u64::deserialize(after)? as usize;
+    ensure_unchanged(len_before, len_after, kind.clone())?;
+
+    let iters = len_before / batch_size;
+    let leftovers = len_before % batch_size;
+    for _ in 0..iters {
+        let (els_before, els_after) = read_batch::<C, _>(before, after, batch_size)?;
+        ensure_unchanged_vec(&els_before, &els_after, kind)?;
+    }
+    // in case the batch size did not evenly divide the number of queries
+    if leftovers > 0 {
+        let (els_before, els_after) = read_batch::<C, _>(before, after, leftovers)?;
+        ensure_unchanged_vec(&els_before, &els_after, kind)?;
+    }
+
+    Ok(())
+}
+
+/// Checks that 2 vectors read from the 2 buffers are the same in chunks
+fn chunked_check_ratio<E: PairingEngine, B: Read + Write + Seek>(
+    before: &mut B,
+    before_delta_g2: E::G2Affine,
+    after: &mut B,
+    after_delta_g2: E::G2Affine,
+    batch_size: usize,
+    err: &'static str,
+) -> Result<()> {
+    // read total length
+    let len_before = u64::deserialize(before)? as usize;
+    let len_after = u64::deserialize(after)? as usize;
+    if len_before != len_after {
+        return Err(Phase2Error::InvalidLength.into());
+    }
+
+    let iters = len_before / batch_size;
+    let leftovers = len_before % batch_size;
+    for _ in 0..iters {
+        let (els_before, els_after) = read_batch::<E::G1Affine, _>(before, after, batch_size)?;
+        let pairs = merge_pairs(&els_before, &els_after);
+        check_same_ratio::<E>(&pairs, &(after_delta_g2, before_delta_g2), err)?;
+    }
+    // in case the batch size did not evenly divide the number of queries
+    if leftovers > 0 {
+        let (els_before, els_after) = read_batch::<E::G1Affine, _>(before, after, leftovers)?;
+        let pairs = merge_pairs(&els_before, &els_after);
+        check_same_ratio::<E>(&pairs, &(after_delta_g2, before_delta_g2), err)?;
+    }
+
+    Ok(())
+}
+
+fn read_batch<C: AffineCurve, B: Read + Write + Seek>(
+    before: &mut B,
+    after: &mut B,
+    batch_size: usize,
+) -> Result<(Vec<C>, Vec<C>)> {
+    let els_before = (0..batch_size)
+        .map(|_| C::deserialize(before))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let els_after = (0..batch_size)
+        .map(|_| C::deserialize(after))
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok((els_before, els_after))
 }

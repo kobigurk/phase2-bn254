@@ -51,6 +51,9 @@ pub enum InvariantKind {
     GammaG2,
     DeltaG1,
     Transcript,
+    AlphaG1Query,
+    BetaG1Query,
+    BetaG2Query,
 }
 
 use std::fmt;
@@ -66,6 +69,9 @@ impl fmt::Display for InvariantKind {
             InvariantKind::GammaG2 => write!(f, "GammaG2"),
             InvariantKind::DeltaG1 => write!(f, "DeltaG1"),
             InvariantKind::Transcript => write!(f, "Transcript"),
+            InvariantKind::AlphaG1Query => write!(f, "AlphaG1Query"),
+            InvariantKind::BetaG1Query => write!(f, "BetaG1Query"),
+            InvariantKind::BetaG2Query => write!(f, "BetaG2Query"),
         }
     }
 }

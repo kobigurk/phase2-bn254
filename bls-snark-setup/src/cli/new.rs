@@ -3,7 +3,7 @@ use gumdrop::Options;
 use bls_snark::gadgets::ValidatorSetUpdate;
 use zexe_algebra::{Bls12_377, SW6};
 use zexe_r1cs_core::ConstraintSynthesizer;
-use zexe_r1cs_std::test_constraint_counter::TestConstraintCounter;
+use zexe_r1cs_std::test_constraint_counter::ConstraintCounter;
 
 use phase2::parameters::{circuit_to_qap, MPCParameters};
 use snark_utils::{log_2, Groth16Params, Result, UseCompression};
@@ -29,7 +29,7 @@ pub struct NewOpts {
     pub num_validators: usize,
 }
 
-const COMPRESSION: UseCompression = UseCompression::Yes;
+const COMPRESSION: UseCompression = UseCompression::No;
 
 pub fn empty_circuit(opt: &NewOpts) -> (ValidatorSetUpdate<Bls12_377>, usize) {
     let maximum_non_signers = (opt.num_validators - 1) / 3;
@@ -43,7 +43,7 @@ pub fn empty_circuit(opt: &NewOpts) -> (ValidatorSetUpdate<Bls12_377>, usize) {
     );
 
     let num_constraints = {
-        let mut counter = TestConstraintCounter::new();
+        let mut counter = ConstraintCounter::new();
         valset
             .clone()
             .generate_constraints(&mut counter)

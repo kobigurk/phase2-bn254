@@ -1,4 +1,5 @@
 use gumdrop::Options;
+use memmap::MmapOptions;
 use phase2::chunked_groth16::verify as chunked_verify;
 use snark_utils::Result;
 use std::fs::OpenOptions;
@@ -17,14 +18,24 @@ pub struct VerifyOpts {
 }
 
 pub fn verify(opts: &VerifyOpts) -> Result<()> {
-    let mut before = OpenOptions::new()
+    let before = OpenOptions::new()
         .read(true)
         .open(&opts.before)
         .expect("could not read the previous participant's MPC transcript file");
-    let mut after = OpenOptions::new()
+    let mut before = unsafe {
+        MmapOptions::new()
+            .map_mut(&before)
+            .expect("unable to create a memory map for input")
+    };
+    let after = OpenOptions::new()
         .read(true)
         .open(&opts.after)
         .expect("could not read the previous participant's MPC transcript file");
-    chunked_verify::<SW6, _>(&mut before, &mut after, opts.batch)?;
+    let mut after = unsafe {
+        MmapOptions::new()
+            .map_mut(&after)
+            .expect("unable to create a memory map for input")
+    };
+    chunked_verify::<SW6>(&mut before, &mut after, opts.batch)?;
     Ok(())
 }

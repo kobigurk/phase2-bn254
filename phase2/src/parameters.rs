@@ -479,7 +479,7 @@ mod tests {
         let mpc = generate_ceremony::<E>();
         let mut mpc_serialized = vec![];
         mpc.write(&mut mpc_serialized).unwrap();
-        let mut mpc_cursor = std::io::Cursor::new(mpc_serialized);
+        let mut mpc_cursor = std::io::Cursor::new(mpc_serialized.clone());
 
         // first contribution
         let mut contribution1 = mpc.clone();
@@ -490,26 +490,26 @@ mod tests {
 
         // verify it against the previous step
         mpc.verify(&contribution1).unwrap();
-        verify::<E, _>(&mut mpc_cursor, &mut c1_cursor, 4).unwrap();
+        verify::<E>(&mut mpc_serialized.as_mut(), &mut c1_serialized.as_mut(), 4).unwrap();
         // after each call on the cursors the cursor's position is at the end,
         // so we have to reset it for further testing!
         mpc_cursor.set_position(0);
         c1_cursor.set_position(0);
 
         // second contribution via batched method
-        let mut c2_buf = c1_serialized;
+        let mut c2_buf = c1_serialized.clone();
         c2_buf.resize(c2_buf.len() + PublicKey::<E>::size(), 0); // make the buffer larger by 1 contribution
         contribute::<E, _>(&mut c2_buf, rng, 4).unwrap();
-        let mut c2_cursor = std::io::Cursor::new(c2_buf);
+        let mut c2_cursor = std::io::Cursor::new(c2_buf.clone());
         c2_cursor.set_position(0);
 
         // verify it against the previous step
-        verify::<E, _>(&mut c1_cursor, &mut c2_cursor, 4).unwrap();
+        verify::<E>(&mut c1_serialized.as_mut(), &mut c2_buf.as_mut(), 4).unwrap();
         c1_cursor.set_position(0);
         c2_cursor.set_position(0);
 
         // verify it against the original mpc
-        verify::<E, _>(&mut mpc_cursor, &mut c2_cursor, 4).unwrap();
+        verify::<E>(&mut mpc_serialized.as_mut(), &mut c2_buf.as_mut(), 4).unwrap();
         mpc_cursor.set_position(0);
         c2_cursor.set_position(0);
 

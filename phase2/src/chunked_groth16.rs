@@ -21,11 +21,14 @@ use zexe_groth16::VerifyingKey;
 /// Given two serialized contributions to the ceremony, this will check that `after`
 /// has been correctly calculated from `before`. Large vectors will be read in
 /// `batch_size` batches
-pub fn verify<E: PairingEngine, B: Read + Write + Seek>(
-    before: &mut B,
-    after: &mut B,
+pub fn verify<E: PairingEngine>(
+    before: &mut [u8],
+    after: &mut [u8],
     batch_size: usize,
 ) -> Result<Vec<[u8; 64]>> {
+    let before = &mut std::io::Cursor::new(before);
+    let after = &mut std::io::Cursor::new(after);
+
     let vk_before = VerifyingKey::<E>::deserialize(before)?;
     let beta_g1_before = E::G1Affine::deserialize(before)?;
     // we don't need the previous delta_g1 so we can skip it
@@ -56,44 +59,78 @@ pub fn verify<E: PairingEngine, B: Read + Write + Seek>(
         &InvariantKind::GammaAbcG1,
     )?;
 
-    // Alpha G1, Beta G1/G2 queries are same
-    // (do this in chunks since the vectors may be large)
-    chunked_ensure_unchanged_vec::<E::G1Affine, _>(
-        before,
-        after,
-        batch_size,
-        &InvariantKind::AlphaG1Query,
-    )?;
-    chunked_ensure_unchanged_vec::<E::G1Affine, _>(
-        before,
-        after,
-        batch_size,
-        &InvariantKind::BetaG1Query,
-    )?;
-    chunked_ensure_unchanged_vec::<E::G2Affine, _>(
-        before,
-        after,
-        batch_size,
-        &InvariantKind::BetaG2Query,
-    )?;
+    // Split the before-after buffers in non-overlapping slices and spawn a thread for each group
+    // of variables
+    let position = before.position() as usize;
+    let remaining_before = &mut before.get_mut()[position..];
+    let position = after.position() as usize;
+    let remaining_after = &mut after.get_mut()[position..];
+    let (before_alpha_g1, before_beta_g1, before_beta_g2, before_h, before_l) =
+        split_transcript::<E>(remaining_before)?;
+    let (after_alpha_g1, after_beta_g1, after_beta_g2, after_h, after_l) =
+        split_transcript::<E>(remaining_after)?;
+    // Save the position where the cursor should be after the threads execute
+    let pos = position
+        + 5 * u64::SERIALIZED_SIZE
+        + before_alpha_g1.len()
+        + before_beta_g1.len()
+        + before_beta_g2.len()
+        + before_h.len()
+        + before_l.len();
 
-    // H and L queries should be updated with delta^-1
-    chunked_check_ratio::<E, _>(
-        before,
-        vk_before.delta_g2,
-        after,
-        vk_after.delta_g2,
-        batch_size,
-        "H_query ratio check failed",
-    )?;
-    chunked_check_ratio::<E, _>(
-        before,
-        vk_before.delta_g2,
-        after,
-        vk_after.delta_g2,
-        batch_size,
-        "L_query ratio check failed",
-    )?;
+    crossbeam::scope(|s| {
+        // Alpha G1, Beta G1/G2 queries are same
+        // (do this in chunks since the vectors may be large)
+        s.spawn(|_| {
+            chunked_ensure_unchanged_vec::<E::G1Affine>(
+                before_alpha_g1,
+                after_alpha_g1,
+                batch_size,
+                &InvariantKind::AlphaG1Query,
+            )
+        });
+        s.spawn(|_| {
+            chunked_ensure_unchanged_vec::<E::G1Affine>(
+                before_beta_g1,
+                after_beta_g1,
+                batch_size,
+                &InvariantKind::BetaG1Query,
+            )
+        });
+        s.spawn(|_| {
+            chunked_ensure_unchanged_vec::<E::G2Affine>(
+                before_beta_g2,
+                after_beta_g2,
+                batch_size,
+                &InvariantKind::BetaG2Query,
+            )
+        });
+
+        // H and L queries should be updated with delta^-1
+        s.spawn(|_| {
+            chunked_check_ratio::<E>(
+                before_h,
+                vk_before.delta_g2,
+                after_h,
+                vk_after.delta_g2,
+                batch_size,
+                "H_query ratio check failed",
+            )
+        });
+        s.spawn(|_| {
+            chunked_check_ratio::<E>(
+                before_l,
+                vk_before.delta_g2,
+                after_l,
+                vk_after.delta_g2,
+                batch_size,
+                "L_query ratio check failed",
+            )
+        });
+    })?;
+
+    before.seek(SeekFrom::Start(pos as u64))?;
+    after.seek(SeekFrom::Start(pos as u64))?;
 
     // cs_hash should be the same
     let mut cs_hash_before = [0u8; 64];
@@ -292,16 +329,18 @@ fn mul_query<C: AffineCurve, B: Read + Write + Seek>(
 }
 
 /// Checks that 2 vectors read from the 2 buffers are the same in chunks
-fn chunked_ensure_unchanged_vec<C: AffineCurve, B: Read + Write + Seek>(
-    before: &mut B,
-    after: &mut B,
+fn chunked_ensure_unchanged_vec<C: AffineCurve>(
+    before: &mut [u8],
+    after: &mut [u8],
     batch_size: usize,
     kind: &InvariantKind,
 ) -> Result<()> {
-    // read total length
-    let len_before = u64::deserialize(before)? as usize;
-    let len_after = u64::deserialize(after)? as usize;
+    let len_before = before.len();
+    let len_after = after.len();
     ensure_unchanged(len_before, len_after, kind.clone())?;
+
+    let before = &mut std::io::Cursor::new(before);
+    let after = &mut std::io::Cursor::new(after);
 
     let iters = len_before / batch_size;
     let leftovers = len_before % batch_size;
@@ -319,20 +358,23 @@ fn chunked_ensure_unchanged_vec<C: AffineCurve, B: Read + Write + Seek>(
 }
 
 /// Checks that 2 vectors read from the 2 buffers are the same in chunks
-fn chunked_check_ratio<E: PairingEngine, B: Read + Write + Seek>(
-    before: &mut B,
+fn chunked_check_ratio<E: PairingEngine>(
+    before: &mut [u8],
     before_delta_g2: E::G2Affine,
-    after: &mut B,
+    after: &mut [u8],
     after_delta_g2: E::G2Affine,
     batch_size: usize,
     err: &'static str,
 ) -> Result<()> {
     // read total length
-    let len_before = u64::deserialize(before)? as usize;
-    let len_after = u64::deserialize(after)? as usize;
+    let len_before = before.len();
+    let len_after = after.len();
     if len_before != len_after {
         return Err(Phase2Error::InvalidLength.into());
     }
+
+    let before = &mut std::io::Cursor::new(before);
+    let after = &mut std::io::Cursor::new(after);
 
     let iters = len_before / batch_size;
     let leftovers = len_before % batch_size;
@@ -363,4 +405,37 @@ fn read_batch<C: AffineCurve, B: Read + Write + Seek>(
         .map(|_| C::deserialize(after))
         .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok((els_before, els_after))
+}
+
+type SplitBuf<'a> = (
+    &'a mut [u8],
+    &'a mut [u8],
+    &'a mut [u8],
+    &'a mut [u8],
+    &'a mut [u8],
+);
+
+/// splits the transcript from phase 1 after it's been prepared and converted to coefficient form
+fn split_transcript<E: PairingEngine>(input: &mut [u8]) -> Result<SplitBuf> {
+    // A, bg1, bg2, h, l
+    let len_size = u64::SERIALIZED_SIZE;
+    let a_g1_length = u64::deserialize(&mut &*input)? as usize;
+    let (a_g1, others) = input[len_size..].split_at_mut(a_g1_length * E::G1Affine::SERIALIZED_SIZE);
+
+    let b_g1_length = u64::deserialize(&mut &*others)? as usize;
+    let (b_g1, others) =
+        others[len_size..].split_at_mut(b_g1_length * E::G1Affine::SERIALIZED_SIZE);
+
+    let b_g2_length = u64::deserialize(&mut &*others)? as usize;
+    let (b_g2, others) =
+        others[len_size..].split_at_mut(b_g2_length * E::G2Affine::SERIALIZED_SIZE);
+
+    let h_g1_length = u64::deserialize(&mut &*others)? as usize;
+    let (h_g1, others) =
+        others[len_size..].split_at_mut(h_g1_length * E::G1Affine::SERIALIZED_SIZE);
+
+    let l_g1_length = u64::deserialize(&mut &*others)? as usize;
+    let (l_g1, _) = others[len_size..].split_at_mut(l_g1_length * E::G1Affine::SERIALIZED_SIZE);
+
+    Ok((a_g1, b_g1, b_g2, h_g1, l_g1))
 }

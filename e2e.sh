@@ -24,12 +24,17 @@ $phase2 --response-fname response --phase2-fname processed --phase2-size $POWER
 
 ###### Phase 2
 
-$snark new --phase1 processed --output ceremony --num-epochs $NUM_EPOCHS --num-validators $NUM_VALIDATORS --phase1-size $POWER
-cp ceremony initial
-$snark contribute --data ceremony
-$snark contribute --data ceremony
+$snark new --phase1 processed --output initial_ceremony --num-epochs $NUM_EPOCHS --num-validators $NUM_VALIDATORS --phase1-size $POWER
 
-$snark verify --before initial --after ceremony
+cp initial_ceremony contribution1
+yes | $snark contribute --data contribution1
+$snark verify --before initial_ceremony --after contribution1
+
+# a new contributor contributes
+cp contribution1 contribution2
+yes | $snark contribute --data contribution2
+$snark verify --before contribution1 --after contribution2
+$snark verify --before initial_ceremony --after contribution2
 
 # done! since `verify` passed, you can be sure that this will work
 # as shown in the `mpc.rs` example

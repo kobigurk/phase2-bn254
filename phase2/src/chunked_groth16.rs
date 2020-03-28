@@ -3,7 +3,7 @@
 //! Large MPCs can require >50GB of elements to be loaded in memory. This module provides
 //! utilities for operating directly on raw items which implement `Read`, `Write` and `Seek`
 //! such that contributing and verifying the MPC can be done in chunks which fit in memory.
-use crate::keypair::{Keypair, PublicKey, PUBKEY_SIZE};
+use crate::keypair::{Keypair, PublicKey};
 use crate::parameters::*;
 use byteorder::{BigEndian, WriteBytesExt};
 use rand::Rng;
@@ -136,11 +136,12 @@ pub fn verify<E: PairingEngine, B: Read + Write + Seek>(
 /// followed by the contributions array and the contributions hash), this will modify the
 /// Delta_g1, the VK's Delta_g2 and will update the H and L queries in place while leaving
 /// everything else unchanged
-pub fn contribute<E: PairingEngine, B: Read + Write + Seek, R: Rng>(
-    buffer: &mut B,
+pub fn contribute<E: PairingEngine, R: Rng>(
+    buffer: &mut [u8],
     rng: &mut R,
     batch_size: usize,
 ) -> Result<[u8; 64]> {
+    let buffer = &mut std::io::Cursor::new(buffer);
     // The VK is small so we read it directly from the start
     let mut vk = VerifyingKey::<E>::deserialize(buffer)?;
     // leave beta_g1 unchanged
@@ -187,10 +188,35 @@ pub fn contribute<E: PairingEngine, B: Read + Write + Seek, R: Rng>(
     skip_vec::<E::G1Affine, _>(buffer)?; // Beta G1
     skip_vec::<E::G2Affine, _>(buffer)?; // Beta G2
 
-    // update the h_query
-    chunked_mul_queries::<E::G1Affine, _>(buffer, &delta_inv, batch_size)?;
-    // update the l_query
-    chunked_mul_queries::<E::G1Affine, _>(buffer, &delta_inv, batch_size)?;
+    // The previous operations are all on small size elements so do them serially
+    // the `h` and `l` queries are relatively large, so we can get a nice speedup
+    // by performing the reads and writes in parallel
+    let h_query_len = u64::deserialize(buffer)? as usize;
+    let position = buffer.position() as usize;
+    let remaining = &mut buffer.get_mut()[position..];
+    let (h, l) = remaining.split_at_mut(h_query_len * E::G1Affine::SERIALIZED_SIZE);
+    let l_query_len = u64::deserialize(&mut &*l)? as usize;
+
+    // spawn 2 scoped threads to perform the contribution
+    crossbeam::scope(|s| {
+        s.spawn(|_| chunked_mul_queries::<E::G1Affine>(h, h_query_len, &delta_inv, batch_size));
+        s.spawn(|_| {
+            chunked_mul_queries::<E::G1Affine>(
+                // since we read the l_query length we will pass the buffer
+                // after it
+                &mut l[u64::SERIALIZED_SIZE..],
+                l_query_len,
+                &delta_inv,
+                batch_size,
+            )
+        });
+    })?;
+
+    // we processed the 2 elements via the raw buffer, so we have to modify the cursor accordingly
+    let pos = position
+        + (l_query_len + h_query_len) * E::G1Affine::SERIALIZED_SIZE
+        + u64::SERIALIZED_SIZE;
+    buffer.seek(SeekFrom::Start(pos as u64))?;
 
     // leave the cs_hash unchanged (64 bytes size)
     buffer.seek(SeekFrom::Current(64))?;
@@ -200,7 +226,7 @@ pub fn contribute<E: PairingEngine, B: Read + Write + Seek, R: Rng>(
 
     // advance to where the next pubkey would be in the buffer and append it
     buffer.seek(SeekFrom::Current(
-        (PUBKEY_SIZE * contributions.len()) as i64,
+        (PublicKey::<E>::size() * contributions.len()) as i64,
     ))?;
     public_key.write(buffer)?;
 
@@ -218,13 +244,13 @@ fn skip_vec<C: AffineCurve, B: Read + Seek>(buffer: &mut B) -> Result<()> {
 /// Multiplies a vector of affine elements by `element` in `batch_size` batches
 /// The first 8 bytes read from the buffer are the vector's length. The result
 /// is written back to the buffer in place
-fn chunked_mul_queries<C: AffineCurve, B: Read + Write + Seek>(
-    buffer: &mut B,
+fn chunked_mul_queries<C: AffineCurve>(
+    buffer: &mut [u8],
+    query_len: usize,
     element: &C::ScalarField,
     batch_size: usize,
 ) -> Result<()> {
-    // read total length
-    let query_len = u64::deserialize(buffer)? as usize;
+    let buffer = &mut std::io::Cursor::new(buffer);
 
     let iters = query_len / batch_size;
     let leftovers = query_len % batch_size;

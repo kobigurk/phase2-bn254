@@ -11,18 +11,17 @@ use zexe_r1cs_core::ConstraintSynthesizer;
 fn generate_mpc_parameters<E, C>(c: C, rng: &mut impl Rng) -> MPCParameters<E>
 where
     E: PairingEngine,
-    C: ConstraintSynthesizer<E::Fr>,
+    C: Clone + ConstraintSynthesizer<E::Fr>,
 {
-    let powers = 5;
+    let powers = 6; // powers of tau
     let batch = 4;
-    let phase2_size = 8;
     let params = CeremonyParams::<E>::new(powers, batch);
     let compressed = UseCompression::Yes;
     // make 1 power of tau contribution (assume powers of tau gets calculated properly)
     let (_, output, _, _) = setup_verify(compressed, compressed, &params);
     let accumulator = BatchedAccumulator::deserialize(&output, compressed, &params).unwrap();
 
-    // prepare for 2^5 powers
+    // prepare only the first 32 powers (for whatever reason)
     let groth_params = Groth16Params::<E>::new(
         32,
         accumulator.tau_powers_g1,
@@ -30,16 +29,19 @@ where
         accumulator.alpha_tau_powers_g1,
         accumulator.beta_tau_powers_g1,
         accumulator.beta_g2,
-    );
+    )
+    .unwrap();
     // write the transcript to a file
     let mut writer = vec![];
     groth_params.write(&mut writer, compressed).unwrap();
 
-    let mut transcript = std::io::Cursor::new(writer);
-    transcript.set_position(0);
-    // read only the first 8 coefficients from the prepared 32
+    // perform the MPC on only the amount of constraints required for the circuit
+    let mut counter = zexe_r1cs_std::test_constraint_counter::ConstraintCounter::new();
+    c.clone().generate_constraints(&mut counter).unwrap();
+    let phase2_size = counter.num_aux + counter.num_inputs + counter.num_constraints;
+
     let mut mpc =
-        MPCParameters::<E>::new_from_buffer(c, &mut transcript, compressed, 32, phase2_size)
+        MPCParameters::<E>::new_from_buffer(c, writer.as_mut(), compressed, 32, phase2_size)
             .unwrap();
 
     let before = mpc.clone();

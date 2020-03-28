@@ -1,6 +1,6 @@
 use snark_utils::*;
 use std::fmt;
-use std::io::{self, Read, Seek, Write};
+use std::io::{self, Read, Write};
 
 use zexe_algebra::{
     AffineCurve, CanonicalDeserialize, CanonicalSerialize, Field, One, PairingEngine,
@@ -44,9 +44,9 @@ impl<E: PairingEngine + PartialEq> PartialEq for MPCParameters<E> {
 }
 
 impl<E: PairingEngine> MPCParameters<E> {
-    pub fn new_from_buffer<R: Read + Seek, C>(
+    pub fn new_from_buffer<C>(
         circuit: C,
-        transcript: &mut R,
+        transcript: &mut [u8],
         compressed: UseCompression,
         phase1_size: usize,
         phase2_size: usize,
@@ -486,7 +486,7 @@ mod tests {
         contribution1.contribute(rng).unwrap();
         let mut c1_serialized = vec![];
         contribution1.write(&mut c1_serialized).unwrap();
-        let mut c1_cursor = std::io::Cursor::new(c1_serialized);
+        let mut c1_cursor = std::io::Cursor::new(c1_serialized.clone());
 
         // verify it against the previous step
         mpc.verify(&contribution1).unwrap();
@@ -497,8 +497,10 @@ mod tests {
         c1_cursor.set_position(0);
 
         // second contribution via batched method
-        let mut c2_cursor = c1_cursor.clone();
-        contribute::<E, _, _>(&mut c2_cursor, rng, 4).unwrap();
+        let mut c2_buf = c1_serialized;
+        c2_buf.resize(c2_buf.len() + PublicKey::<E>::size(), 0); // make the buffer larger by 1 contribution
+        contribute::<E, _>(&mut c2_buf, rng, 4).unwrap();
+        let mut c2_cursor = std::io::Cursor::new(c2_buf);
         c2_cursor.set_position(0);
 
         // verify it against the previous step
@@ -549,7 +551,8 @@ mod tests {
             accumulator.alpha_tau_powers_g1,
             accumulator.beta_tau_powers_g1,
             accumulator.beta_g2,
-        );
+        )
+        .unwrap();
 
         // this circuit requires 7 constraints, so a ceremony with size 8 is sufficient
         let c = TestCircuit::<E>(None);

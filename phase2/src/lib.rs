@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 
-mod keypair;
+pub mod keypair;
 
 pub mod parameters;
 mod polynomial;

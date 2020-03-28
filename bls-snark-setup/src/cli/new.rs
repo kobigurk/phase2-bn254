@@ -8,6 +8,7 @@ use zexe_r1cs_std::test_constraint_counter::ConstraintCounter;
 use phase2::parameters::{circuit_to_qap, MPCParameters};
 use snark_utils::{log_2, Groth16Params, Result, UseCompression};
 
+use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 #[derive(Debug, Options, Clone)]
@@ -46,30 +47,36 @@ pub fn empty_circuit(opt: &NewOpts) -> (ValidatorSetUpdate<Bls12_377>, usize) {
         None, // The hashes are done over SW6 so no helper is provided for the setup
     );
 
-    let num_constraints = {
+    let phase2_size = {
         let mut counter = ConstraintCounter::new();
         valset
             .clone()
             .generate_constraints(&mut counter)
             .expect("could not calculate number of required constraints");
-        let constraints = counter.num_constraints();
-        let power = log_2(constraints) as u32;
+        let phase2_size = counter.num_aux + counter.num_inputs + counter.num_constraints;
+        let power = log_2(phase2_size) as u32;
         // get the nearest power of 2
-        if constraints < 2usize.pow(power) {
+        if phase2_size < 2usize.pow(power) {
             2usize.pow(power + 1)
         } else {
-            constraints
+            phase2_size
         }
     };
 
-    (valset, num_constraints)
+    (valset, phase2_size)
 }
 
 pub fn new(opt: &NewOpts) -> Result<()> {
-    let mut phase1_transcript = OpenOptions::new()
+    let phase1_transcript = OpenOptions::new()
         .read(true)
+        .write(true)
         .open(&opt.phase1)
         .expect("could not read phase 1 transcript file");
+    let mut phase1_transcript = unsafe {
+        MmapOptions::new()
+            .map_mut(&phase1_transcript)
+            .expect("unable to create a memory map for input")
+    };
     let mut output = OpenOptions::new()
         .read(false)
         .write(true)
@@ -77,7 +84,7 @@ pub fn new(opt: &NewOpts) -> Result<()> {
         .open(&opt.output)
         .expect("could not open file for writing the MPC parameters ");
 
-    let (valset, num_constraints) = empty_circuit(&opt);
+    let (valset, phase2_size) = empty_circuit(&opt);
 
     // Read `num_constraints` Lagrange coefficients from the Phase1 Powers of Tau which were
     // prepared for this step. This will fail if Phase 1 was too small.
@@ -85,7 +92,7 @@ pub fn new(opt: &NewOpts) -> Result<()> {
         &mut phase1_transcript,
         COMPRESSION,
         2usize.pow(opt.phase1_size),
-        num_constraints,
+        phase2_size,
     )?;
 
     // Convert it to a QAP

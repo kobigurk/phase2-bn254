@@ -26,6 +26,14 @@ pub enum Error {
     SynthesisError(#[from] SynthesisError),
     #[error("Phase 2 Error: {0}")]
     Phase2Error(#[from] Phase2Error),
+    #[error("Crossbeam error during while joining the thread")]
+    CrossBeamError,
+}
+
+impl From<Box<dyn std::any::Any + Send>> for Error {
+    fn from(_: Box<dyn std::any::Any + Send>) -> Error {
+        Error::CrossBeamError
+    }
 }
 
 #[derive(Debug, Error, PartialEq)]

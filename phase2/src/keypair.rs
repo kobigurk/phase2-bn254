@@ -7,7 +7,10 @@ use rand::Rng;
 use snark_utils::{hash_to_g2, Deserializer, HashWriter, Result, Serializer, UseCompression};
 use std::fmt;
 use std::io::{self, Read, Write};
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
+use zexe_algebra::{
+    AffineCurve, CanonicalSerialize, ConstantSerializedSize, PairingEngine, ProjectiveCurve,
+    UniformRand,
+};
 
 /// This needs to be destroyed by at least one participant
 /// for the final parameters to be secure.
@@ -68,13 +71,17 @@ impl<E: PairingEngine> PublicKey<E> {
         Ok(contributions)
     }
 
+    pub fn size() -> usize {
+        3 * E::G1Affine::UNCOMPRESSED_SIZE + E::G2Affine::UNCOMPRESSED_SIZE + 64
+    }
+
     /// Serializes the key's **uncompressed** points to the provided
     /// writer
     pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writer.write_element(&self.delta_after, UseCompression::No)?;
-        writer.write_element(&self.s, UseCompression::No)?;
-        writer.write_element(&self.s_delta, UseCompression::No)?;
-        writer.write_element(&self.r_delta, UseCompression::No)?;
+        self.delta_after.serialize_uncompressed(writer)?;
+        self.s.serialize_uncompressed(writer)?;
+        self.s_delta.serialize_uncompressed(writer)?;
+        self.r_delta.serialize_uncompressed(writer)?;
         writer.write_all(&self.transcript)?;
         Ok(())
     }

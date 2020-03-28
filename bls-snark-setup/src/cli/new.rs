@@ -15,6 +15,10 @@ pub struct NewOpts {
     help: bool,
     #[options(help = "the path to the phase1 parameters", default = "phase1")]
     pub phase1: String,
+    #[options(
+        help = "the total number of coefficients (in powers of 2) which were created after processing phase 1"
+    )]
+    pub phase1_size: u32,
     #[options(help = "the challenge file name to be created", default = "challenge")]
     pub output: String,
     #[options(
@@ -77,7 +81,12 @@ pub fn new(opt: &NewOpts) -> Result<()> {
 
     // Read `num_constraints` Lagrange coefficients from the Phase1 Powers of Tau which were
     // prepared for this step. This will fail if Phase 1 was too small.
-    let phase1 = Groth16Params::<SW6>::read(&mut phase1_transcript, COMPRESSION, num_constraints)?;
+    let phase1 = Groth16Params::<SW6>::read(
+        &mut phase1_transcript,
+        COMPRESSION,
+        2usize.pow(opt.phase1_size),
+        num_constraints,
+    )?;
 
     // Convert it to a QAP
     let keypair = circuit_to_qap(valset)?;

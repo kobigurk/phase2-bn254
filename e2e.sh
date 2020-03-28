@@ -24,7 +24,7 @@ $phase2 --response-fname response --phase2-fname processed --phase2-size $POWER
 
 ###### Phase 2
 
-$snark new --phase1 processed --output ceremony --num-epochs $NUM_EPOCHS --num-validators $NUM_VALIDATORS
+$snark new --phase1 processed --output ceremony --num-epochs $NUM_EPOCHS --num-validators $NUM_VALIDATORS --phase1-size $POWER
 cp ceremony initial
 $snark contribute --data ceremony
 $snark contribute --data ceremony

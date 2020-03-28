@@ -13,7 +13,7 @@ where
     E: PairingEngine,
     C: ConstraintSynthesizer<E::Fr>,
 {
-    let powers = 3;
+    let powers = 5;
     let batch = 4;
     let phase2_size = 8;
     let params = CeremonyParams::<E>::new(powers, batch);
@@ -22,8 +22,9 @@ where
     let (_, output, _, _) = setup_verify(compressed, compressed, &params);
     let accumulator = BatchedAccumulator::deserialize(&output, compressed, &params).unwrap();
 
+    // prepare for 2^5 powers
     let groth_params = Groth16Params::<E>::new(
-        phase2_size,
+        32,
         accumulator.tau_powers_g1,
         accumulator.tau_powers_g2,
         accumulator.alpha_tau_powers_g1,
@@ -33,12 +34,12 @@ where
     // write the transcript to a file
     let mut writer = vec![];
     groth_params.write(&mut writer, compressed).unwrap();
-    let mut transcript = vec![0; writer.len()];
-    transcript.copy_from_slice(&writer);
 
-    // read the transcript
+    let mut transcript = std::io::Cursor::new(writer);
+    transcript.set_position(0);
+    // read only the first 8 coefficients from the prepared 32
     let mut mpc =
-        MPCParameters::<E>::new_from_buffer(c, &mut &transcript[..], compressed, phase2_size)
+        MPCParameters::<E>::new_from_buffer(c, &mut transcript, compressed, 32, phase2_size)
             .unwrap();
 
     let before = mpc.clone();

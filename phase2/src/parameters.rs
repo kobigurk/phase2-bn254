@@ -1,6 +1,6 @@
 use snark_utils::*;
 use std::fmt;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Seek, Write};
 
 use zexe_algebra::{
     AffineCurve, CanonicalDeserialize, CanonicalSerialize, Field, One, PairingEngine,
@@ -44,17 +44,18 @@ impl<E: PairingEngine + PartialEq> PartialEq for MPCParameters<E> {
 }
 
 impl<E: PairingEngine> MPCParameters<E> {
-    pub fn new_from_buffer<R: Read, C>(
+    pub fn new_from_buffer<R: Read + Seek, C>(
         circuit: C,
         transcript: &mut R,
         compressed: UseCompression,
+        phase1_size: usize,
         phase2_size: usize,
     ) -> Result<MPCParameters<E>>
     where
         C: ConstraintSynthesizer<E::Fr>,
     {
         let assembly = circuit_to_qap::<E, _>(circuit)?;
-        let params = Groth16Params::<E>::read(transcript, compressed, phase2_size)?;
+        let params = Groth16Params::<E>::read(transcript, compressed, phase1_size, phase2_size)?;
         Self::new(assembly, params)
     }
 
@@ -529,7 +530,9 @@ mod tests {
     // helper which generates the initial phase 2 params
     // for the TestCircuit
     fn generate_ceremony<E: PairingEngine>() -> MPCParameters<E> {
-        let powers = 3;
+        // the phase2 params are generated correctly,
+        // even though the powers of tau are >> the circuit size
+        let powers = 5;
         let batch = 4;
         let phase2_size = 7;
         let params = CeremonyParams::<E>::new(powers, batch);

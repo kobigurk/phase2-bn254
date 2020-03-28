@@ -1,8 +1,9 @@
 /// Utilities to read/write and convert the Powers of Tau from Phase 1
 /// to Phase 2-compatible Lagrange Coefficients.
-use crate::{Deserializer, Result, Serializer, UseCompression};
+use crate::{buffer_size, Deserializer, Result, Serializer, UseCompression};
 use std::fmt::Debug;
 use std::io::Write;
+use std::io::{Read, Seek, SeekFrom};
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
 use zexe_fft::EvaluationDomain;
 
@@ -143,18 +144,33 @@ impl<E: PairingEngine> Groth16Params<E> {
         Ok(())
     }
 
-    pub fn read<R: std::io::Read>(
+    /// Reads the first `num_constraints` coefficients from the provided processed
+    /// Phase 1 transcript with size `phase1_size`.
+    pub fn read<R: Read + std::io::Seek>(
         reader: &mut R,
         compressed: UseCompression,
+        phase1_size: usize,
         num_constraints: usize,
     ) -> Result<Groth16Params<E>> {
         let alpha_g1 = reader.read_element(compressed)?;
         let beta_g1 = reader.read_element(compressed)?;
         let beta_g2 = reader.read_element(compressed)?;
+
+        let g1_size = buffer_size::<E::G1Affine>(compressed);
+        let g2_size = buffer_size::<E::G2Affine>(compressed);
+
         let coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        skip(reader, phase1_size - num_constraints, g1_size)?;
+
         let coeffs_g2 = reader.read_elements_exact(num_constraints, compressed)?;
+        skip(reader, phase1_size - num_constraints, g2_size)?;
+
         let alpha_coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        skip(reader, phase1_size - num_constraints, g1_size)?;
+
         let beta_coeffs_g1 = reader.read_elements_exact(num_constraints, compressed)?;
+        skip(reader, phase1_size - num_constraints, g1_size)?;
+
         let h_g1 = reader.read_elements_exact(num_constraints - 1, compressed)?;
 
         Ok(Groth16Params {
@@ -170,6 +186,12 @@ impl<E: PairingEngine> Groth16Params<E> {
     }
 }
 
+fn skip<R: Read + Seek>(reader: &mut R, num_els: usize, el_size: usize) -> Result<()> {
+    reader.seek(SeekFrom::Current((num_els * el_size) as i64))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,18 +202,18 @@ mod tests {
 
     #[test]
     fn first_half_powers() {
-        let power = 3 as usize;
-        let phase2_size = 2u32.pow(power as u32) as usize / 2;
-        read_write_curve::<Bls12_377>(power, phase2_size, UseCompression::Yes);
-        read_write_curve::<Bls12_377>(power, phase2_size, UseCompression::No);
+        let power = 4 as usize;
+        let prepared_phase1_size = 2u32.pow(power as u32) as usize / 2;
+        read_write_curve::<Bls12_377>(power, prepared_phase1_size, UseCompression::Yes);
+        read_write_curve::<Bls12_377>(power, prepared_phase1_size, UseCompression::No);
     }
 
     #[test]
     fn phase2_equal_to_powers() {
         let power = 3 as usize;
-        let phase2_size = 2u32.pow(power as u32) as usize;
-        read_write_curve::<Bls12_377>(power, phase2_size, UseCompression::Yes);
-        read_write_curve::<Bls12_377>(power, phase2_size, UseCompression::No);
+        let prepared_phase1_size = 2u32.pow(power as u32) as usize;
+        read_write_curve::<Bls12_377>(power, prepared_phase1_size, UseCompression::Yes);
+        read_write_curve::<Bls12_377>(power, prepared_phase1_size, UseCompression::No);
     }
 
     #[test]
@@ -208,7 +230,7 @@ mod tests {
 
     fn read_write_curve<E: PairingEngine>(
         powers: usize,
-        phase2_size: usize,
+        prepared_phase1_size: usize,
         compressed: UseCompression,
     ) {
         let batch = 2;
@@ -217,7 +239,7 @@ mod tests {
         let accumulator = BatchedAccumulator::deserialize(&output, compressed, &params).unwrap();
 
         let groth_params = Groth16Params::<E>::new(
-            phase2_size,
+            prepared_phase1_size,
             accumulator.tau_powers_g1,
             accumulator.tau_powers_g2,
             accumulator.alpha_tau_powers_g1,
@@ -227,11 +249,45 @@ mod tests {
 
         let mut writer = vec![];
         groth_params.write(&mut writer, compat(compressed)).unwrap();
-        let mut reader = vec![0; writer.len()];
-        reader.copy_from_slice(&writer);
-        let deserialized =
-            Groth16Params::<E>::read(&mut &reader[..], compat(compressed), phase2_size).unwrap();
+        let mut reader = std::io::Cursor::new(writer);
+        let deserialized = Groth16Params::<E>::read(
+            &mut reader,
+            compat(compressed),
+            prepared_phase1_size,
+            prepared_phase1_size, // phase2_size == prepared phase1 size
+        )
+        .unwrap();
+        reader.set_position(0);
         assert_eq!(deserialized, groth_params);
+
+        let subset = prepared_phase1_size / 2;
+        let deserialized_subset = Groth16Params::<E>::read(
+            &mut reader,
+            compat(compressed),
+            prepared_phase1_size,
+            subset, // phase2 size is smaller than the prepared phase1 size
+        )
+        .unwrap();
+        assert_eq!(
+            &deserialized_subset.coeffs_g1[..],
+            &groth_params.coeffs_g1[..subset]
+        );
+        assert_eq!(
+            &deserialized_subset.coeffs_g2[..],
+            &groth_params.coeffs_g2[..subset]
+        );
+        assert_eq!(
+            &deserialized_subset.alpha_coeffs_g1[..],
+            &groth_params.alpha_coeffs_g1[..subset]
+        );
+        assert_eq!(
+            &deserialized_subset.beta_coeffs_g1[..],
+            &groth_params.beta_coeffs_g1[..subset]
+        );
+        assert_eq!(
+            &deserialized_subset.h_g1[..],
+            &groth_params.h_g1[..subset - 1]
+        ); // h_query is 1 less element
     }
 
     // helper

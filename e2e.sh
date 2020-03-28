@@ -2,7 +2,7 @@
 
 rm -f challenge* response* new_challenge* processed*
 
-POWER=25
+POWER=26
 NUM_VALIDATORS=100
 NUM_EPOCHS=30
 BATCH=1000000

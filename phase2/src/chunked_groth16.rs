@@ -78,36 +78,37 @@ pub fn verify<E: PairingEngine>(
         + before_h.len()
         + before_l.len();
 
-    crossbeam::scope(|s| {
+    crossbeam::scope(|s| -> Result<_> {
         // Alpha G1, Beta G1/G2 queries are same
         // (do this in chunks since the vectors may be large)
-        s.spawn(|_| {
+        let mut threads = Vec::with_capacity(5);
+        threads.push(s.spawn(|_| {
             chunked_ensure_unchanged_vec::<E::G1Affine>(
                 before_alpha_g1,
                 after_alpha_g1,
                 batch_size,
                 &InvariantKind::AlphaG1Query,
             )
-        });
-        s.spawn(|_| {
+        }));
+        threads.push(s.spawn(|_| {
             chunked_ensure_unchanged_vec::<E::G1Affine>(
                 before_beta_g1,
                 after_beta_g1,
                 batch_size,
                 &InvariantKind::BetaG1Query,
             )
-        });
-        s.spawn(|_| {
+        }));
+        threads.push(s.spawn(|_| {
             chunked_ensure_unchanged_vec::<E::G2Affine>(
                 before_beta_g2,
                 after_beta_g2,
                 batch_size,
                 &InvariantKind::BetaG2Query,
             )
-        });
+        }));
 
         // H and L queries should be updated with delta^-1
-        s.spawn(|_| {
+        threads.push(s.spawn(|_| {
             chunked_check_ratio::<E>(
                 before_h,
                 vk_before.delta_g2,
@@ -116,8 +117,8 @@ pub fn verify<E: PairingEngine>(
                 batch_size,
                 "H_query ratio check failed",
             )
-        });
-        s.spawn(|_| {
+        }));
+        threads.push(s.spawn(|_| {
             chunked_check_ratio::<E>(
                 before_l,
                 vk_before.delta_g2,
@@ -126,8 +127,16 @@ pub fn verify<E: PairingEngine>(
                 batch_size,
                 "L_query ratio check failed",
             )
-        });
-    })?;
+        }));
+
+        // join the threads at the end to ensure
+        // the computation is done
+        for t in threads {
+            t.join()??;
+        }
+
+        Ok(())
+    })??;
 
     before.seek(SeekFrom::Start(pos as u64))?;
     after.seek(SeekFrom::Start(pos as u64))?;
@@ -235,9 +244,12 @@ pub fn contribute<E: PairingEngine, R: Rng>(
     let l_query_len = u64::deserialize(&mut &*l)? as usize;
 
     // spawn 2 scoped threads to perform the contribution
-    crossbeam::scope(|s| {
-        s.spawn(|_| chunked_mul_queries::<E::G1Affine>(h, h_query_len, &delta_inv, batch_size));
-        s.spawn(|_| {
+    crossbeam::scope(|s| -> Result<_> {
+        let mut threads = Vec::with_capacity(2);
+        threads.push(
+            s.spawn(|_| chunked_mul_queries::<E::G1Affine>(h, h_query_len, &delta_inv, batch_size)),
+        );
+        threads.push(s.spawn(|_| {
             chunked_mul_queries::<E::G1Affine>(
                 // since we read the l_query length we will pass the buffer
                 // after it
@@ -246,8 +258,14 @@ pub fn contribute<E: PairingEngine, R: Rng>(
                 &delta_inv,
                 batch_size,
             )
-        });
-    })?;
+        }));
+
+        for t in threads {
+            t.join()??;
+        }
+
+        Ok(())
+    })??;
 
     // we processed the 2 elements via the raw buffer, so we have to modify the cursor accordingly
     let pos = position
@@ -335,8 +353,8 @@ fn chunked_ensure_unchanged_vec<C: AffineCurve>(
     batch_size: usize,
     kind: &InvariantKind,
 ) -> Result<()> {
-    let len_before = before.len();
-    let len_after = after.len();
+    let len_before = before.len() / C::SERIALIZED_SIZE;
+    let len_after = after.len() / C::SERIALIZED_SIZE;
     ensure_unchanged(len_before, len_after, kind.clone())?;
 
     let before = &mut std::io::Cursor::new(before);
@@ -367,8 +385,8 @@ fn chunked_check_ratio<E: PairingEngine>(
     err: &'static str,
 ) -> Result<()> {
     // read total length
-    let len_before = before.len();
-    let len_after = after.len();
+    let len_before = before.len() / E::G1Affine::SERIALIZED_SIZE;
+    let len_after = after.len() / E::G1Affine::SERIALIZED_SIZE;
     if len_before != len_after {
         return Err(Phase2Error::InvalidLength.into());
     }

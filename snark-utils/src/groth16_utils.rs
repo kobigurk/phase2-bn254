@@ -3,6 +3,7 @@
 use crate::{buffer_size, Deserializer, Result, Serializer, UseCompression};
 use std::fmt::Debug;
 use std::io::Write;
+use tracing::{debug, info, span, Level};
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
 use zexe_fft::EvaluationDomain;
 
@@ -79,8 +80,13 @@ impl<E: PairingEngine> Groth16Params<E> {
         beta_tau_powers_g1: Vec<E::G1Affine>,
         beta_g2: E::G2Affine,
     ) -> Result<Self> {
+        let span = span!(Level::TRACE, "Groth16Utils_new");
+        let _enter = span.enter();
+
         // Create the evaluation domain
         let domain = EvaluationDomain::<E::Fr>::new(phase2_size).expect("could not create domain");
+
+        info!("converting powers of tau to Lagrange coefficients");
 
         Ok(crossbeam::scope(|s| -> Result<_> {
             // Convert the accumulated powers to Lagrange coefficients
@@ -94,10 +100,17 @@ impl<E: PairingEngine> Groth16Params<E> {
             let h_g1 = s.spawn(|_| h_query_groth16(&tau_powers_g1, phase2_size));
 
             let coeffs_g1 = coeffs_g1.join()?;
+            debug!("Tau G1 Coefficients calculated");
             let coeffs_g2 = coeffs_g2.join()?;
+            debug!("Tau G2 Coefficients calculated");
             let alpha_coeffs_g1 = alpha_coeffs_g1.join()?;
+            debug!("Alpha Tau G1 Coefficients calculated");
             let beta_coeffs_g1 = beta_coeffs_g1.join()?;
+            debug!("Beta Tau G1 Coefficients calculated");
             let h_g1 = h_g1.join()?;
+            debug!("H query Coefficients calculated");
+
+            info!("successfully created groth16 parameters from powers of tau");
 
             Ok(Groth16Params {
                 alpha_g1: alpha_tau_powers_g1[0],
@@ -158,6 +171,9 @@ impl<E: PairingEngine> Groth16Params<E> {
         phase1_size: usize,
         num_constraints: usize,
     ) -> Result<Groth16Params<E>> {
+        let span = span!(Level::TRACE, "Groth16Utils_read");
+        let _enter = span.enter();
+
         let mut reader = std::io::Cursor::new(reader);
         let alpha_g1 = reader.read_element(compressed)?;
         let beta_g1 = reader.read_element(compressed)?;
@@ -170,6 +186,7 @@ impl<E: PairingEngine> Groth16Params<E> {
         let (in_coeffs_g1, in_coeffs_g2, in_alpha_coeffs_g1, in_beta_coeffs_g1, in_h_g1) =
             split_transcript::<E>(reader, phase1_size, num_constraints, compressed);
 
+        info!("reading groth16 parameters...");
         // Read all elements in parallel
         // note: '??' is used for getting the result from the threaded operation,
         // and then getting the result from the function inside the thread)
@@ -183,10 +200,17 @@ impl<E: PairingEngine> Groth16Params<E> {
             let h_g1 = s.spawn(|_| in_h_g1.read_batch::<E::G1Affine>(compressed));
 
             let coeffs_g1 = coeffs_g1.join()??;
+            debug!("Read Tau G1 Coefficients");
             let coeffs_g2 = coeffs_g2.join()??;
+            debug!("Read Tau G2 Coefficients");
             let alpha_coeffs_g1 = alpha_coeffs_g1.join()??;
+            debug!("Read Alpha G1 Coefficients");
             let beta_coeffs_g1 = beta_coeffs_g1.join()??;
+            debug!("Read Beta G1 Coefficients");
             let h_g1 = h_g1.join()??;
+            debug!("Read H query Coefficients");
+
+            info!("successfully read groth16 parameters");
 
             Ok(Groth16Params {
                 alpha_g1,

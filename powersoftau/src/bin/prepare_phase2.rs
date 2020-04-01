@@ -12,6 +12,10 @@ use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, SW6};
 use std::fs::OpenOptions;
 
 use memmap::*;
+use tracing_subscriber::{
+    filter::EnvFilter,
+    fmt::{time::ChronoUtc, Subscriber},
+};
 
 #[derive(Debug, Options, Clone)]
 struct PreparePhase2Opts {
@@ -42,6 +46,11 @@ struct PreparePhase2Opts {
 }
 
 fn main() -> Result<()> {
+    Subscriber::builder()
+        .with_timer(ChronoUtc::rfc3339())
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let opts = PreparePhase2Opts::parse_args_default_or_exit();
 
     let now = Instant::now();

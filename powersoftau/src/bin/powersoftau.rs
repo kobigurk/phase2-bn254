@@ -7,12 +7,21 @@ use snark_utils::{beacon_randomness, get_rng, user_system_randomness};
 
 use std::process;
 use std::time::Instant;
+use tracing_subscriber::{
+    filter::EnvFilter,
+    fmt::{time::ChronoUtc, Subscriber},
+};
 use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine as Engine, SW6};
 
 #[macro_use]
 extern crate hex_literal;
 
 fn main() {
+    Subscriber::builder()
+        .with_timer(ChronoUtc::rfc3339())
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let opts: PowersOfTauOpts = PowersOfTauOpts::parse_args_default_or_exit();
 
     match opts.curve_kind {

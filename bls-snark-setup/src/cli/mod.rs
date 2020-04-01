@@ -1,7 +1,7 @@
 use gumdrop::Options;
 
-mod new;
 pub use new::{empty_circuit, new, NewOpts};
+mod new;
 
 mod contribute;
 pub use contribute::{contribute, ContributeOpts};

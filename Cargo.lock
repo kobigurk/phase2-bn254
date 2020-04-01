@@ -822,6 +822,8 @@ dependencies = [
  "rayon",
  "snark-utils",
  "test-helpers",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1165,6 +1167,7 @@ dependencies = [
  "rust-crypto",
  "test-helpers",
  "thiserror",
+ "tracing",
  "typenum",
 ]
 

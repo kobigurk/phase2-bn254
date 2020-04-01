@@ -18,6 +18,7 @@ extern crate hex_literal;
 
 fn main() {
     Subscriber::builder()
+        .with_target(false)
         .with_timer(ChronoUtc::rfc3339())
         .with_env_filter(EnvFilter::from_default_env())
         .init();

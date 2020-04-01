@@ -12,6 +12,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
     ops::Neg,
 };
+use tracing::{debug, info, info_span, trace};
 use zexe_algebra::{
     AffineCurve, CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize, Field,
     PairingEngine, ProjectiveCurve,
@@ -21,11 +22,16 @@ use zexe_groth16::VerifyingKey;
 /// Given two serialized contributions to the ceremony, this will check that `after`
 /// has been correctly calculated from `before`. Large vectors will be read in
 /// `batch_size` batches
+#[allow(clippy::cognitive_complexity)]
 pub fn verify<E: PairingEngine>(
     before: &mut [u8],
     after: &mut [u8],
     batch_size: usize,
 ) -> Result<Vec<[u8; 64]>> {
+    let span = info_span!("phase2-verify");
+    let _enter = span.enter();
+    info!("starting...");
+
     let before = &mut std::io::Cursor::new(before);
     let after = &mut std::io::Cursor::new(after);
 
@@ -59,6 +65,8 @@ pub fn verify<E: PairingEngine>(
         &InvariantKind::GammaAbcG1,
     )?;
 
+    debug!("initial elements unchanged");
+
     // Split the before-after buffers in non-overlapping slices and spawn a thread for each group
     // of variables
     let position = before.position() as usize;
@@ -79,10 +87,14 @@ pub fn verify<E: PairingEngine>(
         + before_l.len();
 
     crossbeam::scope(|s| -> Result<_> {
+        let _enter = span.enter();
         // Alpha G1, Beta G1/G2 queries are same
         // (do this in chunks since the vectors may be large)
         let mut threads = Vec::with_capacity(5);
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("alpha_g1_query");
+            let _enter = span.enter();
             chunked_ensure_unchanged_vec::<E::G1Affine>(
                 before_alpha_g1,
                 after_alpha_g1,
@@ -91,6 +103,9 @@ pub fn verify<E: PairingEngine>(
             )
         }));
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("beta_g1_query");
+            let _enter = span.enter();
             chunked_ensure_unchanged_vec::<E::G1Affine>(
                 before_beta_g1,
                 after_beta_g1,
@@ -99,6 +114,9 @@ pub fn verify<E: PairingEngine>(
             )
         }));
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("beta_g2_query");
+            let _enter = span.enter();
             chunked_ensure_unchanged_vec::<E::G2Affine>(
                 before_beta_g2,
                 after_beta_g2,
@@ -109,6 +127,9 @@ pub fn verify<E: PairingEngine>(
 
         // H and L queries should be updated with delta^-1
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("h_g1_query");
+            let _enter = span.enter();
             chunked_check_ratio::<E>(
                 before_h,
                 vk_before.delta_g2,
@@ -119,6 +140,9 @@ pub fn verify<E: PairingEngine>(
             )
         }));
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("l_g1_query");
+            let _enter = span.enter();
             chunked_check_ratio::<E>(
                 before_l,
                 vk_before.delta_g2,
@@ -152,6 +176,8 @@ pub fn verify<E: PairingEngine>(
         InvariantKind::CsHash,
     )?;
 
+    debug!("cs hash was unchanged");
+
     // None of the previous transformations should change
     let contributions_before = PublicKey::<E>::read_batch(before)?;
     let contributions_after = PublicKey::<E>::read_batch(after)?;
@@ -161,6 +187,8 @@ pub fn verify<E: PairingEngine>(
         InvariantKind::Contributions,
     )?;
 
+    debug!("previous contributions were unchanged");
+
     // Ensure that the new pubkey has been properly calculated
     let pubkey = if let Some(pubkey) = contributions_after.last() {
         pubkey
@@ -169,13 +197,22 @@ pub fn verify<E: PairingEngine>(
         return Err(Phase2Error::NoContributions.into());
     };
     ensure_unchanged(pubkey.delta_after, delta_g1_after, InvariantKind::DeltaG1)?;
+    debug!("public key was updated correctly");
+
     check_same_ratio::<E>(
         &(E::G1Affine::prime_subgroup_generator(), pubkey.delta_after),
         &(E::G2Affine::prime_subgroup_generator(), vk_after.delta_g2),
         "Inconsistent G2 Delta",
     )?;
 
-    verify_transcript(cs_hash_before, &contributions_after)
+    debug!("verifying key was updated correctly");
+
+    let res = verify_transcript(cs_hash_before, &contributions_after)?;
+
+    debug!("verified transcript");
+
+    info!("done.");
+    Ok(res)
 }
 
 /// Given a buffer which corresponds to the format of `MPCParameters` (Groth16 Parameters
@@ -187,6 +224,11 @@ pub fn contribute<E: PairingEngine, R: Rng>(
     rng: &mut R,
     batch_size: usize,
 ) -> Result<[u8; 64]> {
+    let span = info_span!("phase2-contribute");
+    let _enter = span.enter();
+
+    info!("starting...");
+
     let buffer = &mut std::io::Cursor::new(buffer);
     // The VK is small so we read it directly from the start
     let mut vk = VerifyingKey::<E>::deserialize(buffer)?;
@@ -230,9 +272,13 @@ pub fn contribute<E: PairingEngine, R: Rng>(
     // write delta_g1
     delta_g1.serialize(buffer)?;
 
+    debug!("updated delta g1 and vk delta g2");
+
     skip_vec::<E::G1Affine, _>(buffer)?; // Alpha G1
     skip_vec::<E::G1Affine, _>(buffer)?; // Beta G1
     skip_vec::<E::G2Affine, _>(buffer)?; // Beta G2
+
+    debug!("skipped unused elements...");
 
     // The previous operations are all on small size elements so do them serially
     // the `h` and `l` queries are relatively large, so we can get a nice speedup
@@ -246,10 +292,18 @@ pub fn contribute<E: PairingEngine, R: Rng>(
     // spawn 2 scoped threads to perform the contribution
     crossbeam::scope(|s| -> Result<_> {
         let mut threads = Vec::with_capacity(2);
-        threads.push(
-            s.spawn(|_| chunked_mul_queries::<E::G1Affine>(h, h_query_len, &delta_inv, batch_size)),
-        );
+        let _enter = span.enter();
         threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("h_query");
+            let _enter = span.enter();
+            chunked_mul_queries::<E::G1Affine>(h, h_query_len, &delta_inv, batch_size)
+        }));
+
+        threads.push(s.spawn(|_| {
+            let _enter1 = span.enter();
+            let span = info_span!("l_query");
+            let _enter = span.enter();
             chunked_mul_queries::<E::G1Affine>(
                 // since we read the l_query length we will pass the buffer
                 // after it
@@ -266,6 +320,8 @@ pub fn contribute<E: PairingEngine, R: Rng>(
 
         Ok(())
     })??;
+
+    debug!("appending contribution...");
 
     // we processed the 2 elements via the raw buffer, so we have to modify the cursor accordingly
     let pos = position
@@ -285,6 +341,8 @@ pub fn contribute<E: PairingEngine, R: Rng>(
     ))?;
     public_key.write(buffer)?;
 
+    info!("done.");
+
     Ok(hash)
 }
 
@@ -299,25 +357,40 @@ fn skip_vec<C: AffineCurve, B: Read + Seek>(buffer: &mut B) -> Result<()> {
 /// Multiplies a vector of affine elements by `element` in `batch_size` batches
 /// The first 8 bytes read from the buffer are the vector's length. The result
 /// is written back to the buffer in place
+#[allow(clippy::cognitive_complexity)]
 fn chunked_mul_queries<C: AffineCurve>(
     buffer: &mut [u8],
     query_len: usize,
     element: &C::ScalarField,
     batch_size: usize,
 ) -> Result<()> {
+    let span = info_span!("multiply_query");
+    let _enter = span.enter();
+    debug!("starting...");
     let buffer = &mut std::io::Cursor::new(buffer);
 
     let iters = query_len / batch_size;
     let leftovers = query_len % batch_size;
     // naive chunking, probably room for parallelization
-    for _ in 0..iters {
+    for i in 0..iters {
+        let span = info_span!("iter", i);
+        let _enter = span.enter();
+
         mul_query::<C, _>(buffer, element, batch_size)?;
+
+        trace!("ok");
     }
     // in case the batch size did not evenly divide the number of queries
     if leftovers > 0 {
+        let span = info_span!("iter", i = iters);
+        let _enter = span.enter();
+
         mul_query::<C, _>(buffer, element, leftovers)?;
+
+        trace!("ok");
     }
 
+    debug!("done");
     Ok(())
 }
 
@@ -347,12 +420,17 @@ fn mul_query<C: AffineCurve, B: Read + Write + Seek>(
 }
 
 /// Checks that 2 vectors read from the 2 buffers are the same in chunks
+#[allow(clippy::cognitive_complexity)]
 fn chunked_ensure_unchanged_vec<C: AffineCurve>(
     before: &mut [u8],
     after: &mut [u8],
     batch_size: usize,
     kind: &InvariantKind,
 ) -> Result<()> {
+    let span = info_span!("unchanged_vec");
+    let _enter = span.enter();
+    debug!("starting...");
+
     let len_before = before.len() / C::SERIALIZED_SIZE;
     let len_after = after.len() / C::SERIALIZED_SIZE;
     ensure_unchanged(len_before, len_after, kind.clone())?;
@@ -362,15 +440,28 @@ fn chunked_ensure_unchanged_vec<C: AffineCurve>(
 
     let iters = len_before / batch_size;
     let leftovers = len_before % batch_size;
-    for _ in 0..iters {
+    for i in 0..iters {
+        let span1 = info_span!("iter", i);
+        let _enter = span1.enter();
+
         let (els_before, els_after) = read_batch::<C, _>(before, after, batch_size)?;
         ensure_unchanged_vec(&els_before, &els_after, kind)?;
+
+        trace!("ok");
     }
+
     // in case the batch size did not evenly divide the number of queries
     if leftovers > 0 {
+        let span1 = info_span!("iter", i = iters);
+        let _enter = span1.enter();
+
         let (els_before, els_after) = read_batch::<C, _>(before, after, leftovers)?;
         ensure_unchanged_vec(&els_before, &els_after, kind)?;
+
+        trace!("ok");
     }
+
+    debug!("done.");
 
     Ok(())
 }
@@ -384,6 +475,10 @@ fn chunked_check_ratio<E: PairingEngine>(
     batch_size: usize,
     err: &'static str,
 ) -> Result<()> {
+    let span = info_span!("check_ratio");
+    let _enter = span.enter();
+    debug!("starting...");
+
     // read total length
     let len_before = before.len() / E::G1Affine::SERIALIZED_SIZE;
     let len_after = after.len() / E::G1Affine::SERIALIZED_SIZE;
@@ -407,6 +502,8 @@ fn chunked_check_ratio<E: PairingEngine>(
         let pairs = merge_pairs(&els_before, &els_after);
         check_same_ratio::<E>(&pairs, &(after_delta_g2, before_delta_g2), err)?;
     }
+
+    debug!("done.");
 
     Ok(())
 }

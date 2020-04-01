@@ -428,6 +428,7 @@ mod tests {
     use rand::thread_rng;
     use snark_utils::{Groth16Params, UseCompression};
     use test_helpers::{setup_verify, TestCircuit};
+    use tracing_subscriber::{filter::EnvFilter, fmt::Subscriber};
     use zexe_algebra::Bls12_381;
 
     #[test]
@@ -474,6 +475,11 @@ mod tests {
 
     // contributing once and comparing with the previous step passes
     fn verify_curve<E: PairingEngine>() {
+        Subscriber::builder()
+            .with_target(false)
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+
         let rng = &mut thread_rng();
         // original
         let mpc = generate_ceremony::<E>();
@@ -535,7 +541,7 @@ mod tests {
         // the phase2 params are generated correctly,
         // even though the powers of tau are >> the circuit size
         let powers = 5;
-        let batch = 4;
+        let batch = 16;
         let phase2_size = 7;
         let params = CeremonyParams::<E>::new(powers, batch);
         let accumulator = {

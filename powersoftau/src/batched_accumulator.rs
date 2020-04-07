@@ -535,6 +535,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
             (tau_powers_g2_0, tau_powers_g2_1),
         ) {
             error!("Invalid ratio power_pairs(&after.tau_powers_g1), (tau_powers_g2_0, tau_powers_g2_1) in TauG1 contribution intersection");
+            return false;
         }
         true
     }

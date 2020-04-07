@@ -8,7 +8,7 @@ rm tmp_*
 
 set -e
 
-SIZE=10
+SIZE=15
 BATCH=256
 
 cargo run --release --bin new_constrained challenge1 $SIZE $BATCH

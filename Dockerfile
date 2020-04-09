@@ -14,3 +14,4 @@ RUN cd phase2 && \
 
 FROM debian:buster-slim
 COPY --from=builder /build/bin/* /usr/bin/
+WORKDIR /data

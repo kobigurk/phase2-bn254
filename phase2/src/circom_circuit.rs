@@ -4,7 +4,7 @@ extern crate rand;
 use std::str;
 use std::fs;
 use std::fs::{OpenOptions, File};
-use std::io::{Read, Write};
+use std::io::{Read, Write, BufReader};
 use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::Arc;
@@ -334,7 +334,7 @@ pub fn circuit_from_json_file<E: Engine>(filename: &str) -> CircomCircuit::<E> {
         .read(true)
         .open(filename)
         .expect("unable to open.");
-    return circuit_from_json(reader);
+    return circuit_from_json(BufReader::new(reader));
 }
 
 pub fn circuit_from_json<E: Engine, R: Read>(reader: R) -> CircomCircuit::<E> {

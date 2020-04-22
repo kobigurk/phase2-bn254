@@ -75,7 +75,8 @@ cfg_if! {
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
 
             log!("Contributing...");
-            let hash = params.contribute(&mut rng);
+            let zero: u32 = 0;
+            let hash = params.contribute(&mut rng, &zero);
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
 
             let mut output: Vec<u8> = vec![];

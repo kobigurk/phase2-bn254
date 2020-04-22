@@ -470,7 +470,7 @@ impl MPCParameters {
         }
 
         #[cfg(feature = "wasm")]
-        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar) {
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32) {
             let coeff = coeff.into_repr();
 
             let mut projective = vec![C::Projective::zero(); bases.len()];

@@ -1,7 +1,6 @@
 phase1*
 /target/
 **/*.rs.bk
-Cargo.lock
 node_modules
 phase1radix2m*
 /*.json

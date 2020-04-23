@@ -70,7 +70,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
             let s = s.clone();
             let sx = sx.clone();
 
-            scope.spawn(move || {
+            scope.spawn(move |_| {
                 // We do not need to be overly cautious of the RNG
                 // used for this check.
                 let rng = &mut thread_rng();
@@ -93,7 +93,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
                 sx.lock().unwrap().add_assign(&local_sx);
             });
         }
-    });
+    }).unwrap();
 
     let s = s.lock().unwrap().into_affine();
     let sx = sx.lock().unwrap().into_affine();

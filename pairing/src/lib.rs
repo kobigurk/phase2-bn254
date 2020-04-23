@@ -310,7 +310,7 @@ impl fmt::Display for GroupDecodingError {
             GroupDecodingError::CoordinateDecodingError(description, ref err) => {
                 write!(f, "{} decoding error: {}", description, err)
             }
-            _ => write!(f, "{}", self.description()),
+            _ => write!(f, "{}", self.to_string()),
         }
     }
 }

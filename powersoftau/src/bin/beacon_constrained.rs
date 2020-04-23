@@ -1,3 +1,4 @@
+extern crate hex;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
@@ -10,8 +11,6 @@ use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 use std::io::Write;
-
-#[macro_use]
 extern crate hex_literal;
 
 const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
@@ -29,7 +28,7 @@ fn main() {
     let response_filename = &args[2];
     let circuit_power = args[3].parse().expect("could not parse circuit power");
     let batch_size = args[4].parse().expect("could not parse batch size");
-    let beacon_hash = args[5];
+    let beacon_hash = &args[5];
 
     let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
@@ -50,7 +49,7 @@ fn main() {
         use rand::chacha::ChaChaRng;
         use rand::SeedableRng;
 
-        let mut cur_hash: [u8; 32] = hex!(beacon_hash);
+        let mut cur_hash = hex::decode(beacon_hash).unwrap();
 
         // Performs 2^n hash iterations over it
         const N: u64 = 10;

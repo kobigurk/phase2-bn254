@@ -942,7 +942,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
             {
                 let decoding_error = decoding_error.clone();
 
-                scope.spawn(move || {
+                scope.spawn(move |_| {
                     assert_eq!(source.len(), target.len());
                     for (source, target) in source.iter().zip(target.iter_mut()) {
                         match {
@@ -980,7 +980,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                     }
                 });
             }
-        });
+        }).unwrap();
 
         // extra check that during the decompression all the the initially initialized infinitu points
         // were replaced with something
@@ -1143,7 +1143,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                     .zip(exp.chunks(chunk_size))
                     .zip(projective.chunks_mut(chunk_size))
                 {
-                    scope.spawn(move || {
+                    scope.spawn(move |_| {
                         let mut wnaf = Wnaf::new();
 
                         for ((base, exp), projective) in
@@ -1159,16 +1159,16 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                         }
                     });
                 }
-            });
+            }).unwrap();
 
             // Perform batch normalization
             crossbeam::scope(|scope| {
                 for projective in projective.chunks_mut(chunk_size) {
-                    scope.spawn(move || {
+                    scope.spawn(move |_| {
                         C::Projective::batch_normalization(projective);
                     });
                 }
-            });
+            }).unwrap();
 
             // Turn it all back into affine points
             for (projective, affine) in projective.iter().zip(bases.iter_mut()) {
@@ -1204,7 +1204,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                 // Construct exponents in parallel
                 crossbeam::scope(|scope| {
                     for (i, taupowers) in taupowers.chunks_mut(chunk_size).enumerate() {
-                        scope.spawn(move || {
+                        scope.spawn(move |_| {
                             let mut acc = key.tau.pow(&[(start + i * chunk_size) as u64]);
 
                             for t in taupowers {
@@ -1213,7 +1213,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                             }
                         });
                     }
-                });
+                }).unwrap();
 
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g2, &taupowers[0..], None);
@@ -1266,7 +1266,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                 // Construct exponents in parallel
                 crossbeam::scope(|scope| {
                     for (i, taupowers) in taupowers.chunks_mut(chunk_size).enumerate() {
-                        scope.spawn(move || {
+                        scope.spawn(move |_| {
                             let mut acc = key.tau.pow(&[(start + i * chunk_size) as u64]);
 
                             for t in taupowers {
@@ -1275,7 +1275,7 @@ impl<'a, E: Engine> BatchedAccumulator<'a, E> {
                             }
                         });
                     }
-                });
+                }).unwrap();
 
                 batch_exp::<E, _>(&mut accumulator.tau_powers_g1, &taupowers[0..], None);
                 //accumulator.beta_g2 = accumulator.beta_g2.mul(key.beta).into_affine();

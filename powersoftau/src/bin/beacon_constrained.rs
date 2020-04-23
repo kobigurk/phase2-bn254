@@ -1,4 +1,3 @@
-extern crate hex;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
@@ -11,6 +10,7 @@ use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 use std::io::Write;
+extern crate hex_literal;
 
 const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
 const COMPRESS_THE_OUTPUT: UseCompression = UseCompression::Yes;

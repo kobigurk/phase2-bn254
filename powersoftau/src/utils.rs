@@ -219,7 +219,7 @@ fn dense_multiexp_inner<G: CurveAffine>(
             for (base, exp) in bases.chunks(chunk).zip(exponents.chunks(chunk)) {
                 let this_region_rwlock = arc.clone();
                 // let handle =
-                scope.spawn(move || {
+                scope.spawn(move |_| {
                     let mut buckets = vec![<G as CurveAffine>::Projective::zero(); (1 << c) - 1];
                     // Accumulate the result
                     let mut acc = G::Projective::zero();
@@ -263,7 +263,7 @@ fn dense_multiexp_inner<G: CurveAffine>(
                     (*guard).add_assign(&acc);
                 });
             }
-        });
+        }).unwrap();
 
         let this_region = Arc::try_unwrap(arc).unwrap();
 

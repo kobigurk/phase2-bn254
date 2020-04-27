@@ -104,7 +104,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
 
 
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
-/// than 32 bytes.
+/// than 32 bytes. The input must be random.
 pub fn hash_to_g2(mut digest: &[u8]) -> G2
 {
     assert!(digest.len() >= 32);

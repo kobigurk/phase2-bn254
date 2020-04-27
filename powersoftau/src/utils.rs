@@ -27,7 +27,7 @@ pub fn calculate_hash(input_map: &Mmap) -> GenericArray<u8, U64> {
 }
 
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
-/// than 32 bytes.
+/// than 32 bytes. The input must be random.
 pub fn hash_to_g2<E: Engine>(mut digest: &[u8]) -> E::G2 {
     assert!(digest.len() >= 32);
 

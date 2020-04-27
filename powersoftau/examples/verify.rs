@@ -1,3 +1,7 @@
+//! verify.rs has multiple problems and shouldn't be used in production without further changes.
+//! Specifically, it doesn't verify the hash chain from each of the contributions and it has a
+//! hardcoded number of participants.
+
 use bellman_ce::pairing::bn256::Bn256;
 use bellman_ce::pairing::bn256::{G1, G2};
 use bellman_ce::pairing::{CurveAffine, CurveProjective};

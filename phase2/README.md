@@ -28,7 +28,7 @@ main().catch(console.error)
 
 ## Security Warnings
 
-This library does not make any guarantees about constant-time operations, memory access patterns, or resistance to side-channel attacks.
+This library does not make any guarantees about constant-time operations, memory access patterns, or resistance to side-channel attacks. To see possible measures to protect the secret data generated during the ceremony, see the [Powers of Tau readme][../powersoftau/README.md].
 
 ## License
 

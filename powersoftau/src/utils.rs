@@ -27,7 +27,7 @@ pub fn calculate_hash(input_map: &Mmap) -> GenericArray<u8, U64> {
 }
 
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
-/// than 32 bytes.
+/// than 32 bytes. The input must be random.
 pub fn hash_to_g2<E: Engine>(mut digest: &[u8]) -> E::G2 {
     assert!(digest.len() >= 32);
 
@@ -152,6 +152,9 @@ pub fn same_ratio<E: Engine, G1: CurveAffine<Engine = E, Scalar = E::Fr>>(
     g1: (G1, G1),
     g2: (G1::Pair, G1::Pair),
 ) -> bool {
+    if g1.0.is_zero() || g1.1.is_zero() || g2.0.is_zero() || g2.1.is_zero() {
+        panic!(format!("none of the inputs should be zero: {}, {}, {}, {}", g1.0, g1.1, g2.0, g2.1));
+    }
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 

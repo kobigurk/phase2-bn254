@@ -14,7 +14,7 @@ crate-type = ["cdylib", "lib", "staticlib"]
 
 [dependencies]
 rand = "0.4"
-bit-vec = "0.4.4"
+bit-vec = "0.6.1"
 futures = "0.1"
 cfg-if = "0.1.7"
 
@@ -30,7 +30,7 @@ prefetch = {version = "0.2", optional = true}
 
 web-sys = {version = "0.3.17", optional = true, features = ["console", "Performance", "Window"]}
 
-tiny-keccak = {version = "1.4.2", optional = true}
+tiny-keccak = {version = "2.0.2", optional = true}
 blake2-rfc = {version = "0.2.18", optional = true}
 
 [features]

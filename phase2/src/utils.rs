@@ -37,6 +37,9 @@ pub fn same_ratio<G1: CurveAffine>(
     g2: (G1::Pair, G1::Pair)
 ) -> bool
 {
+    if g1.0.is_zero() || g1.1.is_zero() || g2.0.is_zero() || g2.1.is_zero() {
+        panic!(format!("none of the inputs should be zero: {}, {}, {}, {}", g1.0, g1.1, g2.0, g2.1));
+    }
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 

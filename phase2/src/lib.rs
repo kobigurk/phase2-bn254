@@ -81,7 +81,12 @@ cfg_if! {
             let mut output: Vec<u8> = vec![];
             params.write(&mut output).expect("failed to write updated parameters");
             log!("Returning parameters");
-            Ok(output)
+
+            Ok(hash
+                .iter().cloned()
+                .chain(output.iter().cloned())
+                .collect()
+            )
         }
     }
 }

@@ -10,11 +10,11 @@ fi
 # move results of powers of tau here
 cp ../powersoftau/phase1radix* .
 
-npm install
+# npm install
 
 # compile circuit
 npx circom circuit.circom -o circuit.json && npx snarkjs info -c circuit.json
-npx snarkjs info -c circuit.json
+# npx snarkjs info -c circuit.json
 
 # initialize ceremony
 cargo run --release --bin new circuit.json circom1.params ./
@@ -32,3 +32,19 @@ cp circom4.params params.bin
 
 # For info how to use and export resulting params see readme from zkutil crate:
 # https://github.com/poma/zkutil
+
+cargo install --root . zkutil
+
+# Export keys to snarkjs/websnark compatible format
+./bin/zkutil export-keys
+
+# Generate a solidity verifier contract
+./bin/zkutil generate-verifier
+
+### Generating and verifying test proof ###
+
+# Make sure you have a correct input.json file in order for that to work
+snarkjs calculatewitness
+./bin/zkutil prove
+./bin/zkutil verify
+snarkjs verify

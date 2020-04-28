@@ -4,6 +4,9 @@ phase1*
 node_modules
 phase1radix2m*
 /*.json
+!input.json
 /*.bin
 /*.params
 /verifier.sol
+/.crates.toml
+/bin

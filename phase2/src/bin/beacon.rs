@@ -32,8 +32,6 @@ fn main() {
         std::process::exit(exitcode::DATAERR);
     }
 
-    let disallow_points_at_infinity = false;
-
     // Create an RNG based on the outcome of the random beacon
     let mut rng = {
         use byteorder::{ReadBytesExt, BigEndian};
@@ -96,7 +94,7 @@ fn main() {
                             .read(true)
                             .open(in_params_filename)
                             .expect("unable to open.");
-    let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
+    let mut params = MPCParameters::read(reader, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
     let zero: u32 = 0;

@@ -8,7 +8,7 @@ use powersoftau::*;
 use crate::parameters::*;
 
 use bellman_ce::domain::{EvaluationDomain, Point};
-use bellman_ce::multicore::Worker;
+use bellman_ce::worker::Worker;
 
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};

@@ -29,8 +29,6 @@ fn main() {
     let entropy = &args[3];
     let print_progress = args.len() == 6 && args[4] == "-v";
 
-    let disallow_points_at_infinity = false;
-
     if print_progress {
         println!("starting");
     }
@@ -71,7 +69,7 @@ fn main() {
                             .read(true)
                             .open(in_params_filename)
                             .expect("unable to open.");
-    let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
+    let mut params = MPCParameters::read(reader, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
     let mut progress_update_interval: u32 = 0;

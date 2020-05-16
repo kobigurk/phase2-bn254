@@ -4,11 +4,6 @@ extern crate byteorder;
 extern crate num_cpus;
 extern crate crossbeam;
 
-#[cfg(feature = "wasm")]
-use bellman_ce::singlecore::Worker;
-#[cfg(not(feature = "wasm"))]
-use bellman_ce::multicore::Worker;
-
 use byteorder::{
     BigEndian,
     ReadBytesExt,
@@ -57,6 +52,7 @@ use bellman_ce::{
     Variable,
     Index,
     ConstraintSystem,
+    worker::Worker,
     groth16::{
         Parameters,
         VerifyingKey
@@ -98,7 +94,6 @@ impl MPCParameters {
     /// until there are contributions (see `contribute()`).
     pub fn new<C>(
         circuit: C,
-        should_filter_points_at_infinity: bool,
         radix_directory: &String,
     ) -> Result<MPCParameters, SynthesisError>
         where C: Circuit<Bn256>
@@ -356,26 +351,15 @@ impl MPCParameters {
             ic: ic.into_iter().map(|e| e.into_affine()).collect()
         };
 
-        let params = if should_filter_points_at_infinity {
-            Parameters {
-                vk: vk,
-                h: Arc::new(h),
-                l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
+        let params = Parameters {
+            vk: vk,
+            h: Arc::new(h),
+            l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
 
-                // Filter points at infinity away from A/B queries
-                a: Arc::new(a_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-                b_g1: Arc::new(b_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
-                b_g2: Arc::new(b_g2.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect())
-            }
-        } else {
-            Parameters {
-                vk: vk,
-                h: Arc::new(h),
-                l: Arc::new(l.into_iter().map(|e| e.into_affine()).collect()),
-                a: Arc::new(a_g1.into_iter().map(|e| e.into_affine()).collect()),
-                b_g1: Arc::new(b_g1.into_iter().map(|e| e.into_affine()).collect()),
-                b_g2: Arc::new(b_g2.into_iter().map(|e| e.into_affine()).collect())
-            }
+            // Filter points at infinity away from A/B queries
+            a: Arc::new(a_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
+            b_g1: Arc::new(b_g1.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect()),
+            b_g2: Arc::new(b_g2.into_iter().filter(|e| !e.is_zero()).map(|e| e.into_affine()).collect())
         };
 
         let h = {
@@ -529,11 +513,10 @@ impl MPCParameters {
     pub fn verify<C: Circuit<Bn256>>(
         &self,
         circuit: C,
-        should_filter_points_at_infinity: bool,
         radix_directory: &String,
     ) -> Result<Vec<[u8; 64]>, ()>
     {
-        let initial_params = MPCParameters::new(circuit, should_filter_points_at_infinity, radix_directory).map_err(|_| ())?;
+        let initial_params = MPCParameters::new(circuit, radix_directory).map_err(|_| ())?;
 
         // H/L will change, but should have same length
         if initial_params.params.h.len() != self.params.h.len() {
@@ -681,11 +664,10 @@ impl MPCParameters {
     /// checks.
     pub fn read<R: Read>(
         mut reader: R,
-        disallow_points_at_infinity: bool,
         checked: bool
     ) -> io::Result<MPCParameters>
     {
-        let params = Parameters::read(&mut reader, disallow_points_at_infinity, checked)?;
+        let params = Parameters::read(&mut reader, checked)?;
 
         let mut cs_hash = [0u8; 64];
         reader.read_exact(&mut cs_hash)?;

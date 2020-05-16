@@ -10,7 +10,7 @@ fi
 # move results of powers of tau here
 cp ../powersoftau/phase1radix* .
 
-npm install
+# npm install
 
 # compile circuit
 npx circom circuit.circom -o circuit.json && npx snarkjs info -c circuit.json
@@ -28,18 +28,23 @@ cargo run --release --bin verify_contribution circuit.json circom2.params circom
 cargo run --release --bin contribute circom3.params circom4.params askldfjklasdf
 cargo run --release --bin verify_contribution circuit.json circom3.params circom4.params ./
 
-# create dummy keys in circom format
-echo "Generating dummy key files..."
-npx snarkjs setup --protocol groth
-# generate resulting keys
-cargo run --release --bin export_keys circom4.params vk.json pk.json
-# patch dummy keys with actual keys params
-cargo run --release --bin copy_json proving_key.json pk.json transformed_pk.json
+cp circom4.params params.bin
 
-# generate solidity verifier
-cargo run --release --bin generate_verifier circom4.params verifier.sol
+# For info how to use and export resulting params see readme from zkutil crate:
+# https://github.com/poma/zkutil
 
-# try to generate and verify proof
-npx snarkjs calculatewitness
-cargo run --release --bin prove circuit.json witness.json circom4.params proof.json public.json
-npx snarkjs verify --vk vk.json --proof proof.json
+cargo install --root . zkutil
+
+# Export keys to snarkjs/websnark compatible format
+./bin/zkutil export-keys
+
+# Generate a solidity verifier contract
+./bin/zkutil generate-verifier
+
+### Generating and verifying test proof ###
+
+# Make sure you have a correct input.json file in order for that to work
+snarkjs calculatewitness
+./bin/zkutil prove
+./bin/zkutil verify
+snarkjs verify

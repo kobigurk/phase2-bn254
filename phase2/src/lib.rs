@@ -1,7 +1,5 @@
 #![allow(unused_imports)]
 
-#[macro_use]
-extern crate serde;
 extern crate bellman_ce;
 extern crate rand;
 extern crate byteorder;
@@ -21,7 +19,6 @@ pub mod keypair_assembly;
 pub mod hash_writer;
 pub mod parameters;
 pub mod utils;
-pub mod circom_circuit;
 
 cfg_if! {
     if #[cfg(feature = "wasm")] {

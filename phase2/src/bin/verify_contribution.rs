@@ -10,7 +10,7 @@ use phase2::circom_circuit::circuit_from_r1cs_file;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 5 {
-        println!("Usage: \n<in_circuit.json> <in_old_params.params> <in_new_params.params> <path/to/phase1radix>");
+        println!("Usage: \n<in_circuit.<r1cs|json>> <in_old_params.params> <in_new_params.params> <path/to/phase1radix>");
         std::process::exit(exitcode::USAGE);
     }
     let circuit_filename = &args[1];

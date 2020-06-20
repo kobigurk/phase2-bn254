@@ -426,7 +426,7 @@ pub fn create_rng() -> Box<dyn Rng> {
 
 
 
-
+// For the format specification see: https://github.com/iden3/r1csfile/blob/master/doc/r1cs_bin_format.md
 fn circuit_from_r1cs_read_header<E: Engine, R:Read>(circuit : &mut CircomCircuit<E>, reader: &mut R) -> std::io::Result<()> {
 
     let n8 = reader.read_u32::<LittleEndian>()?;

@@ -272,6 +272,43 @@ pub fn verify_transform<E: Engine>(
 }
 
 impl<'a, E: Engine> BatchedAccumulator<'a, E> {
+    #[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
+    pub fn print_powers(
+        input_map: &Mmap,
+        input_is_compressed: UseCompression,
+        check_input_for_correctness: CheckForCorrectness,
+        parameters: &'a CeremonyParams<E>,
+        element_type: ElementType,
+        num_to_extract: usize,
+    ) {
+        let mut acc = Self::empty(parameters);
+
+        for i in 0..num_to_extract {
+            let chunk_size = 1;
+            acc.read_chunk(
+                i,
+                chunk_size,
+                input_is_compressed,
+                check_input_for_correctness,
+                &input_map,
+            ).expect("must read a first chunk from `challenge`");
+
+            let tau_g1 = acc.tau_powers_g1[0];
+            let tau_g2 = acc.tau_powers_g2[0];
+            let alpha_g1 = acc.alpha_tau_powers_g1[0];
+            let beta_g1 = acc.beta_tau_powers_g1[0];
+            let beta_g2 = acc.beta_g2;
+
+            match element_type {
+                ElementType::TauG1 => println!("{}", tau_g1),
+                ElementType::TauG2 => println!("{}", tau_g2),
+                ElementType::AlphaG1 => println!("{}", alpha_g1),
+                ElementType::BetaG1 => println!("{}", beta_g1),
+                ElementType::BetaG2 => println!("{}", beta_g2),
+            }
+        }
+    }
+
     /// Verifies a transformation of the `Accumulator` with the `PublicKey`, given a 64-byte transcript `digest`.
     #[allow(clippy::too_many_arguments, clippy::cognitive_complexity)]
     pub fn verify_transformation(

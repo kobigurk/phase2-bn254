@@ -1,8 +1,4 @@
-#![allow(unused)]
-use zexe_algebra::{Bls12_381, Field, PairingEngine};
-use zexe_groth16::{
-    create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
-};
+use zexe_algebra::{Field, PairingEngine};
 use zexe_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisError};
 
 // circuit proving knowledge of a square root
@@ -52,6 +48,11 @@ impl<E: PairingEngine> ConstraintSynthesizer<E::Fr> for TestCircuit<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zexe_algebra::{Bls12_381, PrimeField};
+    use zexe_groth16::{
+        create_random_proof, generate_random_parameters, prepare_verifying_key, verify_proof,
+    };
+
     // no need to run these tests, they're just added as a guideline for how to
     // consume the circuit
     #[test]
@@ -71,8 +72,8 @@ mod tests {
         let pvk = prepare_verifying_key(&params.vk);
 
         // we know the square root of 25 -> 5
-        let out = E::Fr::from(25);
-        let input = E::Fr::from(5);
+        let out = <E::Fr as PrimeField>::BigInt::from(25u64).into();
+        let input = <E::Fr as PrimeField>::BigInt::from(5u64).into();
 
         // Prover instantiates the circuit and creates a proof
         // with his RNG

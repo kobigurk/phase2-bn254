@@ -7,7 +7,7 @@ use powersoftau::{
 use snark_utils::{Groth16Params, Result, UseCompression};
 
 use std::time::Instant;
-use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, SW6};
+use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, BW6_761};
 
 use std::fs::OpenOptions;
 
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
     match opts.curve_kind {
         CurveKind::Bls12_381 => prepare_phase2::<Bls12_381>(&opts)?,
         CurveKind::Bls12_377 => prepare_phase2::<Bls12_377>(&opts)?,
-        CurveKind::SW6 => prepare_phase2::<SW6>(&opts)?,
+        CurveKind::BW6 => prepare_phase2::<BW6_761>(&opts)?,
     }
 
     let new_now = Instant::now();

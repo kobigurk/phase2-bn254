@@ -150,7 +150,7 @@ mod tests {
     use rand::thread_rng;
     use snark_utils::{batch_exp, calculate_hash, generate_powers_of_tau};
     use test_helpers::{random_point, random_point_vec};
-    use zexe_algebra::{AffineCurve, Bls12_377, Bls12_381, ProjectiveCurve, SW6};
+    use zexe_algebra::{AffineCurve, Bls12_377, Bls12_381, ProjectiveCurve, BW6_761};
 
     #[test]
     fn serialize_multiple_batches() {
@@ -175,9 +175,9 @@ mod tests {
 
     #[test]
     #[ignore] // this takes very long to run
-    fn serializer_sw6() {
-        serialize_accumulator_curve::<SW6>(UseCompression::Yes, 2, 2);
-        serialize_accumulator_curve::<SW6>(UseCompression::No, 2, 2);
+    fn serializer_bw6() {
+        serialize_accumulator_curve::<BW6_761>(UseCompression::Yes, 2, 2);
+        serialize_accumulator_curve::<BW6_761>(UseCompression::No, 2, 2);
     }
 
     #[test]

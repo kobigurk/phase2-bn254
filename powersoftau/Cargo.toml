@@ -13,7 +13,7 @@ repository = "https://github.com/matter-labs/powersoftau"
 [dependencies]
 snark-utils = { path = "../snark-utils", features = ["parallel"] }
 
-zexe_algebra = { git = "https://github.com/scipr-lab/zexe", package = "algebra", version = "0.1.0", features = ["parallel"] }
+zexe_algebra = { git = "https://github.com/scipr-lab/zexe", package = "algebra", version = "0.1.0", features = ["parallel", "bw6_761"] }
 
 rand = { version = "0.7" }
 memmap = "0.7.0"

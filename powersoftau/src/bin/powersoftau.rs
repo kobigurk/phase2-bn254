@@ -11,7 +11,7 @@ use tracing_subscriber::{
     filter::EnvFilter,
     fmt::{time::ChronoUtc, Subscriber},
 };
-use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine as Engine, SW6};
+use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine as Engine, BW6_761};
 
 #[macro_use]
 extern crate hex_literal;
@@ -28,7 +28,7 @@ fn main() {
     match opts.curve_kind {
         CurveKind::Bls12_381 => execute_cmd::<Bls12_381>(opts),
         CurveKind::Bls12_377 => execute_cmd::<Bls12_377>(opts),
-        CurveKind::SW6 => execute_cmd::<SW6>(opts),
+        CurveKind::BW6 => execute_cmd::<BW6_761>(opts),
     };
 }
 

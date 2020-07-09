@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use tracing::{debug, info, info_span};
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
-use zexe_fft::EvaluationDomain;
+use zexe_fft::domain::{radix2::Radix2EvaluationDomain, EvaluationDomain};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -39,8 +39,9 @@ impl<E: PairingEngine> PartialEq for Groth16Params<E> {
 /// Performs an IFFT over the provided evaluation domain to the provided
 /// vector of affine points. It then normalizes and returns them back into
 /// affine form
-fn to_coeffs<F, C>(domain: &EvaluationDomain<F>, coeffs: &[C]) -> Vec<C>
+fn to_coeffs<F, C, E>(domain: &E, coeffs: &[C]) -> Vec<C>
 where
+    E: EvaluationDomain<F>,
     F: PrimeField,
     C: AffineCurve,
     C::Projective: std::ops::MulAssign<F>,
@@ -84,7 +85,8 @@ impl<E: PairingEngine> Groth16Params<E> {
         let _enter = span.enter();
 
         // Create the evaluation domain
-        let domain = EvaluationDomain::<E::Fr>::new(phase2_size).expect("could not create domain");
+        let domain =
+            Radix2EvaluationDomain::<E::Fr>::new(phase2_size).expect("could not create domain");
 
         info!("converting powers of tau to lagrange coefficients");
 

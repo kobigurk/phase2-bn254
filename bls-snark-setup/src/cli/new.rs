@@ -1,7 +1,7 @@
 use gumdrop::Options;
 
-use bls_snark::gadgets::ValidatorSetUpdate;
-use zexe_algebra::{Bls12_377, SW6};
+use bls_snark::ValidatorSetUpdate;
+use zexe_algebra::{Bls12_377, BW6_761};
 use zexe_r1cs_core::ConstraintSynthesizer;
 use zexe_r1cs_std::test_constraint_counter::ConstraintCounter;
 
@@ -44,7 +44,7 @@ pub fn empty_circuit(opt: &NewOpts) -> (ValidatorSetUpdate<Bls12_377>, usize) {
         opt.num_validators,
         opt.num_epochs,
         maximum_non_signers,
-        None, // The hashes are done over SW6 so no helper is provided for the setup
+        None, // The hashes are done over BW6 so no helper is provided for the setup
     );
 
     let phase2_size = {
@@ -88,7 +88,7 @@ pub fn new(opt: &NewOpts) -> Result<()> {
 
     // Read `num_constraints` Lagrange coefficients from the Phase1 Powers of Tau which were
     // prepared for this step. This will fail if Phase 1 was too small.
-    let phase1 = Groth16Params::<SW6>::read(
+    let phase1 = Groth16Params::<BW6_761>::read(
         &mut phase1_transcript,
         COMPRESSION,
         2usize.pow(opt.phase1_size),

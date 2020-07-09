@@ -166,13 +166,13 @@ pub enum CheckForCorrectness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zexe_algebra::{Bls12_377, Bls12_381, SW6};
+    use zexe_algebra::{Bls12_377, Bls12_381, BW6_761};
 
     #[test]
     fn params_sizes() {
         curve_params_test::<Bls12_377>(96, 192, 48, 96);
         curve_params_test::<Bls12_381>(96, 192, 48, 96);
-        curve_params_test::<SW6>(196, 588, 98, 294);
+        curve_params_test::<BW6_761>(192, 192, 96, 96);
     }
 
     fn curve_params_test<E: PairingEngine>(

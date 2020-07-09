@@ -3,7 +3,7 @@ use memmap::MmapOptions;
 use phase2::chunked_groth16::verify as chunked_verify;
 use snark_utils::Result;
 use std::fs::OpenOptions;
-use zexe_algebra::SW6;
+use zexe_algebra::BW6_761;
 
 // Options for the Contribute command
 #[derive(Debug, Options, Clone)]
@@ -36,6 +36,6 @@ pub fn verify(opts: &VerifyOpts) -> Result<()> {
             .map_mut(&after)
             .expect("unable to create a memory map for input")
     };
-    chunked_verify::<SW6>(&mut before, &mut after, opts.batch)?;
+    chunked_verify::<BW6_761>(&mut before, &mut after, opts.batch)?;
     Ok(())
 }

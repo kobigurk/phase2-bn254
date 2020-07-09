@@ -6,7 +6,7 @@ POWER=26
 NUM_VALIDATORS=100
 NUM_EPOCHS=30
 BATCH=1000000
-CURVE="sw6"
+CURVE="bw6"
 
 powersoftau="cargo run --release --bin powersoftau -- --curve-kind $CURVE --batch-size $BATCH --power $POWER"
 phase2="cargo run --release --bin prepare_phase2 -- --curve-kind $CURVE --batch-size $BATCH --power $POWER --phase2-size $POWER"

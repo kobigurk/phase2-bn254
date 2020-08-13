@@ -53,7 +53,10 @@ pub fn empty_circuit(opt: &NewOpts) -> (ValidatorSetUpdate<Bls12_377>, usize) {
             .clone()
             .generate_constraints(&mut counter)
             .expect("could not calculate number of required constraints");
-        let phase2_size = counter.num_aux + counter.num_inputs + counter.num_constraints;
+        let phase2_size = std::cmp::max(
+            counter.num_constraints,
+            counter.num_aux + counter.num_inputs + 1,
+        );
         let power = log_2(phase2_size) as u32;
         // get the nearest power of 2
         if phase2_size < 2usize.pow(power) {

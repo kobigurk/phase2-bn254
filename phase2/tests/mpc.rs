@@ -1,12 +1,15 @@
-use phase2::parameters::MPCParameters;
-use powersoftau::{parameters::CeremonyParams, BatchedAccumulator};
-use snark_utils::{Groth16Params, UseCompression};
-use test_helpers::{setup_verify, TestCircuit};
-
+use phase1::{
+    helpers::testing::{setup_verify, CheckForCorrectness},
+    parameters::Phase1Parameters,
+    Phase1,
+    ProvingSystem,
+};
+use phase2::{helpers::testing::TestCircuit, parameters::MPCParameters};
 use rand::{thread_rng, Rng};
+use setup_utils::{Groth16Params, UseCompression};
 use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, PrimeField, BW6_761};
 use zexe_groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters};
-use zexe_r1cs_core::ConstraintSynthesizer;
+use zexe_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisMode};
 
 fn generate_mpc_parameters<E, C>(c: C, rng: &mut impl Rng) -> MPCParameters<E>
 where
@@ -15,11 +18,11 @@ where
 {
     let powers = 6; // powers of tau
     let batch = 4;
-    let params = CeremonyParams::<E>::new(powers, batch);
+    let params = Phase1Parameters::<E>::new_full(ProvingSystem::Groth16, powers, batch);
     let compressed = UseCompression::Yes;
     // make 1 power of tau contribution (assume powers of tau gets calculated properly)
-    let (_, output, _, _) = setup_verify(compressed, compressed, &params);
-    let accumulator = BatchedAccumulator::deserialize(&output, compressed, &params).unwrap();
+    let (_, output, _, _) = setup_verify(compressed, CheckForCorrectness::Full, compressed, &params);
+    let accumulator = Phase1::deserialize(&output, compressed, CheckForCorrectness::Full, &params).unwrap();
 
     // prepare only the first 32 powers (for whatever reason)
     let groth_params = Groth16Params::<E>::new(
@@ -36,16 +39,23 @@ where
     groth_params.write(&mut writer, compressed).unwrap();
 
     // perform the MPC on only the amount of constraints required for the circuit
-    let mut counter = zexe_r1cs_std::test_constraint_counter::ConstraintCounter::new();
-    c.clone().generate_constraints(&mut counter).unwrap();
+    let counter = ConstraintSystem::new_ref();
+    counter.set_mode(SynthesisMode::Setup);
+    c.clone().generate_constraints(counter.clone()).unwrap();
     let phase2_size = std::cmp::max(
-        counter.num_constraints,
-        counter.num_aux + counter.num_inputs + 1,
+        counter.num_constraints(),
+        counter.num_witness_variables() + counter.num_instance_variables() + 1,
     );
 
-    let mut mpc =
-        MPCParameters::<E>::new_from_buffer(c, writer.as_mut(), compressed, 32, phase2_size)
-            .unwrap();
+    let mut mpc = MPCParameters::<E>::new_from_buffer(
+        c,
+        writer.as_mut(),
+        compressed,
+        CheckForCorrectness::Full,
+        32,
+        phase2_size,
+    )
+    .unwrap();
 
     let before = mpc.clone();
     // it is _not_ safe to use it yet, there must be 1 contribution
@@ -89,10 +99,6 @@ fn groth_test_curve<E: PairingEngine>() {
         create_random_proof(c, &params, rng).unwrap()
     };
 
-    let res = verify_proof(
-        &pvk,
-        &proof,
-        &[<E::Fr as PrimeField>::BigInt::from(25).into()],
-    );
+    let res = verify_proof(&pvk, &proof, &[<E::Fr as PrimeField>::BigInt::from(25).into()]);
     assert!(res.is_ok());
 }

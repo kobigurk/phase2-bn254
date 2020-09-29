@@ -1,0 +1,8 @@
+[target.'cfg(not(target_arch = "wasm32"))']
+rustflags = ["-C", "target-cpu=native"]
+
+[target.wasm32-unknown-unknown]
+runner = 'wasm-bindgen-test-runner'
+
+[net]
+git-fetch-with-cli = true

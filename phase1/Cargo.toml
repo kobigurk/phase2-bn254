@@ -1,0 +1,58 @@
+[package]
+name = "phase1"
+version = "0.3.0"
+authors = ["Sean Bowe", "Alex Vlasov", "Georgios Konstantopoulos <me@gakonst.com>", "Kobi Gurkan <kobigurk@gmail.com>", "The Aleo Team <hello@aleo.org>"]
+description = "Core logic for Phase 1"
+homepage = "https://github.com/celo-org/snark-setup"
+repository = "https://github.com/celo-org/snark-setup"
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[[bench]]
+name = "phase1"
+harness = false
+required-features = ["benchmark"]
+
+[dependencies]
+setup-utils = { path = "../setup-utils", default-features = false }
+
+zexe_algebra = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "algebra", features = ["derive"] }
+zexe_algebra_core = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "algebra-core", optional = true, features = ["derive"] }
+
+cfg-if = { version = "0.1.10" }
+criterion = { version = "0.3", optional = true }
+itertools = { version = "0.8.0" }
+rand = { version = "0.7" }
+rayon = { version = "1.3.0", optional = true }
+tracing = { version = "0.1.17" }
+tracing-subscriber = { version = "0.2.3" }
+derivative = { version = "2", features = [ "use_core" ] }
+zexe_bench_utils = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "bench-utils" }
+
+[dev-dependencies]
+phase1 = { path = "./", features = ["testing"] }
+
+zexe_algebra = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "algebra", features = ["full", "derive"] }
+zexe_r1cs_core = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "r1cs-core" }
+marlin = { git = "https://github.com/scipr-lab/marlin", rev = "b7b4be4" }
+poly-commit = { git = "https://github.com/scipr-lab/poly-commit", rev = "efff1c1" }
+
+anyhow = { version = "1.0.31" }
+blake2 = { version = "0.8", default-features = false }
+num-traits = { version = "0.2.12" }
+rusty-hook = { version = "0.11.2" }
+
+[features]
+default = ["cli"]
+cli = ["parallel", "setup-utils/cli"]
+parallel = ["rayon", "setup-utils/parallel", "zexe_algebra/parallel", "zexe_algebra_core/parallel"]
+wasm = ["setup-utils/wasm"]
+
+benchmark = ["criterion"]
+testing = ["parallel", "zexe_algebra_core", "zexe_bench_utils/print-trace"]
+
+[[test]]
+name = "marlin"
+path = "tests/marlin.rs"
+required-features = ["phase1/testing", "cli"]
+

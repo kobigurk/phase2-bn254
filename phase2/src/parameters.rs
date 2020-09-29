@@ -1,18 +1,27 @@
-use snark_utils::*;
-use std::fmt;
-use std::io::{self, Read, Write};
+use cfg_if::cfg_if;
 
-use zexe_algebra::{
-    AffineCurve, CanonicalDeserialize, CanonicalSerialize, Field, One, PairingEngine,
-    ProjectiveCurve, Zero,
-};
-use zexe_groth16::{KeypairAssembly, Parameters, VerifyingKey};
-use zexe_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, Index, SynthesisError, Variable};
-
-use rand::Rng;
+cfg_if! {
+    if #[cfg(not(feature = "wasm"))] {
+        use super::polynomial::eval;
+        use zexe_algebra::{ Zero };
+        use zexe_groth16::{VerifyingKey};
+        use zexe_r1cs_core::SynthesisError;
+    }
+}
 
 use super::keypair::{hash_cs_pubkeys, Keypair, PublicKey};
-use super::polynomial::eval;
+
+use setup_utils::*;
+
+use zexe_algebra::{AffineCurve, CanonicalDeserialize, CanonicalSerialize, Field, PairingEngine, ProjectiveCurve};
+use zexe_groth16::Parameters;
+use zexe_r1cs_core::{lc, ConstraintSynthesizer, ConstraintSystem, ConstraintSystemRef, SynthesisMode, Variable};
+
+use rand::Rng;
+use std::{
+    fmt,
+    io::{self, Read, Write},
+};
 
 /// MPC parameters are just like Zexe's `Parameters` except, when serialized,
 /// they contain a transcript of contributions at the end, which can be verified.
@@ -44,10 +53,12 @@ impl<E: PairingEngine + PartialEq> PartialEq for MPCParameters<E> {
 }
 
 impl<E: PairingEngine> MPCParameters<E> {
+    #[cfg(not(feature = "wasm"))]
     pub fn new_from_buffer<C>(
         circuit: C,
         transcript: &mut [u8],
         compressed: UseCompression,
+        check_input_for_correctness: CheckForCorrectness,
         phase1_size: usize,
         phase2_size: usize,
     ) -> Result<MPCParameters<E>>
@@ -55,15 +66,26 @@ impl<E: PairingEngine> MPCParameters<E> {
         C: ConstraintSynthesizer<E::Fr>,
     {
         let assembly = circuit_to_qap::<E, _>(circuit)?;
-        let params = Groth16Params::<E>::read(transcript, compressed, phase1_size, phase2_size)?;
+        let params = Groth16Params::<E>::read(
+            transcript,
+            compressed,
+            check_input_for_correctness,
+            phase1_size,
+            phase2_size,
+        )?;
         Self::new(assembly, params)
     }
 
-    /// Create new Groth16 parameters (compatible with Zexe) for a
-    /// given circuit. The resulting parameters are unsafe to use
-    /// until there are contributions (see `contribute()`).
-    pub fn new(assembly: KeypairAssembly<E>, params: Groth16Params<E>) -> Result<MPCParameters<E>> {
+    /// Create new Groth16 parameters (compatible with Zexe and snarkOS) for a
+    /// given QAP which has been produced from a circuit. The resulting parameters
+    /// are unsafe to use until there are contributions (see `contribute()`).
+    #[cfg(not(feature = "wasm"))]
+    pub fn new(cs: ConstraintSystemRef<E::Fr>, params: Groth16Params<E>) -> Result<MPCParameters<E>> {
         // Evaluate the QAP against the coefficients created from phase 1
+        let (at, bt, ct) = {
+            let matrices = cs.to_matrices().unwrap();
+            (matrices.a, matrices.b, matrices.c)
+        };
         let (a_g1, b_g1, b_g2, gamma_abc_g1, l) = eval::<E>(
             // Lagrange coeffs for Tau, read in from Phase 1
             &params.coeffs_g1,
@@ -71,11 +93,11 @@ impl<E: PairingEngine> MPCParameters<E> {
             &params.alpha_coeffs_g1,
             &params.beta_coeffs_g1,
             // QAP polynomials of the circuit
-            &assembly.at,
-            &assembly.bt,
-            &assembly.ct,
+            &at,
+            &bt,
+            &ct,
             // Helper
-            assembly.num_inputs,
+            cs.num_instance_variables(),
         );
 
         // Reject unconstrained elements, so that
@@ -166,18 +188,11 @@ impl<E: PairingEngine> MPCParameters<E> {
             return Err(Phase2Error::NoContributions.into());
         };
         // Current parameters should have consistent delta in G1
-        ensure_unchanged(
-            pubkey.delta_after,
-            after.params.delta_g1,
-            InvariantKind::DeltaG1,
-        )?;
+        ensure_unchanged(pubkey.delta_after, after.params.delta_g1, InvariantKind::DeltaG1)?;
         // Current parameters should have consistent delta in G2
         check_same_ratio::<E>(
             &(E::G1Affine::prime_subgroup_generator(), pubkey.delta_after),
-            &(
-                E::G2Affine::prime_subgroup_generator(),
-                after.params.vk.delta_g2,
-            ),
+            &(E::G2Affine::prime_subgroup_generator(), after.params.vk.delta_g2),
             "Inconsistent G2 Delta",
         )?;
 
@@ -189,11 +204,7 @@ impl<E: PairingEngine> MPCParameters<E> {
         )?;
 
         // cs_hash should be the same
-        ensure_unchanged(
-            &before.cs_hash[..],
-            &after.cs_hash[..],
-            InvariantKind::CsHash,
-        )?;
+        ensure_unchanged(&before.cs_hash[..], &after.cs_hash[..], InvariantKind::CsHash)?;
 
         // H/L will change, but should have same length
         ensure_same_length(&before.params.h_query, &after.params.h_query)?;
@@ -205,16 +216,8 @@ impl<E: PairingEngine> MPCParameters<E> {
             after.params.vk.alpha_g1,
             InvariantKind::AlphaG1,
         )?;
-        ensure_unchanged(
-            before.params.beta_g1,
-            after.params.beta_g1,
-            InvariantKind::BetaG1,
-        )?;
-        ensure_unchanged(
-            before.params.vk.beta_g2,
-            after.params.vk.beta_g2,
-            InvariantKind::BetaG2,
-        )?;
+        ensure_unchanged(before.params.beta_g1, after.params.beta_g1, InvariantKind::BetaG1)?;
+        ensure_unchanged(before.params.vk.beta_g2, after.params.vk.beta_g2, InvariantKind::BetaG2)?;
         ensure_unchanged(
             before.params.vk.gamma_g2,
             after.params.vk.gamma_g2,
@@ -272,10 +275,10 @@ impl<E: PairingEngine> MPCParameters<E> {
 
     /// Serialize these parameters. The serialized parameters
     /// can be read by Zexe's Groth16 `Parameters`.
-    pub fn write<W: Write>(&self, writer: &mut W) -> Result<()> {
-        self.params.serialize(writer)?;
+    pub fn write<W: Write>(&self, mut writer: W) -> Result<()> {
+        self.params.serialize(&mut writer)?;
         writer.write_all(&self.cs_hash)?;
-        PublicKey::write_batch(writer, &self.contributions)?;
+        PublicKey::write_batch(&mut writer, &self.contributions)?;
 
         Ok(())
     }
@@ -318,11 +321,7 @@ pub fn ensure_same_length<T, U>(a: &[T], b: &[U]) -> Result<()> {
     Ok(())
 }
 
-pub fn ensure_unchanged_vec<T: PartialEq>(
-    before: &[T],
-    after: &[T],
-    kind: &InvariantKind,
-) -> Result<()> {
+pub fn ensure_unchanged_vec<T: PartialEq>(before: &[T], after: &[T], kind: &InvariantKind) -> Result<()> {
     if before.len() != after.len() {
         return Err(Phase2Error::InvalidLength.into());
     }
@@ -340,19 +339,12 @@ pub fn ensure_unchanged<T: PartialEq>(before: T, after: T, kind: InvariantKind) 
     Ok(())
 }
 
-pub fn verify_transcript<E: PairingEngine>(
-    cs_hash: [u8; 64],
-    contributions: &[PublicKey<E>],
-) -> Result<Vec<[u8; 64]>> {
+pub fn verify_transcript<E: PairingEngine>(cs_hash: [u8; 64], contributions: &[PublicKey<E>]) -> Result<Vec<[u8; 64]>> {
     let mut result = vec![];
     let mut old_delta = E::G1Affine::prime_subgroup_generator();
     for (i, pubkey) in contributions.iter().enumerate() {
         let hash = hash_cs_pubkeys(cs_hash, &contributions[0..i], pubkey.s, pubkey.s_delta);
-        ensure_unchanged(
-            &pubkey.transcript[..],
-            &hash.as_ref()[..],
-            InvariantKind::Transcript,
-        )?;
+        ensure_unchanged(&pubkey.transcript[..], &hash.as_ref()[..], InvariantKind::Transcript)?;
 
         // generate the G2 point from the hash
         let r = hash_to_g2::<E>(hash.as_ref()).into_affine();
@@ -390,50 +382,44 @@ fn hash_params<E: PairingEngine>(params: &Parameters<E>) -> Result<[u8; 64]> {
 }
 
 /// Converts an R1CS circuit to QAP form
-pub fn circuit_to_qap<E: PairingEngine, C: ConstraintSynthesizer<E::Fr>>(
+pub fn circuit_to_qap<Zexe: PairingEngine, C: ConstraintSynthesizer<Zexe::Fr>>(
     circuit: C,
-) -> Result<KeypairAssembly<E>> {
-    let mut assembly = KeypairAssembly::<E> {
-        num_inputs: 0,
-        num_aux: 0,
-        num_constraints: 0,
-        at: vec![],
-        bt: vec![],
-        ct: vec![],
-    };
+) -> Result<ConstraintSystemRef<Zexe::Fr>> {
+    // This is a Groth16 keypair assembly
+    let cs = ConstraintSystem::new_ref();
+    cs.set_mode(SynthesisMode::Setup);
 
-    // Allocate the "one" input variable
-    assembly.alloc_input(|| "", || Ok(E::Fr::one()))?;
     // Synthesize the circuit.
-    circuit.generate_constraints(&mut assembly)?;
+    circuit
+        .generate_constraints(cs.clone())
+        .expect("constraint generation should not fail");
     // Input constraints to ensure full density of IC query
     // x * 0 = 0
-    for i in 0..assembly.num_inputs {
-        assembly.enforce(
-            || "",
-            |lc| lc + Variable::new_unchecked(Index::Input(i)),
-            |lc| lc,
-            |lc| lc,
-        );
+    for i in 0..cs.num_instance_variables() {
+        cs.enforce_constraint(lc!() + Variable::Instance(i), lc!(), lc!())?;
     }
 
-    Ok(assembly)
+    Ok(cs)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chunked_groth16::{contribute, verify};
-    use powersoftau::{parameters::CeremonyParams, BatchedAccumulator};
+    use crate::{
+        chunked_groth16::{contribute, verify},
+        helpers::testing::TestCircuit,
+    };
+    use phase1::{helpers::testing::setup_verify, Phase1, Phase1Parameters, ProvingSystem};
+    use setup_utils::{Groth16Params, UseCompression};
+
+    use zexe_algebra::Bls12_377;
+
     use rand::thread_rng;
-    use snark_utils::{Groth16Params, UseCompression};
-    use test_helpers::{setup_verify, TestCircuit};
     use tracing_subscriber::{filter::EnvFilter, fmt::Subscriber};
-    use zexe_algebra::Bls12_381;
 
     #[test]
     fn serialize_ceremony() {
-        serialize_ceremony_curve::<Bls12_381>()
+        serialize_ceremony_curve::<Bls12_377>()
     }
 
     fn serialize_ceremony_curve<E: PairingEngine + PartialEq>() {
@@ -449,7 +435,7 @@ mod tests {
 
     #[test]
     fn verify_with_self_fails() {
-        verify_with_self_fails_curve::<Bls12_381>()
+        verify_with_self_fails_curve::<Bls12_377>()
     }
 
     // if there has been no contribution
@@ -460,17 +446,14 @@ mod tests {
         // we handle the error like this because [u8; 64] does not implement
         // debug, meaning we cannot call `assert` on it
         if let Err(e) = err {
-            assert_eq!(
-                e.to_string(),
-                "Phase 2 Error: There were no contributions found"
-            );
+            assert_eq!(e.to_string(), "Phase 2 Error: There were no contributions found");
         } else {
             panic!("Verifying with self must fail")
         }
     }
     #[test]
     fn verify_contribution() {
-        verify_curve::<Bls12_381>()
+        verify_curve::<Bls12_377>()
     }
 
     // contributing once and comparing with the previous step passes
@@ -543,11 +526,11 @@ mod tests {
         let powers = 5;
         let batch = 16;
         let phase2_size = 7;
-        let params = CeremonyParams::<E>::new(powers, batch);
+        let params = Phase1Parameters::<E>::new_full(ProvingSystem::Groth16, powers, batch);
         let accumulator = {
             let compressed = UseCompression::No;
-            let (_, output, _, _) = setup_verify(compressed, compressed, &params);
-            BatchedAccumulator::deserialize(&output, compressed, &params).unwrap()
+            let (_, output, _, _) = setup_verify(compressed, CheckForCorrectness::Full, compressed, &params);
+            Phase1::deserialize(&output, compressed, CheckForCorrectness::Full, &params).unwrap()
         };
 
         let groth_params = Groth16Params::<E>::new(

@@ -1,6 +1,6 @@
-use rayon::prelude::*;
 use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
-use zexe_r1cs_core::Index;
+
+use rayon::prelude::*;
 
 /// Evaluates and returns the provided QAP Polynomial vectors at the provided coefficients.
 /// Format: [a_g1, b_g1, b_g2, gamma_abc_g1, l_g1]
@@ -14,9 +14,9 @@ pub fn eval<E: PairingEngine>(
     alpha_coeffs_g1: &[E::G1Affine],
     beta_coeffs_g1: &[E::G1Affine],
     // QAP polynomials
-    at: &[Vec<(E::Fr, Index)>],
-    bt: &[Vec<(E::Fr, Index)>],
-    ct: &[Vec<(E::Fr, Index)>],
+    at: &[Vec<(E::Fr, usize)>],
+    bt: &[Vec<(E::Fr, usize)>],
+    ct: &[Vec<(E::Fr, usize)>],
     // The number of inputs
     num_inputs: usize,
 ) -> (
@@ -27,15 +27,10 @@ pub fn eval<E: PairingEngine>(
     Vec<E::G1Affine>,
 ) {
     // calculate the evaluated polynomials
-    let a_g1 = dot_product_vec(at, coeffs_g1, num_inputs);
-    let b_g1 = dot_product_vec(bt, coeffs_g1, num_inputs);
-    let b_g2 = dot_product_vec(bt, coeffs_g2, num_inputs);
-    let ext = dot_product_ext::<E>(
-        (at, beta_coeffs_g1),
-        (bt, alpha_coeffs_g1),
-        (ct, coeffs_g1),
-        num_inputs,
-    );
+    let a_g1 = dot_product_vec(at, coeffs_g1);
+    let b_g1 = dot_product_vec(bt, coeffs_g1);
+    let b_g2 = dot_product_vec(bt, coeffs_g2);
+    let ext = dot_product_ext::<E>((at, beta_coeffs_g1), (bt, alpha_coeffs_g1), (ct, coeffs_g1));
 
     // break to `gamma_abc_g1` and `l` coeffs
     let (gamma_abc_g1, l) = ext.split_at(num_inputs);
@@ -53,18 +48,15 @@ pub fn eval<E: PairingEngine>(
 #[allow(clippy::type_complexity)]
 #[allow(clippy::op_ref)] // false positive by clippy
 fn dot_product_ext<E: PairingEngine>(
-    (at, beta_coeffs_g1): (&[Vec<(E::Fr, Index)>], &[E::G1Affine]),
-    (bt, alpha_coeffs_g1): (&[Vec<(E::Fr, Index)>], &[E::G1Affine]),
-    (ct, coeffs_g1): (&[Vec<(E::Fr, Index)>], &[E::G1Affine]),
-    num_inputs: usize,
+    (at, beta_coeffs_g1): (&[Vec<(E::Fr, usize)>], &[E::G1Affine]),
+    (bt, alpha_coeffs_g1): (&[Vec<(E::Fr, usize)>], &[E::G1Affine]),
+    (ct, coeffs_g1): (&[Vec<(E::Fr, usize)>], &[E::G1Affine]),
 ) -> Vec<E::G1Projective> {
     let mut ret = at
         .par_iter()
         .zip(bt.par_iter().zip(ct))
         .map(|(at, (bt, ct))| {
-            dot_product(&at, &beta_coeffs_g1, num_inputs)
-                + &dot_product(&bt, &alpha_coeffs_g1, num_inputs)
-                + &dot_product(&ct, &coeffs_g1, num_inputs)
+            dot_product(&at, &beta_coeffs_g1) + &dot_product(&bt, &alpha_coeffs_g1) + &dot_product(&ct, &coeffs_g1)
         })
         .collect::<Vec<_>>();
     E::G1Projective::batch_normalization(&mut ret);
@@ -74,38 +66,23 @@ fn dot_product_ext<E: PairingEngine>(
 /// Returns a batch normalized projective vector where the coefficients
 /// have been applied to the input
 /// This is a NxN * Nx1 -> Nx1 matrix multiplication basically
-fn dot_product_vec<C: AffineCurve>(
-    input: &[Vec<(C::ScalarField, Index)>],
-    coeffs: &[C],
-    num_inputs: usize,
-) -> Vec<C::Projective> {
-    let mut ret = input
-        .par_iter()
-        .map(|row| dot_product(row, coeffs, num_inputs))
-        .collect::<Vec<_>>();
+fn dot_product_vec<C: AffineCurve>(input: &[Vec<(C::ScalarField, usize)>], coeffs: &[C]) -> Vec<C::Projective> {
+    let mut ret = input.par_iter().map(|row| dot_product(row, coeffs)).collect::<Vec<_>>();
     // Batch normalize
     C::Projective::batch_normalization(&mut ret);
     ret
 }
 
 /// Executes a dot product between two vectors (1xN * Nx1)
-/// If the Index of the input is an Auxiliary index it uses the
+/// If the usize of the input is an Auxiliary index it uses the
 /// `coeffs` vector offset by `num_inputs`
 #[allow(clippy::redundant_closure)]
-fn dot_product<C: AffineCurve>(
-    input: &[(C::ScalarField, Index)],
-    coeffs: &[C],
-    num_inputs: usize,
-) -> C::Projective {
+fn dot_product<C: AffineCurve>(input: &[(C::ScalarField, usize)], coeffs: &[C]) -> C::Projective {
     input
         .into_par_iter()
         .fold(
             || C::Projective::zero(),
-            |mut sum, &(coeff, lag)| {
-                let ind = match lag {
-                    Index::Input(i) => i,
-                    Index::Aux(i) => num_inputs + i,
-                };
+            |mut sum, &(coeff, ind)| {
                 sum += &coeffs[ind].mul(coeff);
                 sum
             },
@@ -116,22 +93,22 @@ fn dot_product<C: AffineCurve>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use phase1::helpers::testing::random_point_vec;
     use rand::{thread_rng, Rng};
-    use test_helpers::random_point_vec;
     use zexe_algebra::{
         bls12_377::{Bls12_377, Fr, G1Affine, G1Projective},
         UniformRand,
     };
 
-    fn gen_input(rng: &mut impl Rng) -> Vec<(Fr, Index)> {
+    fn gen_input(rng: &mut impl Rng) -> Vec<(Fr, usize)> {
         let scalar = (0..6).map(|_| Fr::rand(rng)).collect::<Vec<_>>();
         vec![
-            (scalar[0], Index::Input(0)),
-            (scalar[1], Index::Input(1)),
-            (scalar[2], Index::Aux(0)),
-            (scalar[3], Index::Aux(2)), // can they ever be out of order in reality?
-            (scalar[4], Index::Aux(1)),
-            (scalar[5], Index::Input(2)),
+            (scalar[0], 0),
+            (scalar[1], 1),
+            (scalar[2], 3),
+            (scalar[3], 5), // can they ever be out of order in reality?
+            (scalar[4], 4),
+            (scalar[5], 2),
         ]
     }
 
@@ -151,28 +128,26 @@ mod tests {
     fn test_dot_product() {
         // 3 inputs, 3 aux
         let mut rng = thread_rng();
-        let num_inputs = 3;
         let input = gen_input(&mut rng);
         let scalar = input.iter().map(|i| i.0).collect::<Vec<_>>();
         let elements: Vec<G1Affine> = random_point_vec(6, &mut rng);
 
         let expected = get_expected(&elements, &scalar);
 
-        let got = dot_product(&input, &elements, num_inputs);
+        let got = dot_product(&input, &elements);
 
         assert_eq!(got, expected);
 
         // it also applies the coefficients vector to each row
         // in the inputs vector
         let input_vec = vec![input; 10];
-        let got = dot_product_vec(&input_vec, &elements, num_inputs);
+        let got = dot_product_vec(&input_vec, &elements);
         assert_eq!(got, vec![expected; 10])
     }
 
     #[test]
     fn test_dot_product_ext() {
         let mut rng = thread_rng();
-        let num_inputs = 3;
         // generate the input vectors
         let at = (0..10).map(|_| gen_input(&mut rng)).collect::<Vec<_>>();
         let bt = (0..10).map(|_| gen_input(&mut rng)).collect::<Vec<_>>();
@@ -182,12 +157,7 @@ mod tests {
         let alpha_coeffs_g1: Vec<G1Affine> = random_point_vec(6, &mut rng);
         let coeffs_g1: Vec<G1Affine> = random_point_vec(6, &mut rng);
 
-        let got = dot_product_ext::<Bls12_377>(
-            (&at, &beta_coeffs_g1),
-            (&bt, &alpha_coeffs_g1),
-            (&ct, &coeffs_g1),
-            num_inputs,
-        );
+        let got = dot_product_ext::<Bls12_377>((&at, &beta_coeffs_g1), (&bt, &alpha_coeffs_g1), (&ct, &coeffs_g1));
 
         // it should be the sum of the dot products
         let mut expected = Vec::new();

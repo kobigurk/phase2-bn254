@@ -92,7 +92,7 @@ cfg_if! {
             buffer[start * size..end * size].read_batch_preallocated(
                 &mut elements[0..end - start],
                 compression,
-                CheckForCorrectness::Full,
+                CheckForCorrectness::OnlyNonZero,
             )?;
             // TODO(kobi): replace with batch subgroup check
             let all_in_prime_order_subgroup = elements.iter().all(|p| {

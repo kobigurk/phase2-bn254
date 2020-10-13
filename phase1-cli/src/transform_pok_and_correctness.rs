@@ -15,8 +15,11 @@ const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
 pub fn transform_pok_and_correctness<T: Engine + Sync>(
     challenge_filename: &str,
+    challenge_hash_filename: &str,
     response_filename: &str,
+    response_hash_filename: &str,
     new_challenge_filename: &str,
+    new_challenge_hash_filename: &str,
     parameters: &Phase1Parameters<T>,
 ) {
     println!(
@@ -87,6 +90,10 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
     // Check that contribution is correct
 
     let current_accumulator_hash = calculate_hash(&challenge_readable_map);
+    std::fs::File::create(challenge_hash_filename)
+        .expect("unable to open current accumulator hash file")
+        .write_all(current_accumulator_hash.as_slice())
+        .expect("unable to write current accumulator hash");
 
     println!("Hash of the `challenge` file for verification:");
     print_hash(&current_accumulator_hash);
@@ -110,6 +117,10 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
     }
 
     let response_hash = calculate_hash(&response_readable_map);
+    std::fs::File::create(response_hash_filename)
+        .expect("unable to open response hash file")
+        .write_all(response_hash.as_slice())
+        .expect("unable to write response hash");
 
     println!("Hash of the response file for verification:");
     print_hash(&response_hash);
@@ -188,6 +199,11 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
         let new_challenge_readable_map = writable_map.make_read_only().expect("must make a map readonly");
 
         let recompressed_hash = calculate_hash(&new_challenge_readable_map);
+
+        std::fs::File::create(new_challenge_hash_filename)
+            .expect("unable to open new challenge hash file")
+            .write_all(recompressed_hash.as_slice())
+            .expect("unable to write new challenge hash");
 
         println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
         print_hash(&recompressed_hash);

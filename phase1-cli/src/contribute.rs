@@ -16,7 +16,9 @@ const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 pub fn contribute<T: Engine + Sync>(
     challenge_filename: &str,
+    challenge_hash_filename: &str,
     response_filename: &str,
+    response_hash_filename: &str,
     parameters: &Phase1Parameters<T>,
     mut rng: impl Rng,
 ) {
@@ -83,6 +85,10 @@ pub fn contribute<T: Engine + Sync>(
     {
         println!("`challenge` file contains decompressed points and has a hash:");
         print_hash(&current_accumulator_hash);
+        std::fs::File::create(challenge_hash_filename)
+            .expect("unable to open current accumulator hash file")
+            .write_all(current_accumulator_hash.as_slice())
+            .expect("unable to write current accumulator hash");
 
         (&mut writable_map[0..])
             .write_all(current_accumulator_hash.as_slice())
@@ -142,5 +148,9 @@ pub fn contribute<T: Engine + Sync>(
               The BLAKE2b hash of response file is:\n"
     );
     print_hash(&contribution_hash);
+    std::fs::File::create(response_hash_filename)
+        .expect("unable to open contribution hash file")
+        .write_all(contribution_hash.as_slice())
+        .expect("unable to write contribution hash");
     println!("Thank you for your participation, much appreciated! :)");
 }

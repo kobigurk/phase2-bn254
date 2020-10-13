@@ -3,7 +3,7 @@
 [[package]]
 name = "algebra"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "algebra-core",
 ]
@@ -11,22 +11,26 @@ dependencies = [
 [[package]]
 name = "algebra-core"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "algebra-core-derive",
+ "cc",
  "derivative",
- "field-assembly",
+ "either",
+ "itertools 0.9.0",
  "num-traits",
+ "paste",
  "rand 0.7.3",
  "rayon",
  "rustc_version",
  "unroll",
+ "voracious_radix_sort",
 ]
 
 [[package]]
 name = "algebra-core-derive"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "proc-macro2 1.0.21",
  "quote 1.0.7",
@@ -80,7 +84,7 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 [[package]]
 name = "bench-utils"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "colored",
 ]
@@ -152,6 +156,12 @@ checksum = "4b9434b9a5aa1450faa3f9cb14ea0e8c53bb5d2b3c1bfd1ab4fc03e9f33fbfb0"
 dependencies = [
  "rustc_version",
 ]
+
+[[package]]
+name = "cc"
+version = "1.0.61"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed67cbde08356238e75fc4656be4749481eeffb09e19f320a25237d5221c985d"
 
 [[package]]
 name = "cfg-if"
@@ -396,19 +406,11 @@ dependencies = [
 [[package]]
 name = "ff-fft"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "algebra-core",
  "rand 0.7.3",
  "rayon",
-]
-
-[[package]]
-name = "field-assembly"
-version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
-dependencies = [
- "mince",
 ]
 
 [[package]]
@@ -462,7 +464,7 @@ dependencies = [
 [[package]]
 name = "groth16"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "algebra-core",
  "bench-utils",
@@ -641,15 +643,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mince"
-version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
-dependencies = [
- "quote 1.0.7",
- "syn 1.0.41",
-]
-
-[[package]]
 name = "nias"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -695,6 +688,25 @@ name = "opaque-debug"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2839e79665f131bdb5782e51f2c6c9599c133c6098982a54c794358bf432529c"
+
+[[package]]
+name = "paste"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45ca20c77d80be666aef2b45486da86238fabe33e38306bd3118fe4af33fa880"
+dependencies = [
+ "paste-impl",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "paste-impl"
+version = "0.1.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d95a7db200b97ef370c8e6de0088252f7e0dfff7d047a28528e47456c0fc98b6"
+dependencies = [
+ "proc-macro-hack",
+]
 
 [[package]]
 name = "phase1"
@@ -819,6 +831,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c36fa947111f5c62a733b652544dd0016a43ce89619538a8ef92724a6f501a20"
 
 [[package]]
+name = "proc-macro-hack"
+version = "0.5.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99c605b9a0adc77b7211c6b1f722dcb613d68d66859a44f3d485a6da332b0598"
+
+[[package]]
 name = "proc-macro2"
 version = "0.4.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,7 +875,7 @@ dependencies = [
 [[package]]
 name = "r1cs-core"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/celo-org/zexe?rev=6a3741655267fad6407b4ce548ef7ed805469c9b#6a3741655267fad6407b4ce548ef7ed805469c9b"
+source = "git+https://github.com/celo-org/zexe?rev=a339dbdc9dda9baaa119185b4482a3e4f868c0ec#a339dbdc9dda9baaa119185b4482a3e4f868c0ec"
 dependencies = [
  "algebra-core",
  "tracing",
@@ -867,7 +885,7 @@ dependencies = [
 [[package]]
 name = "r1cs-std"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/scipr-lab/zexe#38e792fffc78c0bfc4d780ee21257c8cb70a2e2a"
+source = "git+https://github.com/scipr-lab/zexe#85cac1770dddd4da79e9993c5d1dcb5732db08f5"
 dependencies = [
  "algebra",
  "derivative",
@@ -1383,6 +1401,12 @@ dependencies = [
  "quote 0.6.13",
  "syn 0.15.44",
 ]
+
+[[package]]
+name = "voracious_radix_sort"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "616c76cba4a47731b29152961b4b6861156b03cdb339683a9cef81d0cc5e53cf"
 
 [[package]]
 name = "walkdir"

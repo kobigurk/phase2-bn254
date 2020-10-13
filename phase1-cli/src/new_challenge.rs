@@ -8,7 +8,11 @@ use std::{fs::OpenOptions, io::Write};
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
-pub fn new_challenge<T: Engine + Sync>(challenge_filename: &str, parameters: &Phase1Parameters<T>) {
+pub fn new_challenge<T: Engine + Sync>(
+    challenge_filename: &str,
+    challenge_hash_filename: &str,
+    parameters: &Phase1Parameters<T>,
+) {
     println!(
         "Will generate an empty accumulator for 2^{} powers of tau",
         parameters.total_size_in_log2
@@ -55,6 +59,11 @@ pub fn new_challenge<T: Engine + Sync>(challenge_filename: &str, parameters: &Ph
     // Get the hash of the contribution, so the user can compare later
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
     let contribution_hash = calculate_hash(&output_readonly);
+
+    std::fs::File::create(challenge_hash_filename)
+        .expect("unable to open new challenge hash file")
+        .write_all(contribution_hash.as_slice())
+        .expect("unable to write new challenge hash");
 
     println!("Empty contribution is formed with a hash:");
     print_hash(&contribution_hash);

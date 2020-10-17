@@ -15,6 +15,7 @@ use zexe_algebra::{Bls12_377, PairingEngine as Engine, BW6_761};
 
 use gumdrop::Options;
 use std::{fs::read_to_string, process, time::Instant};
+use tracing::{error, info};
 use tracing_subscriber::{
     filter::EnvFilter,
     fmt::{time::ChronoUtc, Subscriber},
@@ -33,8 +34,8 @@ fn execute_cmd<E: Engine>(opts: Phase1Opts) {
     );
 
     let command = opts.clone().command.unwrap_or_else(|| {
-        eprintln!("No command was provided.");
-        eprintln!("{}", Phase1Opts::usage());
+        error!("No command was provided.");
+        error!("{}", Phase1Opts::usage());
         process::exit(2)
     });
 
@@ -96,7 +97,7 @@ fn execute_cmd<E: Engine>(opts: Phase1Opts) {
     };
 
     let new_now = Instant::now();
-    println!("Executing {:?} took: {:?}", opts, new_now.duration_since(now));
+    info!("Executing {:?} took: {:?}", opts, new_now.duration_since(now));
 }
 
 fn main() {

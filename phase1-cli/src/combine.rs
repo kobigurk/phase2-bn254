@@ -8,6 +8,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufRead, BufReader},
 };
+use tracing::info;
 
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
 const COMPRESS_NEW_COMBINED: UseCompression = UseCompression::No;
@@ -17,7 +18,7 @@ pub fn combine<T: Engine + Sync>(
     combined_filename: &str,
     parameters: &Phase1Parameters<T>,
 ) {
-    println!("Will combine contributions",);
+    info!("Will combine contributions",);
 
     let mut readers = vec![];
 
@@ -73,7 +74,7 @@ pub fn combine<T: Engine + Sync>(
         .open(combined_filename)
         .expect("unable to create new combined file in this directory");
 
-    println!("parameters for output: {:?}", parameters_for_output);
+    info!("parameters for output: {:?}", parameters_for_output);
 
     writer
         .set_len(parameters_for_output.accumulator_size as u64)
@@ -105,9 +106,9 @@ pub fn combine<T: Engine + Sync>(
     );
 
     if let Err(e) = res {
-        println!("Combining failed: {}", e);
+        info!("Combining failed: {}", e);
         panic!("INVALID CONTRIBUTIONS!!!");
     } else {
-        println!("Combining succeeded!");
+        info!("Combining succeeded!");
     }
 }

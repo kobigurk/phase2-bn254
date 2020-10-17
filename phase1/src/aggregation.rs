@@ -582,7 +582,6 @@ mod tests {
 
             let mut full_contribution_after_split = vec![];
             for chunk_index in 0..num_chunks {
-                println!("chunk index: {}/{} {:?}", chunk_index, num_chunks, *proving_system);
                 // Generate a new parameter for this chunk.
                 let parameters = Phase1Parameters::<E>::new_chunk(
                     ContributionMode::Chunked,

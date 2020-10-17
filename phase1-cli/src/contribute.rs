@@ -9,6 +9,7 @@ use std::{
     fs::OpenOptions,
     io::{Read, Write},
 };
+use tracing::info;
 
 const COMPRESSED_INPUT: UseCompression = UseCompression::No;
 const COMPRESSED_OUTPUT: UseCompression = UseCompression::Yes;
@@ -74,7 +75,7 @@ pub fn contribute<T: Engine + Sync>(
             .expect("unable to create a memory map for output")
     };
 
-    println!("Calculating previous contribution hash...");
+    info!("Calculating previous contribution hash...");
 
     assert!(
         UseCompression::No == COMPRESSED_INPUT,
@@ -83,7 +84,7 @@ pub fn contribute<T: Engine + Sync>(
     let current_accumulator_hash = calculate_hash(&readable_map);
 
     {
-        println!("`challenge` file contains decompressed points and has a hash:");
+        info!("`challenge` file contains decompressed points and has a hash:");
         print_hash(&current_accumulator_hash);
         std::fs::File::create(challenge_hash_filename)
             .expect("unable to open current accumulator hash file")
@@ -104,7 +105,7 @@ pub fn contribute<T: Engine + Sync>(
             .read_exact(&mut challenge_hash)
             .expect("couldn't read hash of challenge file from response file");
 
-        println!(
+        info!(
             "`challenge` file claims (!!! Must not be blindly trusted) that it was based on the original contribution with a hash:"
         );
         print_hash(&challenge_hash);
@@ -115,7 +116,7 @@ pub fn contribute<T: Engine + Sync>(
         Phase1::key_generation(&mut rng, current_accumulator_hash.as_ref()).expect("could not generate keypair");
 
     // Perform the transformation
-    println!("Computing and writing your contribution, this could take a while...");
+    info!("Computing and writing your contribution, this could take a while...");
 
     // this computes a transformation and writes it
     Phase1::computation(
@@ -129,7 +130,7 @@ pub fn contribute<T: Engine + Sync>(
     )
     .expect("must contribute with the key");
 
-    println!("Finishing writing your contribution to response file...");
+    info!("Finishing writing your contribution to response file...");
 
     // Write the public key
     public_key
@@ -142,7 +143,7 @@ pub fn contribute<T: Engine + Sync>(
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
     let contribution_hash = calculate_hash(&output_readonly);
 
-    print!(
+    info!(
         "Done!\n\n\
               Your contribution has been written to response file\n\n\
               The BLAKE2b hash of response file is:\n"
@@ -152,5 +153,5 @@ pub fn contribute<T: Engine + Sync>(
         .expect("unable to open contribution hash file")
         .write_all(contribution_hash.as_slice())
         .expect("unable to write contribution hash");
-    println!("Thank you for your participation, much appreciated! :)");
+    info!("Thank you for your participation, much appreciated! :)");
 }

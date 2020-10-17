@@ -5,9 +5,10 @@ use zexe_algebra::PairingEngine as Engine;
 
 use memmap::*;
 use std::fs::OpenOptions;
+use tracing::info;
 
 pub fn transform_ratios<T: Engine + Sync>(response_filename: &str, parameters: &Phase1Parameters<T>) {
-    println!(
+    info!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
         parameters.total_size_in_log2
     );
@@ -48,11 +49,11 @@ pub fn transform_ratios<T: Engine + Sync>(response_filename: &str, parameters: &
 
     let response_hash = calculate_hash(&response_readable_map);
 
-    println!("Hash of the response file for verification:");
+    info!("Hash of the response file for verification:");
     print_hash(&response_hash);
 
     // check that it follows the protocol
-    println!("Verifying a contribution to contain proper powers and correspond to the public key...");
+    info!("Verifying a contribution to contain proper powers and correspond to the public key...");
 
     let res = Phase1::aggregate_verification(
         (&response_readable_map, UseCompression::No, CheckForCorrectness::No),
@@ -60,9 +61,9 @@ pub fn transform_ratios<T: Engine + Sync>(response_filename: &str, parameters: &
     );
 
     if let Err(e) = res {
-        println!("Verification failed: {}", e);
+        info!("Verification failed: {}", e);
         panic!("INVALID CONTRIBUTION!!!");
     } else {
-        println!("Verification succeeded!");
+        info!("Verification succeeded!");
     }
 }

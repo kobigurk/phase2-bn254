@@ -26,6 +26,7 @@ use std::{
     ops::{AddAssign, Mul},
     sync::Arc,
 };
+use tracing::info;
 use typenum::consts::U64;
 
 #[cfg(not(feature = "wasm"))]
@@ -44,16 +45,18 @@ pub fn generate_powers_of_tau<E: PairingEngine>(tau: &E::Fr, start: usize, end: 
 }
 
 pub fn print_hash(hash: &[u8]) {
+    let mut hash_str = String::new();
     for line in hash.chunks(16) {
-        print!("\t");
+        hash_str.extend("\t");
         for section in line.chunks(4) {
             for b in section {
-                print!("{:02x}", b);
+                hash_str.extend(&format!("{:02x}", b));
             }
-            print!(" ");
+            hash_str.extend(" ");
         }
-        println!();
+        hash_str.extend("\n");
     }
+    info!("{}", hash_str);
 }
 
 /// Multiply a large number of points by a scalar

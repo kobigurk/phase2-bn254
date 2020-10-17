@@ -143,7 +143,7 @@ pub fn contribute<T: Engine + Sync>(
     let output_readonly = writable_map.make_read_only().expect("must make a map readonly");
     let contribution_hash = calculate_hash(&output_readonly);
 
-    print!(
+    info!(
         "Done!\n\n\
               Your contribution has been written to response file\n\n\
               The BLAKE2b hash of response file is:\n"

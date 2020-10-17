@@ -47,14 +47,13 @@ pub fn generate_powers_of_tau<E: PairingEngine>(tau: &E::Fr, start: usize, end: 
 pub fn print_hash(hash: &[u8]) {
     let mut hash_str = String::new();
     for line in hash.chunks(16) {
-        hash_str.extend("\t");
+        hash_str.push_str("\t");
         for section in line.chunks(4) {
             for b in section {
-                hash_str.extend(&format!("{:02x}", b));
+                hash_str.push_str(&format!("{:02x}", b));
             }
-            hash_str.extend(" ");
+            hash_str.push_str(" ");
         }
-        hash_str.extend("\n");
     }
     info!("{}", hash_str);
 }

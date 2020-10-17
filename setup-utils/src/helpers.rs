@@ -54,6 +54,7 @@ pub fn print_hash(hash: &[u8]) {
             }
             hash_str.push_str(" ");
         }
+        hash_str.push_str("\n");
     }
     info!("{}", hash_str);
 }

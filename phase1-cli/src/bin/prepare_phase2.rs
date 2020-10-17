@@ -10,6 +10,7 @@ use zexe_algebra::{Bls12_377, PairingEngine, BW6_761};
 use gumdrop::Options;
 use memmap::*;
 use std::{fs::OpenOptions, time::Instant};
+use tracing::info;
 use tracing_subscriber::{
     filter::EnvFilter,
     fmt::{time::ChronoUtc, Subscriber},
@@ -107,7 +108,7 @@ fn main() -> Result<()> {
     }
 
     let new_now = Instant::now();
-    println!("Executing {:?} took: {:?}", opts, new_now.duration_since(now));
+    info!("Executing {:?} took: {:?}", opts, new_now.duration_since(now));
 
     Ok(())
 }

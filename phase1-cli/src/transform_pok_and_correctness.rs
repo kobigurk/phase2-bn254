@@ -8,6 +8,7 @@ use std::{
     fs::OpenOptions,
     io::{Read, Write},
 };
+use tracing::info;
 
 const PREVIOUS_CHALLENGE_IS_COMPRESSED: UseCompression = UseCompression::No;
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
@@ -22,7 +23,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
     new_challenge_hash_filename: &str,
     parameters: &Phase1Parameters<T>,
 ) {
-    println!(
+    info!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
         parameters.total_size_in_log2
     );
@@ -85,7 +86,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
             .expect("unable to create a memory map for input")
     };
 
-    println!("Calculating previous challenge hash...");
+    info!("Calculating previous challenge hash...");
 
     // Check that contribution is correct
 
@@ -95,7 +96,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
         .write_all(current_accumulator_hash.as_slice())
         .expect("unable to write current accumulator hash");
 
-    println!("Hash of the `challenge` file for verification:");
+    info!("Hash of the `challenge` file for verification:");
     print_hash(&current_accumulator_hash);
 
     // Check the hash chain - a new response must be based on the previous challenge!
@@ -108,7 +109,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
             .read_exact(&mut response_challenge_hash)
             .expect("couldn't read hash of challenge file from response file");
 
-        println!("`response` was based on the hash:");
+        info!("`response` was based on the hash:");
         print_hash(&response_challenge_hash);
 
         if &response_challenge_hash[..] != current_accumulator_hash.as_slice() {
@@ -122,7 +123,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
         .write_all(response_hash.as_slice())
         .expect("unable to write response hash");
 
-    println!("Hash of the response file for verification:");
+    info!("Hash of the response file for verification:");
     print_hash(&response_hash);
 
     // get the contributor's public key
@@ -131,7 +132,7 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
 
     // check that it follows the protocol
 
-    println!("Verifying a contribution to contain proper powers and correspond to the public key...");
+    info!("Verifying a contribution to contain proper powers and correspond to the public key...");
 
     let res = Phase1::verification(
         &challenge_readable_map,
@@ -146,16 +147,16 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
     );
 
     if let Err(e) = res {
-        println!("Verification failed: {}", e);
+        info!("Verification failed: {}", e);
         panic!("INVALID CONTRIBUTION!!!");
     } else {
-        println!("Verification succeeded!");
+        info!("Verification succeeded!");
     }
 
     if COMPRESS_NEW_CHALLENGE == UseCompression::Yes {
-        println!("Don't need to recompress the contribution, please copy response file as new challenge");
+        info!("Don't need to recompress the contribution, please copy response file as new challenge");
     } else {
-        println!("Verification succeeded! Writing to new challenge file...");
+        info!("Verification succeeded! Writing to new challenge file...");
 
         // Create new challenge file in this directory
         let writer = OpenOptions::new()
@@ -205,9 +206,9 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
             .write_all(recompressed_hash.as_slice())
             .expect("unable to write new challenge hash");
 
-        println!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
+        info!("Here's the BLAKE2b hash of the decompressed participant's response as new_challenge file:");
         print_hash(&recompressed_hash);
-        println!("Done! new challenge file contains the new challenge file. The other files");
-        println!("were left alone.");
+        info!("Done! new challenge file contains the new challenge file. The other files");
+        info!("were left alone.");
     }
 }

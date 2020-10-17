@@ -5,12 +5,13 @@ use zexe_algebra::PairingEngine as Engine;
 
 use memmap::*;
 use std::fs::OpenOptions;
+use tracing::info;
 
 const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
 const COMPRESS_NEW_SPLIT: UseCompression = UseCompression::No;
 
 pub fn split<T: Engine + Sync>(chunk_filename_prefix: &str, combined_filename: &str, parameters: &Phase1Parameters<T>) {
-    println!("Will split contributions");
+    info!("Will split contributions");
 
     let mut writers = vec![];
 
@@ -101,9 +102,9 @@ pub fn split<T: Engine + Sync>(chunk_filename_prefix: &str, combined_filename: &
     );
 
     if let Err(e) = res {
-        println!("Splitting failed: {}", e);
+        info!("Splitting failed: {}", e);
         panic!("INVALID CONTRIBUTIONS!!!");
     } else {
-        println!("Splitting succeeded!");
+        info!("Splitting succeeded!");
     }
 }

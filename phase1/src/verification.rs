@@ -753,7 +753,6 @@ mod tests {
                     let (input, _) = generate_input(&parameters, compressed_input, correctness);
                     let mut output_1 = generate_output(&parameters, compressed_output);
 
-                    println!("1: {:?}, {}", *proving_system, powers_length_for_proving_system);
                     // Compute a chunked contribution.
                     Phase1::computation(
                         &input,
@@ -803,7 +802,6 @@ mod tests {
                 // Generate a new output vector for the second contributor.
                 let mut output_2 = generate_output(&parameters, compressed_output);
 
-                println!("2");
                 // Compute a chunked contribution, based on the first contributor's output.
                 Phase1::computation(
                     &output_1,
@@ -815,7 +813,6 @@ mod tests {
                     &parameters,
                 )
                 .unwrap();
-                println!("3");
                 // Ensure that the key is not available to the verifier.
                 drop(private_key_2);
 

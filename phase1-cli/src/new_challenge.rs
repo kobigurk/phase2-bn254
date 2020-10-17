@@ -5,6 +5,7 @@ use zexe_algebra::PairingEngine as Engine;
 
 use memmap::*;
 use std::{fs::OpenOptions, io::Write};
+use tracing::info;
 
 const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 
@@ -13,11 +14,11 @@ pub fn new_challenge<T: Engine + Sync>(
     challenge_hash_filename: &str,
     parameters: &Phase1Parameters<T>,
 ) {
-    println!(
+    info!(
         "Will generate an empty accumulator for 2^{} powers of tau",
         parameters.total_size_in_log2
     );
-    println!("In total will generate up to {} powers", parameters.powers_g1_length);
+    info!("In total will generate up to {} powers", parameters.powers_g1_length);
 
     let file = OpenOptions::new()
         .read(true)
@@ -49,7 +50,7 @@ pub fn new_challenge<T: Engine + Sync>(
         .flush()
         .expect("unable to write blank hash to challenge file");
 
-    println!("Blank hash for an empty challenge:");
+    info!("Blank hash for an empty challenge:");
     print_hash(&hash);
 
     Phase1::initialization(&mut writable_map, COMPRESS_NEW_CHALLENGE, &parameters)
@@ -65,7 +66,7 @@ pub fn new_challenge<T: Engine + Sync>(
         .write_all(contribution_hash.as_slice())
         .expect("unable to write new challenge hash");
 
-    println!("Empty contribution is formed with a hash:");
+    info!("Empty contribution is formed with a hash:");
     print_hash(&contribution_hash);
-    println!("Wrote a fresh accumulator to challenge file");
+    info!("Wrote a fresh accumulator to challenge file");
 }

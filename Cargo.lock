@@ -720,6 +720,7 @@ dependencies = [
  "cfg-if",
  "criterion",
  "derivative",
+ "ff-fft",
  "itertools 0.8.2",
  "marlin",
  "num-traits",

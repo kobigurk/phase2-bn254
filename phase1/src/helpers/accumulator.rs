@@ -3,7 +3,6 @@
 use crate::{helpers::buffers::*, Phase1Parameters, ProvingSystem};
 use cfg_if::cfg_if;
 use setup_utils::{BatchDeserializer, BatchSerializer, Deserializer, Serializer, *};
-
 use zexe_algebra::{AffineCurve, PairingEngine};
 
 #[cfg(not(feature = "wasm"))]
@@ -32,6 +31,11 @@ type AccumulatorElementsRef<'a, E: PairingEngine> = (
 
 cfg_if! {
     if #[cfg(not(feature = "wasm"))] {
+        use zexe_fft::cfg_iter;
+
+        #[cfg(feature = "parallel")]
+        use rayon::prelude::*;
+
         use crate::PublicKey;
         /// Given a public key and the accumulator's digest, it hashes each G1 element
         /// along with the digest, and then hashes it to G2.
@@ -95,7 +99,7 @@ cfg_if! {
                 CheckForCorrectness::OnlyNonZero,
             )?;
             // TODO(kobi): replace with batch subgroup check
-            let all_in_prime_order_subgroup = elements.iter().all(|p| {
+            let all_in_prime_order_subgroup = cfg_iter!(elements).all(|p| {
                 p.mul(<<C::ScalarField as PrimeField>::Params as FpParameters>::MODULUS)
                     .is_zero()
             });

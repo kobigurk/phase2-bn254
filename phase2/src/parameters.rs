@@ -529,7 +529,13 @@ mod tests {
         let params = Phase1Parameters::<E>::new_full(ProvingSystem::Groth16, powers, batch);
         let accumulator = {
             let compressed = UseCompression::No;
-            let (_, output, _, _) = setup_verify(compressed, CheckForCorrectness::Full, compressed, &params);
+            let (_, output, _, _) = setup_verify(
+                compressed,
+                CheckForCorrectness::Full,
+                compressed,
+                BatchExpMode::Auto,
+                &params,
+            );
             Phase1::deserialize(&output, compressed, CheckForCorrectness::Full, &params).unwrap()
         };
 

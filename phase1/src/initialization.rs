@@ -83,24 +83,23 @@ mod tests {
                 ProvingSystem::Groth16 => {
                     assert_eq!(deserialized.tau_powers_g1, vec![g1_zero; parameters.powers_g1_length]);
                     assert_eq!(deserialized.tau_powers_g2, vec![g2_zero; parameters.powers_length]);
-                    assert_eq!(deserialized.alpha_tau_powers_g1, vec![
-                        g1_zero;
-                        parameters.powers_length
-                    ]);
+                    assert_eq!(
+                        deserialized.alpha_tau_powers_g1,
+                        vec![g1_zero; parameters.powers_length]
+                    );
                     assert_eq!(deserialized.beta_tau_powers_g1, vec![g1_zero; parameters.powers_length]);
                     assert_eq!(deserialized.beta_g2, g2_zero);
                 }
                 ProvingSystem::Marlin => {
                     assert_eq!(deserialized.tau_powers_g1, vec![g1_zero; parameters.powers_length]);
-                    assert_eq!(deserialized.tau_powers_g2, vec![
-                        g2_zero;
-                        parameters.total_size_in_log2 + 2
-                    ]);
-                    assert_eq!(deserialized.alpha_tau_powers_g1, vec![
-                        g1_zero;
-                        3 + 3 * parameters
-                            .total_size_in_log2
-                    ]);
+                    assert_eq!(
+                        deserialized.tau_powers_g2,
+                        vec![g2_zero; parameters.total_size_in_log2 + 2]
+                    );
+                    assert_eq!(
+                        deserialized.alpha_tau_powers_g1,
+                        vec![g1_zero; 3 + 3 * parameters.total_size_in_log2]
+                    );
                 }
             }
         }

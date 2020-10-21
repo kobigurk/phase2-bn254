@@ -1,12 +1,11 @@
 use phase1::{
     helpers::testing::{setup_verify, CheckForCorrectness},
     parameters::Phase1Parameters,
-    Phase1,
-    ProvingSystem,
+    Phase1, ProvingSystem,
 };
 use phase2::{helpers::testing::TestCircuit, parameters::MPCParameters};
 use rand::{thread_rng, Rng};
-use setup_utils::{Groth16Params, UseCompression};
+use setup_utils::{BatchExpMode, Groth16Params, UseCompression};
 use zexe_algebra::{Bls12_377, Bls12_381, PairingEngine, PrimeField, BW6_761};
 use zexe_groth16::{create_random_proof, prepare_verifying_key, verify_proof, Parameters};
 use zexe_r1cs_core::{ConstraintSynthesizer, ConstraintSystem, SynthesisMode};
@@ -21,7 +20,13 @@ where
     let params = Phase1Parameters::<E>::new_full(ProvingSystem::Groth16, powers, batch);
     let compressed = UseCompression::Yes;
     // make 1 power of tau contribution (assume powers of tau gets calculated properly)
-    let (_, output, _, _) = setup_verify(compressed, CheckForCorrectness::Full, compressed, &params);
+    let (_, output, _, _) = setup_verify(
+        compressed,
+        CheckForCorrectness::Full,
+        compressed,
+        BatchExpMode::Auto,
+        &params,
+    );
     let accumulator = Phase1::deserialize(&output, compressed, CheckForCorrectness::Full, &params).unwrap();
 
     // prepare only the first 32 powers (for whatever reason)

@@ -3,7 +3,7 @@ mod test {
     use phase1::{helpers::testing::generate_input, Phase1, Phase1Parameters, ProvingSystem};
     use poly_commit::kzg10::UniversalParams;
     use rand::thread_rng;
-    use setup_utils::{blank_hash, CheckForCorrectness, UseCompression};
+    use setup_utils::{blank_hash, BatchExpMode, CheckForCorrectness, UseCompression};
 
     use blake2::Blake2s;
     use itertools::Itertools;
@@ -72,6 +72,7 @@ mod test {
             UseCompression::No,
             UseCompression::No,
             CheckForCorrectness::No,
+            BatchExpMode::Auto,
             &privkey,
             &parameters,
         )

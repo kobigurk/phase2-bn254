@@ -7,7 +7,11 @@ use memmap::*;
 use std::fs::OpenOptions;
 use tracing::info;
 
-pub fn transform_ratios<T: Engine + Sync>(response_filename: &str, parameters: &Phase1Parameters<T>) {
+pub fn transform_ratios<T: Engine + Sync>(
+    response_filename: &str,
+    check_input_correctness: CheckForCorrectness,
+    parameters: &Phase1Parameters<T>,
+) {
     info!(
         "Will verify and decompress a contribution to accumulator for 2^{} powers of tau",
         parameters.total_size_in_log2
@@ -56,7 +60,7 @@ pub fn transform_ratios<T: Engine + Sync>(response_filename: &str, parameters: &
     info!("Verifying a contribution to contain proper powers and correspond to the public key...");
 
     let res = Phase1::aggregate_verification(
-        (&response_readable_map, UseCompression::No, CheckForCorrectness::No),
+        (&response_readable_map, UseCompression::No, check_input_correctness),
         &parameters,
     );
 

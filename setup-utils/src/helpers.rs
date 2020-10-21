@@ -1,19 +1,11 @@
 use crate::{
+    elements::CheckForCorrectness,
     errors::{Error, VerificationError},
     Result,
 };
 use zexe_algebra::{
-    AffineCurve,
-    BigInteger,
-    CanonicalSerialize,
-    ConstantSerializedSize,
-    Field,
-    One,
-    PairingEngine,
-    PrimeField,
-    ProjectiveCurve,
-    UniformRand,
-    Zero,
+    AffineCurve, BatchGroupArithmeticSlice, BigInteger, CanonicalSerialize, ConstantSerializedSize, Field, One,
+    PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
 use zexe_fft::{cfg_into_iter, cfg_iter, cfg_iter_mut};
 
@@ -32,6 +24,7 @@ use typenum::consts::U64;
 #[cfg(not(feature = "wasm"))]
 use crypto::{digest::Digest as CryptoDigest, sha2::Sha256};
 
+use crate::elements::BatchExpMode;
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
@@ -72,40 +65,59 @@ pub fn batch_mul<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField) -> Res
     Ok(())
 }
 
-/// Exponentiate a large number of points, with an optional coefficient to be applied to the
-/// exponent.
 pub fn batch_exp<C: AffineCurve>(
     bases: &mut [C],
     exps: &[C::ScalarField],
     coeff: Option<&C::ScalarField>,
+    batch_exp_mode: BatchExpMode,
 ) -> Result<()> {
+    const CPU_CHUNK_SIZE: usize = 1 << 12;
     if bases.len() != exps.len() {
         return Err(Error::InvalidLength {
             expected: bases.len(),
             got: exps.len(),
         });
     }
-    // raise the base to the exponent and assign it back to the base
-    // this will return the points as projective
-    let mut points: Vec<_> = cfg_iter_mut!(bases)
-        .zip(exps)
-        .map(|(base, exp)| {
-            // If a coefficient was provided, multiply the exponent
-            // by that coefficient
-            let exp = if let Some(coeff) = coeff { exp.mul(coeff) } else { *exp };
+    match (batch_exp_mode, bases.len() < CPU_CHUNK_SIZE) {
+        (BatchExpMode::Auto, true) | (BatchExpMode::Direct, _) => {
+            // raise the base to the exponent and assign it back to the base
+            // this will return the points as projective
+            let mut points: Vec<_> = cfg_iter_mut!(bases)
+                .zip(exps)
+                .map(|(base, exp)| {
+                    // If a coefficient was provided, multiply the exponent
+                    // by that coefficient
+                    let exp = if let Some(coeff) = coeff { exp.mul(coeff) } else { *exp };
 
-            // Raise the base to the exponent (additive notation so it is executed
-            // via a multiplication)
-            base.mul(exp)
-        })
-        .collect();
-    // we do not use Zexe's batch_normalization_into_affine because it allocates
-    // a new vector
-    C::Projective::batch_normalization(&mut points);
-    cfg_iter_mut!(bases)
-        .zip(points)
-        .for_each(|(base, proj)| *base = proj.into_affine());
+                    // Raise the base to the exponent (additive notation so it is executed
+                    // via a multiplication)
+                    base.mul(exp)
+                })
+                .collect();
+            // we do not use Zexe's batch_normalization_into_affine because it allocates
+            // a new vector
+            C::Projective::batch_normalization(&mut points);
+            cfg_iter_mut!(bases)
+                .zip(points)
+                .for_each(|(base, proj)| *base = proj.into_affine());
+        }
+        (BatchExpMode::Auto, false) | (BatchExpMode::BatchInversion, _) => {
+            let mut powers_vec: Vec<_> = exps
+                .to_vec()
+                .iter()
+                .map(|s| {
+                    let s = &mut match coeff {
+                        Some(k) => *s * k,
+                        None => *s,
+                    };
+                    s.into_repr()
+                })
+                .collect();
 
+            // &mut bases[..].cpu_gpu_scalar_mul(&powers_vec[..], 1 << 5, CPU_CHUNK_SIZE);
+            bases.batch_scalar_mul_in_place::<<C::ScalarField as PrimeField>::BigInt>(&mut powers_vec[..], 5);
+        }
+    }
     Ok(())
 }
 
@@ -135,9 +147,9 @@ pub fn user_system_randomness() -> Vec<u8> {
 
 #[allow(clippy::modulo_one)]
 #[cfg(not(feature = "wasm"))]
-pub fn beacon_randomness(mut beacon_hash: [u8; 32]) -> [u8; 32] {
+pub fn beacon_randomness_sha256_work(mut beacon_hash: [u8; 32]) -> [u8; 32] {
     // Performs 2^n hash iterations over it
-    const N: u64 = 10;
+    const N: u64 = 42;
 
     for i in 0..(1u64 << N) {
         // Print 1024 of the interstitial states
@@ -515,5 +527,20 @@ fn dense_multiexp_inner<G: AffineCurve>(
         next_region.add_assign(&this);
 
         next_region
+    }
+}
+
+pub const DEFAULT_CONTRIBUTE_CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
+pub const DEFAULT_VERIFY_CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
+pub const DEFAULT_VERIFY_CHECK_OUTPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::Full;
+
+pub fn upgrade_correctness_check_config(
+    check_correctness: CheckForCorrectness,
+    force_correctness_checks: bool,
+) -> CheckForCorrectness {
+    match (check_correctness, force_correctness_checks) {
+        (CheckForCorrectness::No, true) => CheckForCorrectness::OnlyInGroup,
+        (CheckForCorrectness::OnlyNonZero, true) => CheckForCorrectness::Full,
+        (_, _) => check_correctness,
     }
 }

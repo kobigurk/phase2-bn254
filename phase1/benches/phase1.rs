@@ -1,8 +1,6 @@
 use phase1::{
     helpers::testing::{generate_input, setup_verify},
-    Phase1,
-    Phase1Parameters,
-    ProvingSystem,
+    Phase1, Phase1Parameters, ProvingSystem,
 };
 use setup_utils::*;
 

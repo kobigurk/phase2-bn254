@@ -56,4 +56,3 @@ testing = ["parallel", "zexe_algebra_core", "zexe_bench_utils/print-trace"]
 name = "marlin"
 path = "tests/marlin.rs"
 required-features = ["phase1/testing", "cli"]
-

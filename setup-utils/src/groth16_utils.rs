@@ -4,8 +4,7 @@ use crate::{buffer_size, CheckForCorrectness, Deserializer, Result, Serializer, 
 
 use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
 use zexe_fft::{
-    cfg_into_iter,
-    cfg_iter,
+    cfg_into_iter, cfg_iter,
     domain::{radix2::Radix2EvaluationDomain, EvaluationDomain},
 };
 
@@ -266,13 +265,10 @@ mod tests {
     use crate::UseCompression;
     use phase1::{
         helpers::testing::{
-            setup_verify,
-            CheckForCorrectness as CheckForCorrectnessPhase1,
+            setup_verify, BatchExpMode as BatchExpModePhase1, CheckForCorrectness as CheckForCorrectnessPhase1,
             UseCompression as UseCompressionPhase1,
         },
-        Phase1,
-        Phase1Parameters,
-        ProvingSystem,
+        Phase1, Phase1Parameters, ProvingSystem,
     };
 
     use zexe_algebra::Bls12_377;
@@ -300,6 +296,7 @@ mod tests {
             compat(compressed),
             compat_correctness(CheckForCorrectness::Full),
             compat(compressed),
+            BatchExpModePhase1::Auto,
             &params,
         );
         let accumulator = Phase1::deserialize(

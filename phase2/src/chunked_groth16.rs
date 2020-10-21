@@ -10,12 +10,7 @@ use crate::{
 use setup_utils::{batch_mul, check_same_ratio, merge_pairs, InvariantKind, Phase2Error, Result};
 
 use zexe_algebra::{
-    AffineCurve,
-    CanonicalDeserialize,
-    CanonicalSerialize,
-    ConstantSerializedSize,
-    Field,
-    PairingEngine,
+    AffineCurve, CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize, Field, PairingEngine,
     ProjectiveCurve,
 };
 use zexe_groth16::VerifyingKey;

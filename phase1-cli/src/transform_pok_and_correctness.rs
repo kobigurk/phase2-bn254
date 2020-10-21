@@ -16,8 +16,10 @@ const COMPRESS_NEW_CHALLENGE: UseCompression = UseCompression::No;
 pub fn transform_pok_and_correctness<T: Engine + Sync>(
     challenge_filename: &str,
     challenge_hash_filename: &str,
+    check_input_correctness: CheckForCorrectness,
     response_filename: &str,
     response_hash_filename: &str,
+    check_output_correctness: CheckForCorrectness,
     new_challenge_filename: &str,
     new_challenge_hash_filename: &str,
     parameters: &Phase1Parameters<T>,
@@ -140,8 +142,8 @@ pub fn transform_pok_and_correctness<T: Engine + Sync>(
         current_accumulator_hash.as_slice(),
         PREVIOUS_CHALLENGE_IS_COMPRESSED,
         CONTRIBUTION_IS_COMPRESSED,
-        CheckForCorrectness::No,
-        CheckForCorrectness::Full,
+        check_input_correctness,
+        check_output_correctness,
         &parameters,
     );
 

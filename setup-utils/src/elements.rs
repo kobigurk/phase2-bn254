@@ -36,8 +36,6 @@ impl fmt::Display for CheckForCorrectness {
     }
 }
 
-// todo: remove this, we can always get the size of the element
-// from the `buffer_size` method
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ElementType {
     TauG1,
@@ -55,6 +53,24 @@ impl fmt::Display for ElementType {
             ElementType::AlphaG1 => write!(f, "AlphaG1"),
             ElementType::BetaG1 => write!(f, "BetaG1"),
             ElementType::BetaG2 => write!(f, "BetaG2"),
+        }
+    }
+}
+
+/// Determines which batch exponentiation algorithm to use
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum BatchExpMode {
+    Auto,
+    Direct,
+    BatchInversion,
+}
+
+impl fmt::Display for BatchExpMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            BatchExpMode::Auto => write!(f, "Auto"),
+            BatchExpMode::Direct => write!(f, "Legacy"),
+            BatchExpMode::BatchInversion => write!(f, "Batch inversion"),
         }
     }
 }

@@ -67,6 +67,7 @@ pub(crate) fn apply_powers<C: AffineCurve>(
     (start, end): (usize, usize),
     powers: &[C::ScalarField],
     coeff: Option<&C::ScalarField>,
+    batch_exp_mode: BatchExpMode,
 ) -> Result<()> {
     let in_size = buffer_size::<C>(input_compressed);
     let out_size = buffer_size::<C>(output_compressed);
@@ -75,7 +76,7 @@ pub(crate) fn apply_powers<C: AffineCurve>(
     let mut elements =
         &mut input[start * in_size..end * in_size].read_batch::<C>(input_compressed, check_input_for_correctness)?;
     // calculate the powers
-    batch_exp(&mut elements, &powers[..end - start], coeff)?;
+    batch_exp(&mut elements, &powers[..end - start], coeff, batch_exp_mode)?;
     // write back
     output[start * out_size..end * out_size].write_batch(&elements, output_compressed)?;
 

@@ -3,12 +3,11 @@
 use crate::{helpers::buffers::*, Phase1Parameters, ProvingSystem};
 use cfg_if::cfg_if;
 use setup_utils::{BatchDeserializer, BatchSerializer, Deserializer, Serializer, *};
+
 use zexe_algebra::{AffineCurve, PairingEngine};
 
 #[cfg(not(feature = "wasm"))]
-use crate::ContributionMode;
-#[cfg(not(feature = "wasm"))]
-use zexe_algebra::{FpParameters, PrimeField, Zero};
+use {crate::ContributionMode, zexe_algebra::batch_verify_in_subgroup};
 
 #[allow(type_alias_bounds)]
 type AccumulatorElements<E: PairingEngine> = (
@@ -31,10 +30,10 @@ type AccumulatorElementsRef<'a, E: PairingEngine> = (
 
 cfg_if! {
     if #[cfg(not(feature = "wasm"))] {
-        use zexe_fft::cfg_iter;
-
+        use zexe_algebra::{PrimeField, FpParameters, cfg_iter, Zero};
         #[cfg(feature = "parallel")]
         use rayon::prelude::*;
+        use tracing::debug;
 
         use crate::PublicKey;
         /// Given a public key and the accumulator's digest, it hashes each G1 element
@@ -99,10 +98,21 @@ cfg_if! {
                 CheckForCorrectness::OnlyNonZero,
             )?;
             // TODO(kobi): replace with batch subgroup check
-            let all_in_prime_order_subgroup = cfg_iter!(elements).all(|p| {
-                p.mul(<<C::ScalarField as PrimeField>::Params as FpParameters>::MODULUS)
-                    .is_zero()
-            });
+            const SECURITY_PARAM: usize = 128;
+            const BATCH_SIZE: usize = 1 << 12;
+            let now = std::time::Instant::now();
+            let all_in_prime_order_subgroup = if elements.len() > BATCH_SIZE {
+                match batch_verify_in_subgroup(elements, SECURITY_PARAM, &mut rand::thread_rng()) {
+                    Ok(()) => true,
+                    _ => false,
+                }
+            } else {
+                cfg_iter!(elements).all(|p| {
+                    p.mul(<<C::ScalarField as PrimeField>::Params as FpParameters>::MODULUS)
+                        .is_zero()
+                })
+            };
+            debug!("Subgroup verification for {} elems: {}us", end - start, now.elapsed().as_micros());
             if !all_in_prime_order_subgroup {
                 return Err(Error::IncorrectSubgroup);
             }

@@ -1,5 +1,5 @@
 use phase1::{Phase1, Phase1Parameters};
-use setup_utils::{calculate_hash, print_hash, CheckForCorrectness, UseCompression};
+use setup_utils::{calculate_hash, print_hash, BatchExpMode, CheckForCorrectness, UseCompression};
 
 use zexe_algebra::PairingEngine as Engine;
 
@@ -13,13 +13,14 @@ use tracing::info;
 
 const COMPRESSED_INPUT: UseCompression = UseCompression::No;
 const COMPRESSED_OUTPUT: UseCompression = UseCompression::Yes;
-const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 
 pub fn contribute<T: Engine + Sync>(
     challenge_filename: &str,
     challenge_hash_filename: &str,
     response_filename: &str,
     response_hash_filename: &str,
+    check_input_correctness: CheckForCorrectness,
+    batch_exp_mode: BatchExpMode,
     parameters: &Phase1Parameters<T>,
     mut rng: impl Rng,
 ) {
@@ -124,7 +125,8 @@ pub fn contribute<T: Engine + Sync>(
         &mut writable_map,
         COMPRESSED_INPUT,
         COMPRESSED_OUTPUT,
-        CHECK_INPUT_CORRECTNESS,
+        check_input_correctness,
+        batch_exp_mode,
         &private_key,
         &parameters,
     )

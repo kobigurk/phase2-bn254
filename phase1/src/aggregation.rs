@@ -369,62 +369,65 @@ mod tests {
         let correctness = CheckForCorrectness::Full;
 
         for proving_system in &[ProvingSystem::Groth16, ProvingSystem::Marlin] {
-            let powers_length = 1 << powers;
-            let powers_g1_length = (powers_length << 1) - 1;
-            let powers_length_for_proving_system = match *proving_system {
-                ProvingSystem::Groth16 => powers_g1_length,
-                ProvingSystem::Marlin => powers_length,
-            };
-            let num_chunks = (powers_length_for_proving_system + batch - 1) / batch;
+            for batch_exp_mode in
+                vec![BatchExpMode::Auto, BatchExpMode::Direct, BatchExpMode::BatchInversion].into_iter()
+            {
+                let powers_length = 1 << powers;
+                let powers_g1_length = (powers_length << 1) - 1;
+                let powers_length_for_proving_system = match *proving_system {
+                    ProvingSystem::Groth16 => powers_g1_length,
+                    ProvingSystem::Marlin => powers_length,
+                };
+                let num_chunks = (powers_length_for_proving_system + batch - 1) / batch;
 
-            let mut full_contribution: Vec<Vec<u8>> = vec![];
+                let mut full_contribution: Vec<Vec<u8>> = vec![];
 
-            for chunk_index in 0..num_chunks {
-                // Generate a new parameter for this chunk.
-                let parameters = Phase1Parameters::<E>::new_chunk(
-                    ContributionMode::Chunked,
-                    chunk_index,
-                    batch,
-                    *proving_system,
-                    powers,
-                    batch,
-                );
+                for chunk_index in 0..num_chunks {
+                    // Generate a new parameter for this chunk.
+                    let parameters = Phase1Parameters::<E>::new_chunk(
+                        ContributionMode::Chunked,
+                        chunk_index,
+                        batch,
+                        *proving_system,
+                        powers,
+                        batch,
+                    );
 
-                //
-                // First contributor computes a chunk.
-                //
+                    //
+                    // First contributor computes a chunk.
+                    //
 
-                let output_1 = {
-                    // Start with an empty hash as this is the first time.
-                    let digest = blank_hash();
+                    let output_1 = {
+                        // Start with an empty hash as this is the first time.
+                        let digest = blank_hash();
 
-                    // Construct the first contributor's keypair.
-                    let (public_key_1, private_key_1) = {
-                        let mut rng = derive_rng_from_seed(b"test_verify_transformation 1");
-                        Phase1::<E>::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
-                    };
+                        // Construct the first contributor's keypair.
+                        let (public_key_1, private_key_1) = {
+                            let mut rng = derive_rng_from_seed(b"test_verify_transformation 1");
+                            Phase1::<E>::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        };
 
-                    // Allocate the input/output vectors
-                    let (input, _) = generate_input(&parameters, compressed_input, correctness);
-                    let mut output_1 = generate_output(&parameters, compressed_output);
+                        // Allocate the input/output vectors
+                        let (input, _) = generate_input(&parameters, compressed_input, correctness);
+                        let mut output_1 = generate_output(&parameters, compressed_output);
 
-                    // Compute a chunked contribution.
-                    Phase1::computation(
-                        &input,
-                        &mut output_1,
-                        compressed_input,
-                        compressed_output,
-                        correctness,
-                        &private_key_1,
-                        &parameters,
-                    )
-                    .unwrap();
-                    // Ensure that the key is not available to the verifier.
-                    drop(private_key_1);
+                        // Compute a chunked contribution.
+                        Phase1::computation(
+                            &input,
+                            &mut output_1,
+                            compressed_input,
+                            compressed_output,
+                            correctness,
+                            batch_exp_mode,
+                            &private_key_1,
+                            &parameters,
+                        )
+                        .unwrap();
+                        // Ensure that the key is not available to the verifier.
+                        drop(private_key_1);
 
-                    // Verify that the chunked contribution is correct.
-                    assert!(
-                        Phase1::verification(
+                        // Verify that the chunked contribution is correct.
+                        assert!(Phase1::verification(
                             &input,
                             &output_1,
                             &public_key_1,
@@ -435,46 +438,45 @@ mod tests {
                             correctness,
                             &parameters,
                         )
-                        .is_ok()
-                    );
+                        .is_ok());
 
-                    output_1
-                };
-
-                //
-                // Second contributor computes a chunk.
-                //
-
-                let output_2 = {
-                    // Note subsequent participants must use the hash of the accumulator they received.
-                    let digest = calculate_hash(&output_1);
-
-                    // Construct the second contributor's keypair, based on the first contributor's output.
-                    let (public_key_2, private_key_2) = {
-                        let mut rng = derive_rng_from_seed(b"test_verify_transformation 2");
-                        Phase1::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        output_1
                     };
 
-                    // Generate a new output vector for the second contributor.
-                    let mut output_2 = generate_output(&parameters, compressed_output);
+                    //
+                    // Second contributor computes a chunk.
+                    //
 
-                    // Compute a chunked contribution, based on the first contributor's output.
-                    Phase1::computation(
-                        &output_1,
-                        &mut output_2,
-                        compressed_output,
-                        compressed_output,
-                        correctness,
-                        &private_key_2,
-                        &parameters,
-                    )
-                    .unwrap();
-                    // Ensure that the key is not available to the verifier.
-                    drop(private_key_2);
+                    let output_2 = {
+                        // Note subsequent participants must use the hash of the accumulator they received.
+                        let digest = calculate_hash(&output_1);
 
-                    // Verify that the chunked contribution is correct.
-                    assert!(
-                        Phase1::verification(
+                        // Construct the second contributor's keypair, based on the first contributor's output.
+                        let (public_key_2, private_key_2) = {
+                            let mut rng = derive_rng_from_seed(b"test_verify_transformation 2");
+                            Phase1::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        };
+
+                        // Generate a new output vector for the second contributor.
+                        let mut output_2 = generate_output(&parameters, compressed_output);
+
+                        // Compute a chunked contribution, based on the first contributor's output.
+                        Phase1::computation(
+                            &output_1,
+                            &mut output_2,
+                            compressed_output,
+                            compressed_output,
+                            correctness,
+                            batch_exp_mode,
+                            &private_key_2,
+                            &parameters,
+                        )
+                        .unwrap();
+                        // Ensure that the key is not available to the verifier.
+                        drop(private_key_2);
+
+                        // Verify that the chunked contribution is correct.
+                        assert!(Phase1::verification(
                             &output_1,
                             &output_2,
                             &public_key_2,
@@ -485,13 +487,11 @@ mod tests {
                             correctness,
                             &parameters,
                         )
-                        .is_ok()
-                    );
+                        .is_ok());
 
-                    // Verification will fail if the old hash is used.
-                    if parameters.chunk_index == 0 {
-                        assert!(
-                            Phase1::verification(
+                        // Verification will fail if the old hash is used.
+                        if parameters.chunk_index == 0 {
+                            assert!(Phase1::verification(
                                 &output_1,
                                 &output_2,
                                 &public_key_2,
@@ -502,70 +502,33 @@ mod tests {
                                 correctness,
                                 &parameters,
                             )
-                            .is_err()
-                        );
-                    }
+                            .is_err());
+                        }
 
-                    output_2
-                };
+                        output_2
+                    };
 
-                // Return the output based on the test case currently being run.
-                match use_wrong_chunks && chunk_index == 1 {
-                    true => {
-                        let chunk_0_contribution: Vec<u8> = (*full_contribution.iter().last().unwrap()).to_vec();
-                        full_contribution.push(chunk_0_contribution);
-                    }
-                    false => {
-                        full_contribution.push(output_2.clone());
+                    // Return the output based on the test case currently being run.
+                    match use_wrong_chunks && chunk_index == 1 {
+                        true => {
+                            let chunk_0_contribution: Vec<u8> = (*full_contribution.iter().last().unwrap()).to_vec();
+                            full_contribution.push(chunk_0_contribution);
+                        }
+                        false => {
+                            full_contribution.push(output_2.clone());
+                        }
                     }
                 }
-            }
 
-            // Aggregate the right ones. Combining and verification should work.
+                // Aggregate the right ones. Combining and verification should work.
 
-            let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
-            let mut output = generate_output(&full_parameters, compressed_output);
+                let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
+                let mut output = generate_output(&full_parameters, compressed_output);
 
-            // Flatten the {full_contribution} vector.
-            let full_contribution = full_contribution
-                .iter()
-                .map(|v| (v.as_slice(), compressed_output))
-                .collect::<Vec<_>>();
-
-            let parameters = Phase1Parameters::<E>::new(
-                ContributionMode::Chunked,
-                0,
-                batch,
-                full_parameters.curve,
-                *proving_system,
-                powers,
-                batch,
-            );
-            Phase1::aggregation(&full_contribution, (&mut output, compressed_output), &parameters).unwrap();
-
-            let parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
-            assert!(Phase1::aggregate_verification((&output, compressed_output, correctness), &parameters,).is_ok());
-
-            let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
-            let mut split_output: Vec<Vec<u8>> = vec![];
-            for chunk_index in 0..num_chunks {
-                let parameters = Phase1Parameters::<E>::new_chunk(
-                    ContributionMode::Chunked,
-                    chunk_index,
-                    batch,
-                    *proving_system,
-                    powers,
-                    batch,
-                );
-
-                let output = generate_output(&parameters, compressed_output);
-                split_output.push(output);
-            }
-
-            {
-                let split_output = split_output
-                    .iter_mut()
-                    .map(|v| (v.as_mut_slice(), compressed_output))
+                // Flatten the {full_contribution} vector.
+                let full_contribution = full_contribution
+                    .iter()
+                    .map(|v| (v.as_slice(), compressed_output))
                     .collect::<Vec<_>>();
 
                 let parameters = Phase1Parameters::<E>::new(
@@ -577,56 +540,94 @@ mod tests {
                     powers,
                     batch,
                 );
-                Phase1::split((&mut output, compressed_output), split_output, &parameters).unwrap();
-            }
+                Phase1::aggregation(&full_contribution, (&mut output, compressed_output), &parameters).unwrap();
 
-            let mut full_contribution_after_split = vec![];
-            for chunk_index in 0..num_chunks {
-                // Generate a new parameter for this chunk.
-                let parameters = Phase1Parameters::<E>::new_chunk(
-                    ContributionMode::Chunked,
-                    chunk_index,
-                    batch,
-                    *proving_system,
-                    powers,
-                    batch,
+                let parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
+                assert!(
+                    Phase1::aggregate_verification((&output, compressed_output, correctness), &parameters,).is_ok()
                 );
 
-                //
-                // First contributor computes a chunk.
-                //
+                let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
+                let mut split_output: Vec<Vec<u8>> = vec![];
+                for chunk_index in 0..num_chunks {
+                    let parameters = Phase1Parameters::<E>::new_chunk(
+                        ContributionMode::Chunked,
+                        chunk_index,
+                        batch,
+                        *proving_system,
+                        powers,
+                        batch,
+                    );
 
-                let output_1 = {
-                    // Start with an empty hash as this is the first time.
-                    let digest = blank_hash();
+                    let output = generate_output(&parameters, compressed_output);
+                    split_output.push(output);
+                }
 
-                    // Construct the first contributor's keypair.
-                    let (public_key_1, private_key_1) = {
-                        let mut rng = derive_rng_from_seed(b"test_verify_transformation 1");
-                        Phase1::<E>::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
-                    };
+                {
+                    let split_output = split_output
+                        .iter_mut()
+                        .map(|v| (v.as_mut_slice(), compressed_output))
+                        .collect::<Vec<_>>();
 
-                    // Allocate the input/output vectors
-                    let input = &split_output[chunk_index];
-                    let mut output_1 = generate_output(&parameters, compressed_output);
+                    let parameters = Phase1Parameters::<E>::new(
+                        ContributionMode::Chunked,
+                        0,
+                        batch,
+                        full_parameters.curve,
+                        *proving_system,
+                        powers,
+                        batch,
+                    );
+                    Phase1::split((&mut output, compressed_output), split_output, &parameters).unwrap();
+                }
 
-                    // Compute a chunked contribution.
-                    Phase1::computation(
-                        input,
-                        &mut output_1,
-                        compressed_output,
-                        compressed_output,
-                        correctness,
-                        &private_key_1,
-                        &parameters,
-                    )
-                    .unwrap();
-                    // Ensure that the key is not available to the verifier.
-                    drop(private_key_1);
+                let mut full_contribution_after_split = vec![];
+                for chunk_index in 0..num_chunks {
+                    // Generate a new parameter for this chunk.
+                    let parameters = Phase1Parameters::<E>::new_chunk(
+                        ContributionMode::Chunked,
+                        chunk_index,
+                        batch,
+                        *proving_system,
+                        powers,
+                        batch,
+                    );
 
-                    // Verify that the chunked contribution is correct.
-                    assert!(
-                        Phase1::verification(
+                    //
+                    // First contributor computes a chunk.
+                    //
+
+                    let output_1 = {
+                        // Start with an empty hash as this is the first time.
+                        let digest = blank_hash();
+
+                        // Construct the first contributor's keypair.
+                        let (public_key_1, private_key_1) = {
+                            let mut rng = derive_rng_from_seed(b"test_verify_transformation 1");
+                            Phase1::<E>::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        };
+
+                        // Allocate the input/output vectors
+                        let input = &split_output[chunk_index];
+                        let mut output_1 = generate_output(&parameters, compressed_output);
+
+                        // Compute a chunked contribution.
+                        Phase1::computation(
+                            input,
+                            &mut output_1,
+                            compressed_output,
+                            compressed_output,
+                            correctness,
+                            batch_exp_mode,
+                            &private_key_1,
+                            &parameters,
+                        )
+                        .unwrap();
+                        // Ensure that the key is not available to the verifier.
+                        drop(private_key_1);
+
+                        // Verify that the chunked contribution is correct.
+                        assert!(Phase1::verification(
                             &input,
                             &output_1,
                             &public_key_1,
@@ -637,42 +638,41 @@ mod tests {
                             correctness,
                             &parameters,
                         )
-                        .is_ok()
-                    );
+                        .is_ok());
 
-                    output_1
-                };
-
-                let output_2 = {
-                    // Note subsequent participants must use the hash of the accumulator they received.
-                    let digest = calculate_hash(&output_1);
-
-                    // Construct the second contributor's keypair, based on the first contributor's output.
-                    let (public_key_2, private_key_2) = {
-                        let mut rng = derive_rng_from_seed(b"test_verify_transformation 2");
-                        Phase1::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        output_1
                     };
 
-                    // Generate a new output vector for the second contributor.
-                    let mut output_2 = generate_output(&parameters, compressed_output);
+                    let output_2 = {
+                        // Note subsequent participants must use the hash of the accumulator they received.
+                        let digest = calculate_hash(&output_1);
 
-                    // Compute a chunked contribution, based on the first contributor's output.
-                    Phase1::computation(
-                        &output_1,
-                        &mut output_2,
-                        compressed_output,
-                        compressed_output,
-                        correctness,
-                        &private_key_2,
-                        &parameters,
-                    )
-                    .unwrap();
-                    // Ensure that the key is not available to the verifier.
-                    drop(private_key_2);
+                        // Construct the second contributor's keypair, based on the first contributor's output.
+                        let (public_key_2, private_key_2) = {
+                            let mut rng = derive_rng_from_seed(b"test_verify_transformation 2");
+                            Phase1::key_generation(&mut rng, digest.as_ref()).expect("could not generate keypair")
+                        };
 
-                    // Verify that the chunked contribution is correct.
-                    assert!(
-                        Phase1::verification(
+                        // Generate a new output vector for the second contributor.
+                        let mut output_2 = generate_output(&parameters, compressed_output);
+
+                        // Compute a chunked contribution, based on the first contributor's output.
+                        Phase1::computation(
+                            &output_1,
+                            &mut output_2,
+                            compressed_output,
+                            compressed_output,
+                            correctness,
+                            batch_exp_mode,
+                            &private_key_2,
+                            &parameters,
+                        )
+                        .unwrap();
+                        // Ensure that the key is not available to the verifier.
+                        drop(private_key_2);
+
+                        // Verify that the chunked contribution is correct.
+                        assert!(Phase1::verification(
                             &output_1,
                             &output_2,
                             &public_key_2,
@@ -683,13 +683,11 @@ mod tests {
                             correctness,
                             &parameters,
                         )
-                        .is_ok()
-                    );
+                        .is_ok());
 
-                    // Verification will fail if the old hash is used.
-                    if parameters.chunk_index == 0 {
-                        assert!(
-                            Phase1::verification(
+                        // Verification will fail if the old hash is used.
+                        if parameters.chunk_index == 0 {
+                            assert!(Phase1::verification(
                                 &output_1,
                                 &output_2,
                                 &public_key_2,
@@ -700,50 +698,50 @@ mod tests {
                                 correctness,
                                 &parameters,
                             )
-                            .is_err()
-                        );
-                    }
+                            .is_err());
+                        }
 
-                    output_2
-                };
+                        output_2
+                    };
 
-                // Return the output based on the test case currently being run.
-                match use_wrong_chunks && chunk_index == 1 {
-                    true => {
-                        let chunk_0_contribution: Vec<u8> = (*full_contribution.iter().last().unwrap()).0.to_vec();
-                        full_contribution_after_split.push(chunk_0_contribution);
-                    }
-                    false => {
-                        full_contribution_after_split.push(output_2.clone());
+                    // Return the output based on the test case currently being run.
+                    match use_wrong_chunks && chunk_index == 1 {
+                        true => {
+                            let chunk_0_contribution: Vec<u8> = (*full_contribution.iter().last().unwrap()).0.to_vec();
+                            full_contribution_after_split.push(chunk_0_contribution);
+                        }
+                        false => {
+                            full_contribution_after_split.push(output_2.clone());
+                        }
                     }
                 }
+
+                let full_contribution_after_split = full_contribution_after_split
+                    .iter()
+                    .map(|v| (v.as_slice(), compressed_output))
+                    .collect::<Vec<_>>();
+
+                let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
+                let mut output = generate_output(&full_parameters, compressed_output);
+                let parameters = Phase1Parameters::<E>::new(
+                    ContributionMode::Chunked,
+                    0,
+                    batch,
+                    full_parameters.curve,
+                    *proving_system,
+                    powers,
+                    batch,
+                );
+                Phase1::aggregation(
+                    &full_contribution_after_split,
+                    (&mut output, compressed_output),
+                    &parameters,
+                )
+                .unwrap();
+
+                let parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
+                assert!(Phase1::aggregate_verification((&output, compressed_output, correctness), &parameters).is_ok());
             }
-
-            let full_contribution_after_split = full_contribution_after_split
-                .iter()
-                .map(|v| (v.as_slice(), compressed_output))
-                .collect::<Vec<_>>();
-
-            let full_parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
-            let mut output = generate_output(&full_parameters, compressed_output);
-            let parameters = Phase1Parameters::<E>::new(
-                ContributionMode::Chunked,
-                0,
-                batch,
-                full_parameters.curve,
-                *proving_system,
-                powers,
-                batch,
-            );
-            Phase1::aggregation(
-                &full_contribution_after_split,
-                (&mut output, compressed_output),
-                &parameters,
-            )
-            .unwrap();
-
-            let parameters = Phase1Parameters::<E>::new_full(*proving_system, powers, batch);
-            assert!(Phase1::aggregate_verification((&output, compressed_output, correctness), &parameters).is_ok());
         }
     }
 

@@ -5,12 +5,7 @@
 use setup_utils::{hash_to_g2, CheckForCorrectness, Deserializer, HashWriter, Result, Serializer, UseCompression};
 
 use zexe_algebra::{
-    AffineCurve,
-    CanonicalSerialize,
-    ConstantSerializedSize,
-    PairingEngine,
-    ProjectiveCurve,
-    UniformRand,
+    AffineCurve, CanonicalSerialize, ConstantSerializedSize, PairingEngine, ProjectiveCurve, UniformRand,
 };
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};

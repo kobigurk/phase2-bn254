@@ -1,4 +1,5 @@
 use crate::{ContributionMode, ProvingSystem};
+use setup_utils::BatchExpMode;
 
 #[derive(Debug, Clone)]
 pub enum CurveKind {
@@ -31,4 +32,18 @@ pub fn proving_system_from_str(src: &str) -> Result<ProvingSystem, String> {
         _ => return Err("unsupported proving system. Currently supported: groth16, marlin".to_string()),
     };
     Ok(system)
+}
+
+pub fn batch_exp_mode_from_str(src: &str) -> Result<BatchExpMode, String> {
+    let batch_exp_mode = match src.to_lowercase().as_str() {
+        "auto" => BatchExpMode::Auto,
+        "direct" => BatchExpMode::Direct,
+        "batch-inversion" => BatchExpMode::BatchInversion,
+        _ => {
+            return Err(
+                "unsupported batch exponentiation mode. Currently supported: auto, direct, batch-inversion".to_string(),
+            );
+        }
+    };
+    Ok(batch_exp_mode)
 }

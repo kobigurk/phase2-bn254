@@ -60,25 +60,13 @@ impl<R: Read> Deserializer for R {
         compression: UseCompression,
         check_for_correctness: CheckForCorrectness,
     ) -> Result<G> {
-        let point = match compression {
-            UseCompression::Yes => {
-                if check_for_correctness == CheckForCorrectness::OnlyNonZero
-                    || check_for_correctness == CheckForCorrectness::No
-                {
-                    G::deserialize_unchecked(self)?
-                } else {
-                    G::deserialize(self)?
-                }
-            }
-            UseCompression::No => {
-                if check_for_correctness == CheckForCorrectness::OnlyNonZero
-                    || check_for_correctness == CheckForCorrectness::No
-                {
-                    G::deserialize_uncompressed_unchecked(self)?
-                } else {
-                    G::deserialize_uncompressed(self)?
-                }
-            }
+        let perform_subgroup_check = !(check_for_correctness == CheckForCorrectness::OnlyNonZero
+            || check_for_correctness == CheckForCorrectness::No);
+        let point = match (compression, perform_subgroup_check) {
+            (UseCompression::Yes, true) => G::deserialize(self)?,
+            (UseCompression::Yes, false) => G::deserialize_unchecked(self)?,
+            (UseCompression::No, true) => G::deserialize_uncompressed(self)?,
+            (UseCompression::No, false) => G::deserialize_uncompressed_unchecked(self)?,
         };
 
         if (check_for_correctness == CheckForCorrectness::Full

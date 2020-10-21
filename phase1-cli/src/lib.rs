@@ -21,12 +21,14 @@ mod transform_ratios;
 pub use transform_ratios::transform_ratios;
 
 use phase1::{
-    helpers::{contribution_mode_from_str, curve_from_str, proving_system_from_str, CurveKind},
-    ContributionMode,
-    ProvingSystem,
+    helpers::{
+        batch_exp_mode_from_str, contribution_mode_from_str, curve_from_str, proving_system_from_str, CurveKind,
+    },
+    ContributionMode, ProvingSystem,
 };
 
 use gumdrop::Options;
+use setup_utils::BatchExpMode;
 use std::default::Default;
 
 #[derive(Debug, Options, Clone)]
@@ -62,6 +64,17 @@ pub struct Phase1Opts {
     pub power: usize,
     #[options(command)]
     pub command: Option<Command>,
+    #[options(
+        help = "whether to always check whether incoming challenges are in correct subgroup and non-zero",
+        default = "false"
+    )]
+    pub force_correctness_checks: bool,
+    #[options(
+        help = "which batch exponentiation version to use",
+        default = "auto",
+        parse(try_from_str = "batch_exp_mode_from_str")
+    )]
+    pub batch_exp_mode: BatchExpMode,
 }
 
 // The supported commands

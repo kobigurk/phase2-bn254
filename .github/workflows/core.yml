@@ -19,7 +19,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: nightly
+          toolchain: stable
           override: true
           components: rustfmt
 
@@ -72,4 +72,3 @@ jobs:
         with:
           command: test
           args: --release --all --no-fail-fast
-

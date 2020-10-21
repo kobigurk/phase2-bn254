@@ -6,7 +6,7 @@ use zexe_algebra_core::UniformRand;
 
 use rand::{thread_rng, Rng};
 
-pub use setup_utils::{CheckForCorrectness, UseCompression};
+pub use setup_utils::{BatchExpMode, CheckForCorrectness, UseCompression};
 
 /// Returns a random affine curve point from the provided RNG.
 pub fn random_point<C: AffineCurve>(rng: &mut impl Rng) -> C {
@@ -25,6 +25,7 @@ pub fn setup_verify<E: PairingEngine>(
     compressed_input: UseCompression,
     check_input_for_correctness: CheckForCorrectness,
     compressed_output: UseCompression,
+    batch_exp_mode: BatchExpMode,
     parameters: &Phase1Parameters<E>,
 ) -> (Vec<u8>, Vec<u8>, PublicKey<E>, GenericArray<u8, U64>) {
     let (input, _) = generate_input(&parameters, compressed_input, check_input_for_correctness);
@@ -43,6 +44,7 @@ pub fn setup_verify<E: PairingEngine>(
         compressed_input,
         compressed_output,
         CheckForCorrectness::Full,
+        batch_exp_mode,
         &privkey,
         parameters,
     )

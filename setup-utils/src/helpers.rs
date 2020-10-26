@@ -7,7 +7,7 @@ use zexe_algebra::{
     AffineCurve, BatchGroupArithmeticSlice, BigInteger, CanonicalSerialize, ConstantSerializedSize, Field, One,
     PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
-use zexe_fft::{cfg_into_iter, cfg_iter, cfg_iter_mut};
+use zexe_fft::{cfg_chunks_mut, cfg_into_iter, cfg_iter, cfg_iter_mut};
 
 use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
@@ -71,13 +71,14 @@ pub fn batch_exp<C: AffineCurve>(
     coeff: Option<&C::ScalarField>,
     batch_exp_mode: BatchExpMode,
 ) -> Result<()> {
-    const CPU_CHUNK_SIZE: usize = 1 << 12;
     if bases.len() != exps.len() {
         return Err(Error::InvalidLength {
             expected: bases.len(),
             got: exps.len(),
         });
     }
+    const CPU_CHUNK_SIZE: usize = 1 << 12; // The batch version is optimal around this value.
+
     match (batch_exp_mode, bases.len() < CPU_CHUNK_SIZE) {
         (BatchExpMode::Auto, true) | (BatchExpMode::Direct, _) => {
             // raise the base to the exponent and assign it back to the base
@@ -113,9 +114,14 @@ pub fn batch_exp<C: AffineCurve>(
                     s.into_repr()
                 })
                 .collect();
-
-            // &mut bases[..].cpu_gpu_scalar_mul(&powers_vec[..], 1 << 5, CPU_CHUNK_SIZE);
-            bases.batch_scalar_mul_in_place::<<C::ScalarField as PrimeField>::BigInt>(&mut powers_vec[..], 5);
+            let chunked_powers_vec = cfg_chunks_mut!(powers_vec, CPU_CHUNK_SIZE).collect::<Vec<_>>();
+            cfg_chunks_mut!(bases, CPU_CHUNK_SIZE)
+                .zip(chunked_powers_vec)
+                .for_each(|(chunk_bases, chunk_exps)| {
+                    // &mut bases[..].cpu_gpu_scalar_mul(&powers_vec[..], 1 << 5, CPU_CHUNK_SIZE);
+                    chunk_bases
+                        .batch_scalar_mul_in_place::<<C::ScalarField as PrimeField>::BigInt>(&mut chunk_exps[..], 5);
+                });
         }
     }
     Ok(())

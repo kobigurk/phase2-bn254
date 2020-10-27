@@ -403,6 +403,9 @@ pub fn check_same_ratio<E: PairingEngine>(
     g2: &(E::G2Affine, E::G2Affine),
     err: &'static str,
 ) -> Result<()> {
+    if g1.0.is_zero() || g1.1.is_zero() || g2.0.is_zero() || g2.1.is_zero() {
+        return Err(VerificationError::InvalidRatio(err).into());
+    }
     if E::pairing(g1.0, g2.1) != E::pairing(g1.1, g2.0) {
         return Err(VerificationError::InvalidRatio(err).into());
     }

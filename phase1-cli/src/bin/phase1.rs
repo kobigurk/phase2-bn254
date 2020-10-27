@@ -93,6 +93,7 @@ fn execute_cmd<E: Engine>(opts: Phase1Opts) {
                 ),
                 &opt.new_challenge_fname,
                 &opt.new_challenge_hash_fname,
+                opts.subgroup_check_mode,
                 &parameters,
             );
         }

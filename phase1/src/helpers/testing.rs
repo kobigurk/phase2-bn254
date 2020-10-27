@@ -76,6 +76,15 @@ pub fn generate_output<E: PairingEngine>(parameters: &Phase1Parameters<E>, compr
     vec![0; expected_response_length]
 }
 
+/// Helper to initialize an empty output accumulator, to be used for new challenges.
+pub fn generate_new_challenge<E: PairingEngine>(
+    parameters: &Phase1Parameters<E>,
+    compressed: UseCompression,
+) -> Vec<u8> {
+    let expected_new_challenge_length = parameters.get_length(compressed);
+    vec![0; expected_new_challenge_length]
+}
+
 /// Helper to generate a random accumulator for Phase 1 given its parameters.
 #[cfg(test)]
 pub fn generate_random_accumulator<E: PairingEngine>(

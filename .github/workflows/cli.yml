@@ -30,14 +30,14 @@ jobs:
           override: true
 
       - name: Run phase1 chunked groth16
-        run: cd phase1-cli && ./scripts/phase1_chunked.sh groth16
+        run: cd phase1-cli/scripts && ./phase1_chunked.sh groth16
 
       - name: Run phase1 full groth16
-        run: cd phase1-cli && ./scripts/phase1_full.sh groth16
+        run: cd phase1-cli/scripts && ./phase1_full.sh groth16
 
       - name: Run phase1 chunked marlin
-        run: cd phase1-cli && ./scripts/phase1_chunked.sh marlin
+        run: cd phase1-cli/scripts && ./phase1_chunked.sh marlin
 
       - name: Run phase1 full marlin
-        run: cd phase1-cli && ./scripts/phase1_full.sh marlin
+        run: cd phase1-cli/scripts && ./phase1_full.sh marlin
 

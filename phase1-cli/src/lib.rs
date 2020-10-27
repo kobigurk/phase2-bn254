@@ -22,13 +22,14 @@ pub use transform_ratios::transform_ratios;
 
 use phase1::{
     helpers::{
-        batch_exp_mode_from_str, contribution_mode_from_str, curve_from_str, proving_system_from_str, CurveKind,
+        batch_exp_mode_from_str, contribution_mode_from_str, curve_from_str, proving_system_from_str,
+        subgroup_check_mode_from_str, CurveKind,
     },
     ContributionMode, ProvingSystem,
 };
 
 use gumdrop::Options;
-use setup_utils::BatchExpMode;
+use setup_utils::{BatchExpMode, SubgroupCheckMode};
 use std::default::Default;
 
 #[derive(Debug, Options, Clone)]
@@ -75,6 +76,12 @@ pub struct Phase1Opts {
         parse(try_from_str = "batch_exp_mode_from_str")
     )]
     pub batch_exp_mode: BatchExpMode,
+    #[options(
+        help = "which subgroup check version to use",
+        default = "auto",
+        parse(try_from_str = "subgroup_check_mode_from_str")
+    )]
+    pub subgroup_check_mode: SubgroupCheckMode,
 }
 
 // The supported commands

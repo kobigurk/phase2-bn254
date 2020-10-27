@@ -355,7 +355,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::testing::{generate_input, generate_output};
+    use crate::helpers::testing::{generate_input, generate_new_challenge, generate_output};
 
     use zexe_algebra::{Bls12_377, BW6_761};
 
@@ -410,6 +410,7 @@ mod tests {
                         // Allocate the input/output vectors
                         let (input, _) = generate_input(&parameters, compressed_input, correctness);
                         let mut output_1 = generate_output(&parameters, compressed_output);
+                        let mut new_challenge_1 = generate_new_challenge(&parameters, UseCompression::No);
 
                         // Compute a chunked contribution.
                         Phase1::computation(
@@ -430,12 +431,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &input,
                             &output_1,
+                            &mut new_challenge_1,
                             &public_key_1,
                             &digest,
                             compressed_input,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_ok());
@@ -459,6 +463,7 @@ mod tests {
 
                         // Generate a new output vector for the second contributor.
                         let mut output_2 = generate_output(&parameters, compressed_output);
+                        let mut new_challenge_2 = generate_new_challenge(&parameters, UseCompression::No);
 
                         // Compute a chunked contribution, based on the first contributor's output.
                         Phase1::computation(
@@ -479,12 +484,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &output_1,
                             &output_2,
+                            &mut new_challenge_2,
                             &public_key_2,
                             &digest,
                             compressed_output,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_ok());
@@ -494,12 +502,15 @@ mod tests {
                             assert!(Phase1::verification(
                                 &output_1,
                                 &output_2,
+                                &mut new_challenge_2,
                                 &public_key_2,
                                 &blank_hash(),
                                 compressed_output,
                                 compressed_output,
+                                UseCompression::No,
                                 correctness,
                                 correctness,
+                                SubgroupCheckMode::Auto,
                                 &parameters,
                             )
                             .is_err());
@@ -610,6 +621,7 @@ mod tests {
                         // Allocate the input/output vectors
                         let input = &split_output[chunk_index];
                         let mut output_1 = generate_output(&parameters, compressed_output);
+                        let mut new_challenge_1 = generate_new_challenge(&parameters, UseCompression::No);
 
                         // Compute a chunked contribution.
                         Phase1::computation(
@@ -630,12 +642,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &input,
                             &output_1,
+                            &mut new_challenge_1,
                             &public_key_1,
                             &digest,
                             compressed_output,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_ok());
@@ -655,6 +670,7 @@ mod tests {
 
                         // Generate a new output vector for the second contributor.
                         let mut output_2 = generate_output(&parameters, compressed_output);
+                        let mut new_challenge_2 = generate_new_challenge(&parameters, UseCompression::No);
 
                         // Compute a chunked contribution, based on the first contributor's output.
                         Phase1::computation(
@@ -675,12 +691,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &output_1,
                             &output_2,
+                            &mut new_challenge_2,
                             &public_key_2,
                             &digest,
                             compressed_output,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_ok());
@@ -690,12 +709,15 @@ mod tests {
                             assert!(Phase1::verification(
                                 &output_1,
                                 &output_2,
+                                &mut new_challenge_2,
                                 &public_key_2,
                                 &blank_hash(),
                                 compressed_output,
                                 compressed_output,
+                                UseCompression::No,
                                 correctness,
                                 correctness,
+                                SubgroupCheckMode::Auto,
                                 &parameters,
                             )
                             .is_err());

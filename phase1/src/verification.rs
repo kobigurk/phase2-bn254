@@ -24,12 +24,15 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
     pub fn verification(
         input: &[u8],
         output: &[u8],
+        new_challenge: &mut [u8],
         key: &PublicKey<E>,
         digest: &[u8],
         compressed_input: UseCompression,
         compressed_output: UseCompression,
+        compressed_new_challenge: UseCompression,
         check_input_for_correctness: CheckForCorrectness,
         check_output_for_correctness: CheckForCorrectness,
+        subgroup_check_mode: SubgroupCheckMode,
         parameters: &'a Phase1Parameters<E>,
     ) -> Result<()> {
         let span = info_span!("phase1-verification");
@@ -39,6 +42,13 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
 
         // Split the output buffer into its components.
         let (tau_g1, tau_g2, alpha_g1, beta_g1, beta_g2) = split(output, parameters, compressed_output);
+        let (
+            new_challenge_tau_g1,
+            new_challenge_tau_g2,
+            new_challenge_alpha_g1,
+            new_challenge_beta_g1,
+            new_challenge_beta_g2,
+        ) = split_mut(new_challenge, parameters, compressed_new_challenge);
 
         if parameters.contribution_mode == ContributionMode::Full || parameters.chunk_index == 0 {
             // Run proof of knowledge checks if contribution mode is on full, or this is the first chunk index.
@@ -160,6 +170,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                         (&*in_beta_g2).read_element::<E::G2Affine>(compressed_input, check_input_for_correctness)?;
                     let after_beta_g2 =
                         (&*beta_g2).read_element::<E::G2Affine>(compressed_output, check_output_for_correctness)?;
+                    new_challenge_beta_g2.write_element(&after_beta_g2, compressed_new_challenge)?;
 
                     // Check that beta_g2[0] was multiplied correctly.
                     check_same_ratio::<E>(
@@ -207,8 +218,14 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                 (tau_g1, compressed_output),
                                 (start_chunk, end_chunk),
                                 &mut g1,
+                                subgroup_check_mode,
                             )
                             .expect("could not check element are non zero and in prime order subgroup");
+
+                            let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
+                            new_challenge_tau_g1[start_chunk * size..end_chunk * size]
+                                .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
+                                .expect("Should have written tau_g1 to new challenge");
 
                             trace!("tau_g1 verification was successful");
                         });
@@ -248,8 +265,14 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         (tau_g2, compressed_output),
                                         (start_chunk, end_chunk),
                                         &mut g2,
+                                        subgroup_check_mode,
                                     )
                                     .expect("could not check element are non zero and in prime order subgroup");
+
+                                    let size = buffer_size::<E::G2Affine>(compressed_new_challenge);
+                                    new_challenge_tau_g2[start_chunk * size..end_chunk * size]
+                                        .write_batch(&mut g2[0..end_chunk - start_chunk], compressed_new_challenge)
+                                        .expect("Should have written tau_g2 to new challenge");
 
                                     trace!("tau_g2 verification was successful");
                                 });
@@ -264,8 +287,14 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         (alpha_g1, compressed_output),
                                         (start_chunk, end_chunk),
                                         &mut g1,
+                                        subgroup_check_mode,
                                     )
                                     .expect("could not check element are non zero and in prime order subgroup");
+
+                                    let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
+                                    new_challenge_alpha_g1[start_chunk * size..end_chunk * size]
+                                        .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
+                                        .expect("Should have written alpha_g1 to new challenge");
 
                                     trace!("alpha_g1 verification was successful");
                                 });
@@ -280,8 +309,14 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         (beta_g1, compressed_output),
                                         (start_chunk, end_chunk),
                                         &mut g1,
+                                        subgroup_check_mode,
                                     )
                                     .expect("could not check element are non zero and in prime order subgroup");
+
+                                    let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
+                                    new_challenge_beta_g1[start_chunk * size..end_chunk * size]
+                                        .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
+                                        .expect("Should have written beta_g1 to new challenge");
 
                                     trace!("beta_g1 verification was successful");
                                 });
@@ -303,11 +338,65 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                 (tau_g1, compressed_output),
                                 (start_chunk, end_chunk),
                                 &mut g1,
+                                subgroup_check_mode,
                             )
                             .expect("could not check ratios for tau_g1 elements");
 
+                            let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
+                            new_challenge_tau_g1[start_chunk * size..end_chunk * size]
+                                .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
+                                .expect("Should have written tau_g1 to new challenge");
+
                             trace!("tau_g1 verification was successful");
                         });
+
+                        if start == 0 {
+                            t.spawn(|_| {
+                                let _ = span.enter();
+
+                                let mut g1 = vec![E::G1Affine::zero(); parameters.batch_size];
+
+                                let num_alpha_powers = 3;
+
+                                let start_chunk = 0;
+                                let end_chunk = num_alpha_powers + 3 * parameters.total_size_in_log2;
+
+                                check_elements_are_nonzero_and_in_prime_order_subgroup::<E::G1Affine>(
+                                    (alpha_g1, compressed_output),
+                                    (start_chunk, end_chunk),
+                                    &mut g1,
+                                    subgroup_check_mode,
+                                )
+                                .expect("could not check ratios for tau_g1 elements");
+
+                                let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
+                                new_challenge_alpha_g1[start_chunk * size..end_chunk * size]
+                                    .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
+                                    .expect("Should have written alpha_g1 to new challenge");
+
+                                trace!("alpha_g1 verification was successful");
+
+                                let start_chunk = 0;
+                                let end_chunk = parameters.total_size_in_log2 + 2;
+
+                                let mut g2 = vec![E::G2Affine::zero(); parameters.batch_size];
+
+                                check_elements_are_nonzero_and_in_prime_order_subgroup::<E::G2Affine>(
+                                    (tau_g2, compressed_output),
+                                    (start_chunk, end_chunk),
+                                    &mut g2,
+                                    subgroup_check_mode,
+                                )
+                                .expect("could not check element are non zero and in prime order subgroup");
+
+                                let size = buffer_size::<E::G2Affine>(compressed_new_challenge);
+                                new_challenge_tau_g2[start_chunk * size..end_chunk * size]
+                                    .write_batch(&mut g2[0..end_chunk - start_chunk], compressed_new_challenge)
+                                    .expect("Should have written tau_g2 to new challenge");
+
+                                trace!("tau_g2 verification was successful");
+                            });
+                        }
                     });
                 }
             }
@@ -584,7 +673,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::helpers::testing::{generate_input, generate_output};
+    use crate::helpers::testing::{generate_input, generate_new_challenge, generate_output};
     use setup_utils::calculate_hash;
 
     use zexe_algebra::{Bls12_377, BW6_761};
@@ -604,6 +693,7 @@ mod tests {
                 // allocate the input/output vectors
                 let (input, _) = generate_input(&parameters, compressed_input, CheckForCorrectness::No);
                 let mut output = generate_output(&parameters, compressed_output);
+                let mut new_challenge = generate_new_challenge(&parameters, UseCompression::No);
 
                 // Construct our keypair
                 let current_accumulator_hash = blank_hash();
@@ -629,12 +719,15 @@ mod tests {
                 let res = Phase1::verification(
                     &input,
                     &output,
+                    &mut new_challenge,
                     &pubkey,
                     &current_accumulator_hash,
                     compressed_input,
                     compressed_output,
+                    UseCompression::No,
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
+                    SubgroupCheckMode::Auto,
                     &parameters,
                 );
                 assert!(res.is_ok());
@@ -646,6 +739,7 @@ mod tests {
 
                 // generate a new output vector for the 2nd participant's contribution
                 let mut output_2 = generate_output(&parameters, compressed_output);
+                let mut new_challenge_2 = generate_new_challenge(&parameters, UseCompression::No);
                 // we use the first output as input
                 Phase1::computation(
                     &output,
@@ -664,12 +758,15 @@ mod tests {
                 let res = Phase1::verification(
                     &output,
                     &output_2,
+                    &mut new_challenge_2,
                     &pubkey,
                     &current_accumulator_hash,
                     compressed_output,
                     compressed_output,
+                    UseCompression::No,
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
+                    SubgroupCheckMode::Auto,
                     &parameters,
                 );
                 assert!(res.is_ok());
@@ -685,12 +782,15 @@ mod tests {
                 let res = Phase1::verification(
                     &output,
                     &output_2,
+                    &mut new_challenge_2,
                     &pubkey,
                     &blank_hash(),
                     compressed_output,
                     compressed_output,
+                    UseCompression::No,
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
+                    SubgroupCheckMode::Auto,
                     &parameters,
                 );
                 assert!(res.is_err());
@@ -763,6 +863,7 @@ mod tests {
                         // Allocate the input/output vectors
                         let (input, _) = generate_input(&parameters, compressed_input, correctness);
                         let mut output_1 = generate_output(&parameters, compressed_output);
+                        let mut new_challenge_1 = generate_new_challenge(&parameters, UseCompression::No);
 
                         // Compute a chunked contribution.
                         Phase1::computation(
@@ -783,12 +884,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &input,
                             &output_1,
+                            &mut new_challenge_1,
                             &public_key_1,
                             &digest,
                             compressed_input,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_ok());
@@ -811,6 +915,7 @@ mod tests {
 
                     // Generate a new output vector for the second contributor.
                     let mut output_2 = generate_output(&parameters, compressed_output);
+                    let mut new_challenge_2 = generate_new_challenge(&parameters, UseCompression::No);
 
                     // Compute a chunked contribution, based on the first contributor's output.
                     Phase1::computation(
@@ -831,12 +936,15 @@ mod tests {
                     assert!(Phase1::verification(
                         &output_1,
                         &output_2,
+                        &mut new_challenge_2,
                         &public_key_2,
                         &digest,
                         compressed_output,
                         compressed_output,
+                        UseCompression::No,
                         correctness,
                         correctness,
+                        SubgroupCheckMode::Auto,
                         &parameters,
                     )
                     .is_ok());
@@ -846,12 +954,15 @@ mod tests {
                         assert!(Phase1::verification(
                             &output_1,
                             &output_2,
+                            &mut new_challenge_2,
                             &public_key_2,
                             &blank_hash(),
                             compressed_output,
                             compressed_output,
+                            UseCompression::No,
                             correctness,
                             correctness,
+                            SubgroupCheckMode::Auto,
                             &parameters,
                         )
                         .is_err());

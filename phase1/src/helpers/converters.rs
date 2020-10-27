@@ -1,5 +1,5 @@
 use crate::{ContributionMode, ProvingSystem};
-use setup_utils::BatchExpMode;
+use setup_utils::{BatchExpMode, SubgroupCheckMode};
 
 #[derive(Debug, Clone)]
 pub enum CurveKind {
@@ -46,4 +46,16 @@ pub fn batch_exp_mode_from_str(src: &str) -> Result<BatchExpMode, String> {
         }
     };
     Ok(batch_exp_mode)
+}
+
+pub fn subgroup_check_mode_from_str(src: &str) -> Result<SubgroupCheckMode, String> {
+    let subgroup_check_mode = match src.to_lowercase().as_str() {
+        "auto" => SubgroupCheckMode::Auto,
+        "direct" => SubgroupCheckMode::Direct,
+        "batched" => SubgroupCheckMode::Batched,
+        _ => {
+            return Err("unsupported subgroup check mode. Currently supported: auto, direct, batched".to_string());
+        }
+    };
+    Ok(subgroup_check_mode)
 }

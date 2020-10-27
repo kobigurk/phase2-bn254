@@ -69,8 +69,26 @@ impl fmt::Display for BatchExpMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             BatchExpMode::Auto => write!(f, "Auto"),
-            BatchExpMode::Direct => write!(f, "Legacy"),
+            BatchExpMode::Direct => write!(f, "Direct"),
             BatchExpMode::BatchInversion => write!(f, "Batch inversion"),
+        }
+    }
+}
+
+/// Determines which batch exponentiation algorithm to use
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum SubgroupCheckMode {
+    Auto,
+    Direct,
+    Batched,
+}
+
+impl fmt::Display for SubgroupCheckMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SubgroupCheckMode::Auto => write!(f, "Auto"),
+            SubgroupCheckMode::Direct => write!(f, "Direct"),
+            SubgroupCheckMode::Batched => write!(f, "Batched"),
         }
     }
 }

@@ -203,7 +203,6 @@ impl<E: PairingEngine> Phase1Parameters<E> {
             }
         };
 
-        // TODO (howardwu): Remove this.
         // 2^{size}
         let powers_length = 1 << total_size_in_log2;
         // 2^{size+1} - 1

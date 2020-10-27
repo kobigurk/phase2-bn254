@@ -23,15 +23,16 @@ function check_hash() {
   test "`xxd -p -c 64 $1.hash`" = "`b2sum $1 | awk '{print $1}'`"
 }
 
-cargo build --release --bin phase1
+cargo $CARGO_VER build --release --bin phase1
 
-phase1_1="cargo $CARGO_VER run --release --bin phase1 -- --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --seed seed1 --proving-system $PROVING_SYSTEM"
-phase1_2="cargo $CARGO_VER run --release --bin phase1 -- --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --seed seed2 --proving-system $PROVING_SYSTEM"
-phase1_combine="cargo $CARGO_VER run --release --bin phase1 -- --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --proving-system $PROVING_SYSTEM"
-phase1_full="cargo $CARGO_VER run --release --bin phase1 -- --curve-kind $CURVE --batch-size $BATCH --contribution-mode full --power $POWER --proving-system $PROVING_SYSTEM"
+phase1_1="../../target/release/phase1 --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --seed seed1 --proving-system $PROVING_SYSTEM"
+phase1_2="../../target/release/phase1 --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --seed seed2 --proving-system $PROVING_SYSTEM"
+phase1_combine="../../target/release/phase1 --curve-kind $CURVE --batch-size $BATCH --contribution-mode chunked --chunk-size $CHUNK_SIZE --power $POWER --proving-system $PROVING_SYSTEM"
+phase1_full="../../target/release/phase1 --curve-kind $CURVE --batch-size $BATCH --contribution-mode full --power $POWER --proving-system $PROVING_SYSTEM"
 ####### Phase 1
 
 for i in $(seq 0 $(($MAX_CHUNK_INDEX/2))); do
+  echo "Contributing and verifying chunk $i..."
   $phase1_1 --chunk-index $i new --challenge-fname challenge_$i --challenge-hash-fname challenge_$i.verified.hash
   yes | $phase1_1 --chunk-index $i contribute --challenge-fname challenge_$i --challenge-hash-fname challenge_$i.hash --response-fname response_$i --response-hash-fname response_$i.hash
   check_hash challenge_$i
@@ -46,6 +47,7 @@ for i in $(seq 0 $(($MAX_CHUNK_INDEX/2))); do
 done
 
 for i in $(seq $(($MAX_CHUNK_INDEX/2 + 1)) $MAX_CHUNK_INDEX); do
+  echo "Contributing and verifying chunk $i..."
   $phase1_1 --chunk-index $i new --challenge-fname challenge_$i --challenge-hash-fname challenge_$i.verified.hash
   yes | $phase1_2 --chunk-index $i contribute --challenge-fname challenge_$i --challenge-hash-fname challenge_$i.hash --response-fname response_$i --response-hash-fname response_$i.hash
   check_hash challenge_$i
@@ -59,11 +61,15 @@ for i in $(seq $(($MAX_CHUNK_INDEX/2 + 1)) $MAX_CHUNK_INDEX); do
   echo new_response_$i >> response_list
 done
 
+echo "Aggregating..."
 $phase1_combine combine --response-list-fname response_list --combined-fname combined
+echo "Apply beacon..."
 $phase1_full beacon --challenge-fname combined --response-fname response_beacon --beacon-hash 0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620
+echo "Verifying..."
 $phase1_full verify-and-transform-pok-and-correctness --challenge-fname combined --challenge-hash-fname combined.verified.hash --response-fname response_beacon --response-hash-fname response_beacon.verified.hash --new-challenge-fname response_beacon_new_challenge --new-challenge-hash-fname response_beacon_new_challenge.verified.hash
 $phase1_full verify-and-transform-ratios --response-fname response_beacon_new_challenge
 
+echo "Doing the same for splitting..."
 $phase1_combine split --chunk-fname-prefix chunk_split --full-fname response_beacon
 
 for i in $(seq 0 $(($MAX_CHUNK_INDEX/2))); do
@@ -96,3 +102,4 @@ $phase1_combine combine --response-list-fname response_list_split --combined-fna
 $phase1_full beacon --challenge-fname combined_split --challenge-hash-fname challenge_$i.hash --response-fname response_beacon_split --response-hash-fname response_$i.hash --beacon-hash 0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620
 $phase1_full verify-and-transform-pok-and-correctness --challenge-fname combined_split --challenge-hash-fname combined_split.verified.hash --response-fname response_beacon_split --response-hash-fname response_beacon_split.verified.hash --new-challenge-fname response_beacon_new_challenge_split --new-challenge-hash-fname response_beacon_new_challenge_split.verified.hash
 $phase1_full verify-and-transform-ratios --response-fname response_beacon_new_challenge_split
+echo "Done!"

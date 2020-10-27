@@ -134,6 +134,7 @@ fn benchmark_verification(c: &mut Criterion) {
                                 *compressed_output,
                                 correctness,
                                 correctness,
+                                SubgroupCheckMode::Auto,
                                 &parameters,
                             )
                             .unwrap()

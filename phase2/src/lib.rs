@@ -29,7 +29,7 @@ cfg_if! {
         extern crate web_sys;
         extern crate wasm_bindgen;
         extern crate console_error_panic_hook;
-        extern crate itertools;
+        //extern crate itertools;
 
         use wasm_bindgen::prelude::*;
         use itertools::Itertools;
@@ -51,9 +51,10 @@ cfg_if! {
             log!("Initializing phase2");
             let mut rng = &mut rand::XorShiftRng::new_unseeded(); // TODO: change this unsafe unseeded random (!)
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
+            let mut progress_update_interval: u32 = 0;
 
             log!("Contributing...");
-            let hash = params.contribute(&mut rng);
+            let hash = params.contribute(&mut rng, &mut progress_update_interval);
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
 
             let mut output: Vec<u8> = vec![];

@@ -6,6 +6,8 @@ This library is still under development.
 
 Build wasm package using `wasm-pack build --release -- --no-default-features --features wasm`
 
+For a node.js build: `wasm-pack build --target nodejs --release -- --no-default-features --features wasm`
+
 this will generate `./pkg` directory with wasm file and js bindings. After that you 
 can use this package in your browser application like so:
 

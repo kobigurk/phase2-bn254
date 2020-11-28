@@ -29,7 +29,6 @@ cfg_if! {
         extern crate web_sys;
         extern crate wasm_bindgen;
         extern crate console_error_panic_hook;
-        //extern crate itertools;
 
         use wasm_bindgen::prelude::*;
         use itertools::Itertools;

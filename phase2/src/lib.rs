@@ -50,7 +50,7 @@ cfg_if! {
             log!("Initializing phase2");
             let mut rng = &mut rand::XorShiftRng::new_unseeded(); // TODO: change this unsafe unseeded random (!)
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
-            let mut progress_update_interval: u32 = 0;
+            let mut progress_update_interval: u32 = 10000;
 
             log!("Contributing...");
             let hash = params.contribute(&mut rng, &mut progress_update_interval);

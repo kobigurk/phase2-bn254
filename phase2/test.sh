@@ -10,6 +10,8 @@ fi
 # move results of powers of tau here
 cp ../powersoftau/phase1radix* .
 
+npm install
+
 # compile circuit
 npx circom circuit.circom -c circuit.json # && npx snarkjs info -c circuit.json
 # npx snarkjs info -c circuit.json

@@ -37,6 +37,9 @@ pub fn same_ratio<G1: CurveAffine>(
     g2: (G1::Pair, G1::Pair)
 ) -> bool
 {
+    if g1.0.is_zero() || g1.1.is_zero() || g2.0.is_zero() || g2.1.is_zero() {
+        return false;
+    }
     g1.0.pairing_with(&g2.1) == g1.1.pairing_with(&g2.0)
 }
 
@@ -70,7 +73,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
             let s = s.clone();
             let sx = sx.clone();
 
-            scope.spawn(move || {
+            scope.spawn(move |_| {
                 // We do not need to be overly cautious of the RNG
                 // used for this check.
                 let rng = &mut thread_rng();
@@ -93,7 +96,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
                 sx.lock().unwrap().add_assign(&local_sx);
             });
         }
-    });
+    }).unwrap();
 
     let s = s.lock().unwrap().into_affine();
     let sx = sx.lock().unwrap().into_affine();
@@ -104,7 +107,7 @@ pub fn merge_pairs<G: CurveAffine>(v1: &[G], v2: &[G]) -> (G, G)
 
 
 /// Hashes to G2 using the first 32 bytes of `digest`. Panics if `digest` is less
-/// than 32 bytes.
+/// than 32 bytes. The input must be random.
 pub fn hash_to_g2(mut digest: &[u8]) -> G2
 {
     assert!(digest.len() >= 32);

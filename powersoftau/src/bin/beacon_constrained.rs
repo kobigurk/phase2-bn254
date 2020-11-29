@@ -1,3 +1,4 @@
+extern crate hex;
 use powersoftau::{
     batched_accumulator::BatchedAccumulator,
     keypair::keypair,
@@ -10,8 +11,6 @@ use memmap::MmapOptions;
 use std::fs::OpenOptions;
 
 use std::io::Write;
-
-#[macro_use]
 extern crate hex_literal;
 
 const INPUT_IS_COMPRESSED: UseCompression = UseCompression::No;
@@ -21,14 +20,21 @@ const CHECK_INPUT_CORRECTNESS: CheckForCorrectness = CheckForCorrectness::No;
 #[allow(clippy::modulo_one)]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 5 {
-        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size>");
+    if args.len() != 7 {
+        println!("Usage: \n<challenge_file> <response_file> <circuit_power> <batch_size> <beacon_hash> <num_iterations_exp>");
         std::process::exit(exitcode::USAGE);
     }
     let challenge_filename = &args[1];
     let response_filename = &args[2];
     let circuit_power = args[3].parse().expect("could not parse circuit power");
     let batch_size = args[4].parse().expect("could not parse batch size");
+    let beacon_hash = &args[5];
+    let num_iterations_exp = &args[6].parse::<usize>().unwrap();
+
+    if *num_iterations_exp < 10 || *num_iterations_exp > 63 {
+        println!("in_num_iterations_exp should be in [10, 63] range");
+        std::process::exit(exitcode::DATAERR);
+    }
 
     let parameters = CeremonyParams::<Bn256>::new(circuit_power, batch_size);
 
@@ -49,19 +55,17 @@ fn main() {
         use rand::chacha::ChaChaRng;
         use rand::SeedableRng;
 
-        // Place block hash here (block number #564321)
-        let mut cur_hash: [u8; 32] =
-            hex!("0000000000000000000a558a61ddc8ee4e488d647a747fe4dcc362fe2026c620");
+        let mut cur_hash = hex::decode(beacon_hash).unwrap();
 
         // Performs 2^n hash iterations over it
-        const N: u64 = 10;
+        let n: usize = *num_iterations_exp;
 
-        for i in 0..(1u64 << N) {
+        for i in 0..(1u64 << n) {
             // Print 1024 of the interstitial states
             // so that verification can be
             // parallelized
 
-            if i % (1u64 << (N - 10)) == 0 {
+            if i % (1u64 << (n - 10)) == 0 {
                 print!("{}: ", i);
                 for b in cur_hash.iter() {
                     print!("{:02x}", b);

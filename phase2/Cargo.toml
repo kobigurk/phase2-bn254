@@ -16,19 +16,19 @@ rand = "0.4"
 byteorder = "1"
 exitcode = "1.1.2"
 blake2-rfc = "0.2"
-blake2 = "0.6.1"
+blake2 = "0.8.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 num-bigint = "0.2.3"
 num-traits = "0.2.8"
-itertools = "0.8.1"
+itertools = "0.9.0"
 hex = "0.4.0"
 cfg-if = "0.1.10"
 bellman_ce = { path = "../bellman", default-features = false } # active features depend on build type
 
 # needed for native only but don't break wasm if present
 num_cpus = "1"
-crossbeam = "0.3"
+crossbeam = "0.7.3"
 rust-crypto = { version = "0.2", optional = true }
 
 # needed for wasm only

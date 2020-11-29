@@ -27,6 +27,11 @@ fn main() {
     let num_iterations_exp = &args[3].parse::<usize>().unwrap();
     let out_params_filename = &args[4];
 
+    if *num_iterations_exp < 10 || *num_iterations_exp > 63 {
+        println!("in_num_iterations_exp should be in [10, 63] range");
+        std::process::exit(exitcode::DATAERR);
+    }
+
     let disallow_points_at_infinity = false;
 
     // Create an RNG based on the outcome of the random beacon
@@ -38,7 +43,16 @@ fn main() {
         use crypto::digest::Digest;
 
         // The hash used for the beacon
-        let mut cur_hash = hex::decode(beacon_hash).unwrap();
+        let hash_result = hex::decode(beacon_hash);
+        if hash_result.is_err() {
+            println!("Beacon hash should be in hexadecimal format");
+            std::process::exit(exitcode::DATAERR);
+        }
+        let mut cur_hash = hash_result.unwrap();
+        if cur_hash.len() != 32 {
+            println!("Beacon hash should be 32 bytes long");
+            std::process::exit(exitcode::DATAERR);
+        }
         // Performs 2^n hash iterations over it
         let n: usize = *num_iterations_exp;
 

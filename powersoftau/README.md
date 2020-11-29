@@ -56,6 +56,8 @@ Put your hash from output response to private gist (example: https://gist.github
 Participants of the ceremony sample some randomness, perform a computation, and then destroy the randomness. **Only one participant needs to do this successfully to ensure the final parameters are secure.** In order to see that this randomness is truly destroyed, participants may take various kinds of precautions:
 
 * putting the machine in a Faraday cage
+* rebooting the machine afterwards
+* rebooting the machine afterwards and disconnecting RAM
 * destroying the machine afterwards
 * running the software on secure hardware
 * not connecting the hardware to any networks

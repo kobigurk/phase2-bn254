@@ -437,7 +437,7 @@ impl MPCParameters {
                 for (bases, projective) in bases.chunks_mut(chunk_size)
                     .zip(projective.chunks_mut(chunk_size))
                     {
-                        scope.spawn(move || {
+                        scope.spawn(move |_| {
                             let mut wnaf = Wnaf::new();
                             let mut count = 0;
                             for (base, projective) in bases.iter_mut()
@@ -451,17 +451,17 @@ impl MPCParameters {
                                 }
                         });
                     }
-            });
+            }).unwrap();
 
             // Perform batch normalization
             crossbeam::scope(|scope| {
                 for projective in projective.chunks_mut(chunk_size)
                     {
-                        scope.spawn(move || {
+                        scope.spawn(move |_| {
                             C::Projective::batch_normalization(projective);
                         });
                     }
-            });
+            }).unwrap();
 
             // Turn it all back into affine points
             for (projective, affine) in projective.iter().zip(bases.iter_mut()) {

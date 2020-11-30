@@ -75,6 +75,7 @@ use super::keypair_assembly::*;
 use super::keypair::*;
 use super::utils::*;
 
+
 /// MPC parameters are just like bellman `Parameters` except, when serialized,
 /// they contain a transcript of contributions at the end, which can be verified.
 #[derive(Clone)]
@@ -469,8 +470,11 @@ impl MPCParameters {
             }
         }
 
+
         #[cfg(feature = "wasm")]
         fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32) {
+            use web_sys::console;
+
             let coeff = coeff.into_repr();
 
             let mut projective = vec![C::Projective::zero(); bases.len()];
@@ -482,7 +486,7 @@ impl MPCParameters {
                 *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                 count = count + 1;
                 if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
-                    println!("progress {} {}", *progress_update_interval, *total_exps)
+                    console::log_1(&format!("progress {} of {}", count, *total_exps).into())
                 }
             }
 

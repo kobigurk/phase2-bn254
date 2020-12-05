@@ -44,7 +44,7 @@ cfg_if! {
         }
 
         #[wasm_bindgen]
-        pub fn contribute(params: Vec<u8>, entropy: Vec<u8>) -> Result<Vec<u8>, JsValue> {
+        pub fn contribute(params: Vec<u8>, entropy: Vec<u8>, sethash: &js_sys::Function) -> Result<Vec<u8>, JsValue> {
             console_error_panic_hook::set_once();
             let disallow_points_at_infinity = false;
 
@@ -78,6 +78,10 @@ cfg_if! {
             log!("Contributing...");
             let hash = params.contribute(&mut rng, &mut progress_update_interval);
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
+            log!("Sending hash...");
+            let this = JsValue::null();
+            let xhash: JsValue = JsValue::from(hash.iter().cloned().next());
+            let _ = sethash.call1(&this, &xhash);
 
             let mut output: Vec<u8> = vec![];
             params.write(&mut output).expect("failed to write updated parameters");

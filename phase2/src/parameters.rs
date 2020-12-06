@@ -3,9 +3,12 @@ extern crate rand;
 extern crate byteorder;
 extern crate num_cpus;
 extern crate crossbeam;
+#[cfg(feature = "wasm")]
+extern crate js_sys;
 
 #[cfg(feature = "wasm")]
 use bellman_ce::singlecore::Worker;
+
 #[cfg(not(feature = "wasm"))]
 use bellman_ce::multicore::Worker;
 
@@ -415,7 +418,8 @@ impl MPCParameters {
     pub fn contribute<R: Rng>(
         &mut self,
         rng: &mut R,
-        progress_update_interval: &u32
+        progress_update_interval: &u32,
+        report_progress: &js_sys::Function
     ) -> [u8; 64]
     {
         // Generate a keypair
@@ -447,7 +451,10 @@ impl MPCParameters {
                                     *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                                     count = count + 1;
                                     if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
-                                        println!("progress {} {}", *progress_update_interval, *total_exps)
+                                        println!("progress {} {}", *progress_update_interval, *total_exps);
+                                        let this = JsValue::null();
+                                        let xhash: JsValue = JsValue::from(hash.iter().cloned().next());
+                                        report_progress(&this, count, total_exps);
                                     }
                                 }
                         });
@@ -472,8 +479,9 @@ impl MPCParameters {
 
 
         #[cfg(feature = "wasm")]
-        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32) {
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32, report_progress: &js_sys::Function) {
             use web_sys::console;
+            use wasm_bindgen::prelude::*;
 
             let coeff = coeff.into_repr();
 
@@ -486,7 +494,11 @@ impl MPCParameters {
                 *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                 count = count + 1;
                 if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
-                    console::log_1(&format!("progress {} of {}", count, *total_exps).into())
+                    console::log_1(&format!("progress {} of {}", count, *total_exps).into());
+                    let this = JsValue::null();
+                    let pcount: JsValue = JsValue::from(count);
+                    let exp_count = JsValue::from(*total_exps);
+                    let _ = report_progress.call2(&this, &pcount, &exp_count);
                 }
             }
 
@@ -503,8 +515,8 @@ impl MPCParameters {
         let mut l = (&self.params.l[..]).to_vec();
         let mut h = (&self.params.h[..]).to_vec();
         let total_exps = (l.len() + h.len()) as u32;
-        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps);
-        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps);
+        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps, &report_progress);
+        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps, &report_progress);
         self.params.l = Arc::new(l);
         self.params.h = Arc::new(h);
 

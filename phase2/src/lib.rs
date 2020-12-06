@@ -81,7 +81,7 @@ cfg_if! {
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
             log!("Sending hash...");
             let this = JsValue::null();
-            let xhash = JsValue::from(str::from_utf8(&hash).unwrap());
+            let xhash = JsValue::from(format!("0x{:02x?}", &hash.iter().format("")));
             let _ = set_hash.call1(&this, &xhash);
 
             let mut output: Vec<u8> = vec![];

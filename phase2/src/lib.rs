@@ -38,6 +38,7 @@ cfg_if! {
             Read,
             Write,
         };
+        use std::str;
 
         macro_rules! log {
             ($($t:tt)*) => (web_sys::console::log_1(&format_args!($($t)*).to_string().into()))
@@ -80,7 +81,7 @@ cfg_if! {
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
             log!("Sending hash...");
             let this = JsValue::null();
-            let xhash: JsValue = JsValue::from(hash.iter().cloned().next());
+            let xhash = JsValue::from(str::from_utf8(&hash).unwrap());
             let _ = set_hash.call1(&this, &xhash);
 
             let mut output: Vec<u8> = vec![];

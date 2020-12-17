@@ -74,7 +74,7 @@ cfg_if! {
             };
         
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
-            let mut progress_update_interval: u32 = 10000;
+            let mut progress_update_interval: u32 = 1000;
 
             log!("Contributing...");
             let hash = params.contribute(&mut rng, &mut progress_update_interval, &report_progress);

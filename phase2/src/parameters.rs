@@ -479,7 +479,7 @@ impl MPCParameters {
 
 
         #[cfg(feature = "wasm")]
-        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32, report_progress: &js_sys::Function) {
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32, report_progress: &js_sys::Function, start_count: &u32) {
             use web_sys::console;
             use wasm_bindgen::prelude::*;
             //use std::{thread, time};
@@ -490,7 +490,7 @@ impl MPCParameters {
 
             // Perform wNAF, placing results into `projective`.
             let mut wnaf = Wnaf::new();
-            let mut count = 0;
+            let mut count = *start_count;
             for (base, projective) in bases.iter_mut().zip(projective.iter_mut()) {
                 *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                 count = count + 1;
@@ -516,8 +516,10 @@ impl MPCParameters {
         let mut l = (&self.params.l[..]).to_vec();
         let mut h = (&self.params.h[..]).to_vec();
         let total_exps = (l.len() + h.len()) as u32;
-        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps, &report_progress);
-        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps, &report_progress);
+        let mut start_count: u32 = 0;
+        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
+        start_count = l.len() as u32;
+        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
         self.params.l = Arc::new(l);
         self.params.h = Arc::new(h);
 

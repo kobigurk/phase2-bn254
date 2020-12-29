@@ -22,7 +22,7 @@ use tracing::info;
 use typenum::consts::U64;
 
 #[cfg(not(feature = "wasm"))]
-use crypto::{digest::Digest as CryptoDigest, sha2::Sha256};
+use sha2::{Digest as CryptoDigest, Sha256};
 
 use crate::elements::BatchExpMode;
 #[cfg(feature = "parallel")]
@@ -171,8 +171,9 @@ pub fn beacon_randomness_sha256_work(mut beacon_hash: [u8; 32]) -> [u8; 32] {
         }
 
         let mut h = Sha256::new();
-        h.input(&beacon_hash);
-        h.result(&mut beacon_hash);
+        h.update(&beacon_hash);
+        let result = h.finalize();
+        (&mut beacon_hash).copy_from_slice(&result);
     }
 
     print!("Final result of beacon: ");

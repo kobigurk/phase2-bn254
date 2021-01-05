@@ -33,6 +33,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
         check_input_for_correctness: CheckForCorrectness,
         check_output_for_correctness: CheckForCorrectness,
         subgroup_check_mode: SubgroupCheckMode,
+        ratio_check: bool,
         parameters: &'a Phase1Parameters<E>,
     ) -> Result<()> {
         let span = info_span!("phase1-verification");
@@ -49,6 +50,33 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
             new_challenge_beta_g1,
             new_challenge_beta_g2,
         ) = split_mut(new_challenge, parameters, compressed_new_challenge);
+
+        let (g1_check, g2_check, ratio_check) = {
+            // Ensure that the initial conditions are correctly formed (first 2 elements)
+            // We allocate a G1 vector of length 2 and re-use it for our G1 elements.
+            // We keep the values of the tau_g1 / tau_g2 elements for later use.
+
+            let after_g1 =
+                read_initial_elements::<E::G1Affine>(tau_g1, compressed_output, check_output_for_correctness);
+
+            // Current iteration of tau_g2[0].
+            let after_g2 =
+                read_initial_elements::<E::G2Affine>(tau_g2, compressed_output, check_output_for_correctness);
+
+            match (after_g1, after_g2) {
+                (Ok(after_g1), Ok(after_g2)) => {
+                    let g1_check = (after_g1[0], after_g1[1]);
+                    let g2_check = (after_g2[0], after_g2[1]);
+
+                    (g1_check, g2_check, ratio_check)
+                }
+                _ => (
+                    (E::G1Affine::zero(), E::G1Affine::zero()),
+                    (E::G2Affine::zero(), E::G2Affine::zero()),
+                    false,
+                ),
+            }
+        };
 
         if parameters.contribution_mode == ContributionMode::Full || parameters.chunk_index == 0 {
             // Run proof of knowledge checks if contribution mode is on full, or this is the first chunk index.
@@ -203,6 +231,11 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                 ContributionMode::Full => (start, end),
             };
 
+            // If there's only one element, ratio check will fail, so return an error
+            if ratio_check && end <= start + 1 {
+                return Err(Error::BatchTooSmall);
+            }
+
             match parameters.proving_system {
                 ProvingSystem::Groth16 => {
                     rayon::scope(|t| {
@@ -220,7 +253,17 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                 &mut g1,
                                 subgroup_check_mode,
                             )
-                            .expect("could not check element are non zero and in prime order subgroup");
+                            .expect("could not check element are non zero and in prime order subgroup (tau g1)");
+
+                            if ratio_check {
+                                check_power_ratios::<E>(
+                                    (tau_g1, compressed_output, CheckForCorrectness::No),
+                                    (start_chunk, end_chunk),
+                                    &mut g1,
+                                    &g2_check,
+                                )
+                                .expect("could not check element ratios (tau g1)");
+                            }
 
                             let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
                             new_challenge_tau_g1[start_chunk * size..end_chunk * size]
@@ -267,7 +310,19 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         &mut g2,
                                         subgroup_check_mode,
                                     )
-                                    .expect("could not check element are non zero and in prime order subgroup");
+                                    .expect(
+                                        "could not check elements are non zero and in prime order subgroup (tau g2)",
+                                    );
+
+                                    if ratio_check {
+                                        check_power_ratios_g2::<E>(
+                                            (tau_g2, compressed_output, CheckForCorrectness::No),
+                                            (start_chunk, end_chunk),
+                                            &mut g2[..],
+                                            &g1_check,
+                                        )
+                                        .expect("could not check ratios (tau g2)");
+                                    }
 
                                     let size = buffer_size::<E::G2Affine>(compressed_new_challenge);
                                     new_challenge_tau_g2[start_chunk * size..end_chunk * size]
@@ -289,7 +344,19 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         &mut g1,
                                         subgroup_check_mode,
                                     )
-                                    .expect("could not check element are non zero and in prime order subgroup");
+                                    .expect(
+                                        "could not check elements are non zero and in prime order subgroup (alpha g1)",
+                                    );
+
+                                    if ratio_check {
+                                        check_power_ratios::<E>(
+                                            (alpha_g1, compressed_output, CheckForCorrectness::No),
+                                            (start_chunk, end_chunk),
+                                            &mut g1,
+                                            &g2_check,
+                                        )
+                                        .expect("could not check ratios (alpha g1)");
+                                    }
 
                                     let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
                                     new_challenge_alpha_g1[start_chunk * size..end_chunk * size]
@@ -311,8 +378,18 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                         &mut g1,
                                         subgroup_check_mode,
                                     )
-                                    .expect("could not check element are non zero and in prime order subgroup");
-
+                                    .expect(
+                                        "could not check element are non zero and in prime order subgroup (beta g1)",
+                                    );
+                                    if ratio_check {
+                                        check_power_ratios::<E>(
+                                            (beta_g1, compressed_output, CheckForCorrectness::No),
+                                            (start_chunk, end_chunk),
+                                            &mut g1,
+                                            &g2_check,
+                                        )
+                                        .expect("could not check element ratios (beta g1)");
+                                    }
                                     let size = buffer_size::<E::G1Affine>(compressed_new_challenge);
                                     new_challenge_beta_g1[start_chunk * size..end_chunk * size]
                                         .write_batch(&mut g1[0..end_chunk - start_chunk], compressed_new_challenge)
@@ -728,6 +805,7 @@ mod tests {
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
                     SubgroupCheckMode::Auto,
+                    false,
                     &parameters,
                 );
                 assert!(res.is_ok());
@@ -767,6 +845,7 @@ mod tests {
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
                     SubgroupCheckMode::Auto,
+                    false,
                     &parameters,
                 );
                 assert!(res.is_ok());
@@ -791,6 +870,7 @@ mod tests {
                     CheckForCorrectness::No,
                     CheckForCorrectness::Full,
                     SubgroupCheckMode::Auto,
+                    false,
                     &parameters,
                 );
                 assert!(res.is_err());
@@ -893,6 +973,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_ok());
@@ -945,6 +1026,7 @@ mod tests {
                         correctness,
                         correctness,
                         SubgroupCheckMode::Auto,
+                        false,
                         &parameters,
                     )
                     .is_ok());
@@ -963,6 +1045,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_err());

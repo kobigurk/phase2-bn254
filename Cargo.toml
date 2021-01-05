@@ -15,3 +15,6 @@ zexe_bench_utils = { git = "https://github.com/celo-org/zexe", rev = "f3f9c27d68
 zexe_r1cs_core = { git = "https://github.com/celo-org/zexe", rev = "f3f9c27d683964e31383327a7418c9f8eb438841", package = "r1cs-core", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 zexe_r1cs_std = { git = "https://github.com/celo-org/zexe", rev = "f3f9c27d683964e31383327a7418c9f8eb438841", package = "r1cs-std", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 zexe_groth16 = { git = "https://github.com/celo-org/zexe", rev = "f3f9c27d683964e31383327a7418c9f8eb438841", package = "groth16", default-features = false, features = [] }
+
+[patch.'https://github.com/scipr-lab/poly-commit']
+poly-commit = { git = "https://github.com/celo-org/poly-commit", rev = "4feda97c665a983304fabff789c76baadff08201" }

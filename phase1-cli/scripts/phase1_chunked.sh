@@ -6,7 +6,7 @@ export RUSTFLAGS="-C target-feature=+bmi2,+adx"
 CARGO_VER=""
 PROVING_SYSTEM=$1
 POWER=10
-BATCH=64
+BATCH=512
 CHUNK_SIZE=512
 if [ "$PROVING_SYSTEM" == "groth16" ]; then
   MAX_CHUNK_INDEX=$((4-1)) # we have 4 chunks, since we have a total of 2^11-1 powers

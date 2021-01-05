@@ -181,7 +181,7 @@ pub fn test_phase1_contribute_bls12_377_chunked() {
             contribute_challenge_test(&get_parameters_chunked::<Bls12_377>(
                 *proving_system,
                 powers,
-                2,
+                3,
                 i,
                 chunk_size,
             ));
@@ -202,7 +202,7 @@ fn test_phase1_contribute_bw6_761_chunked() {
             contribute_challenge_test(&get_parameters_chunked::<BW6_761>(
                 *proving_system,
                 powers,
-                2,
+                3,
                 i,
                 chunk_size,
             ));

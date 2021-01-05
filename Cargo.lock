@@ -867,7 +867,7 @@ dependencies = [
 [[package]]
 name = "poly-commit"
 version = "0.1.1-alpha.0"
-source = "git+https://github.com/scipr-lab/poly-commit?rev=efff1c1#efff1c113bbddd726144bd4ed922301a63b5d334"
+source = "git+https://github.com/celo-org/poly-commit?rev=4feda97c665a983304fabff789c76baadff08201#4feda97c665a983304fabff789c76baadff08201"
 dependencies = [
  "algebra-core",
  "bench-utils",

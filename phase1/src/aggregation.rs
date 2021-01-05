@@ -440,6 +440,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_ok());
@@ -493,6 +494,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_ok());
@@ -511,6 +513,7 @@ mod tests {
                                 correctness,
                                 correctness,
                                 SubgroupCheckMode::Auto,
+                                false,
                                 &parameters,
                             )
                             .is_err());
@@ -651,6 +654,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_ok());
@@ -700,6 +704,7 @@ mod tests {
                             correctness,
                             correctness,
                             SubgroupCheckMode::Auto,
+                            false,
                             &parameters,
                         )
                         .is_ok());
@@ -718,6 +723,7 @@ mod tests {
                                 correctness,
                                 correctness,
                                 SubgroupCheckMode::Auto,
+                                false,
                                 &parameters,
                             )
                             .is_err());

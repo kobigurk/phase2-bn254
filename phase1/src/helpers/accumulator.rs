@@ -35,7 +35,7 @@ cfg_if! {
         use zexe_algebra::{PrimeField, FpParameters, cfg_iter, Zero};
         #[cfg(feature = "parallel")]
         use rayon::prelude::*;
-        use tracing::debug;
+        use tracing::{warn,debug};
 
         use crate::PublicKey;
         /// Given a public key and the accumulator's digest, it hashes each G1 element
@@ -111,9 +111,13 @@ cfg_if! {
                     }
                 }
                 (false, SubgroupCheckMode::Auto) | (_, SubgroupCheckMode::Direct) => {
-                    cfg_iter!(elements).all(|p| {
-                        p.mul(<<C::ScalarField as PrimeField>::Params as FpParameters>::MODULUS)
-                            .is_zero()
+                    cfg_iter!(elements).enumerate().all(|(i, p)| {
+                        let res = p.mul(<<C::ScalarField as PrimeField>::Params as FpParameters>::MODULUS)
+                            .is_zero();
+                        if !res {
+                            warn!("Wasn't in subgroup {} index {}", p, i)
+                        }
+                        res
                     })
                 }
             };
@@ -142,6 +146,12 @@ cfg_if! {
         ) -> Result<Vec<C>> {
             let batch = amount;
             let size = buffer_size::<C>(compressed);
+            if buffer.len() < batch*size {
+                return Err(Error::InvalidLength {
+                    expected: batch,
+                    got: buffer.len() / size,
+                });
+            }
             let result = buffer[0..batch * size].read_batch(compressed, check_input_for_correctness)?;
             if result.len() != batch {
                 return Err(Error::InvalidLength {

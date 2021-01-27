@@ -4,13 +4,17 @@ extern crate rand;
 use std::str;
 use std::fs;
 use std::fs::{OpenOptions, File};
-use std::io::{Read, Write};
+use std::io::{Read, Write, Seek, Error, ErrorKind};
 use std::collections::BTreeMap;
 use std::iter::repeat;
 use std::sync::Arc;
 use itertools::Itertools;
 use rand::{Rng, OsRng};
 use parameters::MPCParameters;
+use byteorder::{LittleEndian, ReadBytesExt};
+use bellman_ce::pairing::ff::Field;
+use bellman_ce::pairing::ff::PrimeFieldRepr;
+use bellman_ce::pairing::ff::PrimeFieldDecodingError;
 
 use bellman_ce::{
     Circuit,
@@ -329,6 +333,71 @@ pub fn witness_from_json<E: Engine, R: Read>(reader: R) -> Vec<E::Fr>{
     return witness.into_iter().map(|x| E::Fr::from_str(&x).unwrap()).collect::<Vec<E::Fr>>();
 }
 
+pub fn witness_from_wtns_file<E: Engine>(filename: &str) -> Vec<E::Fr> {
+    let mut reader = OpenOptions::new()
+        .read(true)
+        .open(filename)
+        .expect("unable to open.");
+    return witness_from_wtns::<E, File>(&mut reader).unwrap();
+}
+
+pub fn witness_from_wtns<E: Engine, R: Read>(mut reader: &mut R) -> std::io::Result<Vec<E::Fr>> {
+
+    let mut magic = [0;4];
+
+    reader.read(&mut magic)?;
+    if magic != [b'w',b't',b'n',b's'] {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid file type"));
+    }
+
+    let version = reader.read_u32::<LittleEndian>()?;
+    if version > 2 {
+        return Err(Error::new(ErrorKind::InvalidData, "Version not supported"));
+    }
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+    let _ = reader.read_u64::<LittleEndian>()?;
+
+    let n8 = reader.read_u32::<LittleEndian>()?;
+    if n8 != 32 {
+        return Err(Error::new(ErrorKind::InvalidData, "Field size is not 256 bits."));
+    }
+
+    let mut q: [u64;4] = [0;4];
+    for i in 0..4 {
+        q[i] = reader.read_u64::<LittleEndian>()?;
+    }
+    if q != [
+        0x43e1f593f0000001,
+        0x2833e84879b97091,
+        0xb85045b68181585d,
+        0x30644e72e131a029
+      ]
+    {
+        return Err(Error::new(ErrorKind::InvalidData, "Circuit not in the bn256 curve field."));
+    }
+
+    let n = reader.read_u32::<LittleEndian>()?;
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+    let _ = reader.read_u64::<LittleEndian>()?;
+
+    let mut res : Vec<E::Fr> = Vec::new();
+    let mut v = E::Fr::zero().into_repr();
+    for _i in 0..n {
+        v.read_le(&mut reader)?;
+        match E::Fr::from_repr(v) {
+            Err(e) => return Err(Error::new(ErrorKind::InvalidData, e)),
+            Ok(v) => res.push(v),
+        }
+    }
+
+    Ok(res)
+}
+
+
 pub fn circuit_from_json_file<E: Engine>(filename: &str) -> CircomCircuit::<E> {
     let reader = OpenOptions::new()
         .read(true)
@@ -362,4 +431,156 @@ pub fn circuit_from_json<E: Engine, R: Read>(reader: R) -> CircomCircuit::<E> {
 
 pub fn create_rng() -> Box<dyn Rng> {
     return Box::new(OsRng::new().unwrap())
+}
+
+
+
+// For the format specification see: https://github.com/iden3/r1csfile/blob/master/doc/r1cs_bin_format.md
+fn circuit_from_r1cs_read_header<E: Engine, R:Read>(circuit : &mut CircomCircuit<E>, reader: &mut R) -> std::io::Result<()> {
+
+    let n8 = reader.read_u32::<LittleEndian>()?;
+    if n8 != 32 {
+        return Err(Error::new(ErrorKind::InvalidData, "Field size is not 256 bits."));
+    }
+
+    let mut q: [u64;4] = [0;4];
+    for i in 0..4 {
+        q[i] = reader.read_u64::<LittleEndian>()?;
+    }
+
+    if q != [
+        0x43e1f593f0000001,
+        0x2833e84879b97091,
+        0xb85045b68181585d,
+        0x30644e72e131a029
+      ]
+    {
+        return Err(Error::new(ErrorKind::InvalidData, "Circuit not in the bn256 curve field."));
+    }
+
+
+    let n_vars = (reader.read_u32::<LittleEndian>()?) as usize;
+    let n_outputs = (reader.read_u32::<LittleEndian>()?) as usize;
+    let n_pub_inputs = (reader.read_u32::<LittleEndian>()?) as usize;
+    let _n_prv_inputs = (reader.read_u32::<LittleEndian>()?) as usize;
+    let _n_labels = (reader.read_u64::<LittleEndian>()?) as usize;
+    let n_constraints = (reader.read_u32::<LittleEndian>()?) as usize;
+
+    circuit.num_inputs = n_pub_inputs + n_outputs + 1;
+    circuit.num_aux = n_vars-circuit.num_inputs;
+    circuit.num_constraints = n_constraints;
+
+    Ok(())
+}
+
+fn circuit_from_r1cs_read_lc<E: Engine, R:Read>(mut reader: &mut R) -> std::io::Result< Vec<(usize, E::Fr)> > {
+    let mut lc : Vec<(usize, E::Fr)> = Vec::new();
+    let n_coefs = reader.read_u32::<LittleEndian>()?;
+    for _i in 0..n_coefs {
+        let coef_id = (reader.read_u32::<LittleEndian>()?) as usize;
+        let mut coef_val = E::Fr::zero().into_repr();
+        coef_val.read_le(&mut reader)?;
+        match E::Fr::from_repr(coef_val) {
+            Err(e) => return Err(Error::new(ErrorKind::InvalidData, e)),
+            Ok(v) => lc.push((coef_id, v)),
+        }
+    }
+
+    Ok(lc)
+}
+
+fn circuit_from_r1cs_read_constraint<E: Engine, R:Read>(circuit : &mut CircomCircuit<E>, mut reader: &mut R) -> std::io::Result<()> {
+    let lc_a = circuit_from_r1cs_read_lc::<E,R>(&mut reader)?;
+    let lc_b = circuit_from_r1cs_read_lc::<E,R>(&mut reader)?;
+    let lc_c = circuit_from_r1cs_read_lc::<E,R>(&mut reader)?;
+
+    circuit.constraints.push((lc_a, lc_b, lc_c));
+
+    Ok(())
+}
+
+fn circuit_from_r1cs_read_constraints<E: Engine, R:Read>(mut circuit : &mut CircomCircuit<E>, mut reader: &mut R) -> std::io::Result<()> {
+    for _i in 0..circuit.num_constraints {
+        circuit_from_r1cs_read_constraint::<E,R>(&mut circuit, &mut reader)?;
+    }
+    Ok(())
+}
+
+
+
+pub fn circuit_from_r1cs<E: Engine, R:Read + Seek>(mut reader: R) -> std::io::Result<CircomCircuit::<E>> {
+    let mut magic = [0;4];
+    let mut circuit= CircomCircuit {
+        num_inputs: 0,
+        num_aux: 0,
+        num_constraints: 0,
+        witness: None,
+        constraints: Vec::new()
+    };
+    let mut pos :i64 = 0;
+
+    reader.read(&mut magic)?;
+    pos +=4;
+
+    if magic != [b'r',b'1',b'c',b's'] {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid file type"));
+    }
+
+
+    let version = reader.read_u32::<LittleEndian>()?;
+    pos += 4;
+    if version > 1 {
+        return Err(Error::new(ErrorKind::InvalidData, "Version not supported"));
+    }
+
+    let mut header_pos: Option<i64> = None;
+    let mut constraints_pos: Option<i64> = None;
+
+    let n_sections = reader.read_u32::<LittleEndian>()?;
+    pos += 4;
+    for _i in 0..n_sections {
+        let section_type = reader.read_u32::<LittleEndian>()?;
+        pos += 4;
+        let section_len = (reader.read_u64::<LittleEndian>()?) as i64;
+        pos += 8;
+        match section_type {
+            1 => match  header_pos {
+                None => header_pos = Some(pos),
+                Some(_) => return Err(Error::new(ErrorKind::InvalidData, "2 Headers sections in the file"))
+            },
+            2 => match  constraints_pos {
+                None => constraints_pos = Some(pos),
+                Some(_) => return Err(Error::new(ErrorKind::InvalidData, "2 Constraints sections in the file"))
+            },
+            _ => ()
+        }
+        reader.seek(std::io::SeekFrom::Current(section_len))?;
+        pos = pos + section_len;
+    }
+
+    match header_pos {
+        Some(p) => {
+            reader.seek(std::io::SeekFrom::Start(p as u64))?;
+            circuit_from_r1cs_read_header(&mut circuit, &mut reader)?;
+        },
+        None => return Err(Error::new(ErrorKind::InvalidData, "No header section"))
+    }
+
+    match constraints_pos {
+        Some(p) => {
+            reader.seek(std::io::SeekFrom::Start(p as u64))?;
+            circuit_from_r1cs_read_constraints(&mut circuit, &mut reader)?;
+        },
+        None => return Err(Error::new(ErrorKind::InvalidData, "No constraints section"))
+    }
+
+    Ok(circuit)
+}
+
+pub fn circuit_from_r1cs_file<E: Engine>(filename: &str) -> CircomCircuit::<E> {
+    let reader = OpenOptions::new()
+        .read(true)
+        .open(filename)
+        .expect("unable to open.");
+    return circuit_from_r1cs(reader).unwrap();
 }

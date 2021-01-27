@@ -6,4 +6,8 @@ phase1radix2m*
 /*.json
 /*.bin
 /*.params
+/*.r1cs
+/*.wasm
+/*.sym
 /verifier.sol
+/build/

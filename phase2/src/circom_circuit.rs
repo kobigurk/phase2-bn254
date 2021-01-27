@@ -342,7 +342,7 @@ pub fn witness_from_wtns_file<E: Engine>(filename: &str) -> Vec<E::Fr> {
 }
 
 pub fn witness_from_wtns<E: Engine, R: Read>(mut reader: &mut R) -> std::io::Result<Vec<E::Fr>> {
-    
+
     let mut magic = [0;4];
 
     reader.read(&mut magic)?;
@@ -351,9 +351,14 @@ pub fn witness_from_wtns<E: Engine, R: Read>(mut reader: &mut R) -> std::io::Res
     }
 
     let version = reader.read_u32::<LittleEndian>()?;
-    if version > 1 {
+    if version > 2 {
         return Err(Error::new(ErrorKind::InvalidData, "Version not supported"));
     }
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+    let _ = reader.read_u64::<LittleEndian>()?;
 
     let n8 = reader.read_u32::<LittleEndian>()?;
     if n8 != 32 {
@@ -364,18 +369,21 @@ pub fn witness_from_wtns<E: Engine, R: Read>(mut reader: &mut R) -> std::io::Res
     for i in 0..4 {
         q[i] = reader.read_u64::<LittleEndian>()?;
     }
-    if q != [ 
+    if q != [
         0x43e1f593f0000001,
         0x2833e84879b97091,
         0xb85045b68181585d,
-        0x30644e72e131a029   
-      ] 
+        0x30644e72e131a029
+      ]
     {
         return Err(Error::new(ErrorKind::InvalidData, "Circuit not in the bn256 curve field."));
     }
 
     let n = reader.read_u32::<LittleEndian>()?;
-    
+
+    let _ = reader.read_u32::<LittleEndian>()?;
+    let _ = reader.read_u64::<LittleEndian>()?;
+
     let mut res : Vec<E::Fr> = Vec::new();
     let mut v = E::Fr::zero().into_repr();
     for _i in 0..n {
@@ -388,6 +396,7 @@ pub fn witness_from_wtns<E: Engine, R: Read>(mut reader: &mut R) -> std::io::Res
 
     Ok(res)
 }
+
 
 pub fn circuit_from_json_file<E: Engine>(filename: &str) -> CircomCircuit::<E> {
     let reader = OpenOptions::new()
@@ -439,12 +448,12 @@ fn circuit_from_r1cs_read_header<E: Engine, R:Read>(circuit : &mut CircomCircuit
         q[i] = reader.read_u64::<LittleEndian>()?;
     }
 
-    if q != [ 
+    if q != [
         0x43e1f593f0000001,
         0x2833e84879b97091,
         0xb85045b68181585d,
-        0x30644e72e131a029   
-      ] 
+        0x30644e72e131a029
+      ]
     {
         return Err(Error::new(ErrorKind::InvalidData, "Circuit not in the bn256 curve field."));
     }
@@ -476,7 +485,7 @@ fn circuit_from_r1cs_read_lc<E: Engine, R:Read>(mut reader: &mut R) -> std::io::
             Ok(v) => lc.push((coef_id, v)),
         }
     }
-    
+
     Ok(lc)
 }
 
@@ -554,7 +563,7 @@ pub fn circuit_from_r1cs<E: Engine, R:Read + Seek>(mut reader: R) -> std::io::Re
             reader.seek(std::io::SeekFrom::Start(p as u64))?;
             circuit_from_r1cs_read_header(&mut circuit, &mut reader)?;
         },
-        None => return Err(Error::new(ErrorKind::InvalidData, "No header section")) 
+        None => return Err(Error::new(ErrorKind::InvalidData, "No header section"))
     }
 
     match constraints_pos {
@@ -562,7 +571,7 @@ pub fn circuit_from_r1cs<E: Engine, R:Read + Seek>(mut reader: R) -> std::io::Re
             reader.seek(std::io::SeekFrom::Start(p as u64))?;
             circuit_from_r1cs_read_constraints(&mut circuit, &mut reader)?;
         },
-        None => return Err(Error::new(ErrorKind::InvalidData, "No constraints section")) 
+        None => return Err(Error::new(ErrorKind::InvalidData, "No constraints section"))
     }
 
     Ok(circuit)

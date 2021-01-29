@@ -38,13 +38,14 @@ cfg_if! {
             Read,
             Write,
         };
+        use std::str;
 
         macro_rules! log {
             ($($t:tt)*) => (web_sys::console::log_1(&format_args!($($t)*).to_string().into()))
         }
 
         #[wasm_bindgen]
-        pub fn contribute(params: Vec<u8>, entropy: Vec<u8>) -> Result<Vec<u8>, JsValue> {
+        pub fn contribute(params: Vec<u8>, entropy: Vec<u8>, report_progress: &js_sys::Function, set_hash: &js_sys::Function) -> Result<Vec<u8>, JsValue> {
             console_error_panic_hook::set_once();
             let disallow_points_at_infinity = false;
 
@@ -73,11 +74,15 @@ cfg_if! {
             };
         
             let mut params = MPCParameters::read(&*params, disallow_points_at_infinity, true).expect("unable to read params");
+            let mut progress_update_interval: u32 = 1000;
 
             log!("Contributing...");
-            let zero: u32 = 0;
-            let hash = params.contribute(&mut rng, &zero);
+            let hash = params.contribute(&mut rng, &mut progress_update_interval, &report_progress);
             log!("Contribution hash: 0x{:02x}", hash.iter().format(""));
+            log!("Sending hash...");
+            let this = JsValue::null();
+            let xhash = JsValue::from(format!("0x{:02x?}", &hash.iter().format("")));
+            let _ = set_hash.call1(&this, &xhash);
 
             let mut output: Vec<u8> = vec![];
             params.write(&mut output).expect("failed to write updated parameters");

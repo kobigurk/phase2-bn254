@@ -24,6 +24,31 @@ async function main() {
 main().catch(console.error)
 ``` 
 
+## Service Worker 
+
+Some differences are required to implement the module in a service worker.
+
+Build wasm package using `wasm-pack build --target no-modules --release -- --no-default-features --features wasm`
+
+Service workers can't do a dynamic import, as above. Instead load the shims using:
+```js
+self.importScripts(./pkg/phase2.js);
+```
+
+This will make wasm_bindgen available to the service worker. 
+Declare the `contribute` function like this:
+```js
+const { contribute } = wasm_bindgen;
+``` 
+Load the wasm binary like this:
+```js
+await wasm_bindgen('./pkg/phase2_bg.wasm');
+```
+and run `contribute` like this:
+```js
+const result = contribute(sourceParams, ...);
+```
+
 ## [Documentation](https://docs.rs/phase2/)
 
 ## Security Warnings

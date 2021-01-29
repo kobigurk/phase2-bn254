@@ -7,3 +7,5 @@ phase1radix2m*
 /*.bin
 /*.params
 /verifier.sol
+*.dat
+*.r1cs

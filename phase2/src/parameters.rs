@@ -3,9 +3,12 @@ extern crate rand;
 extern crate byteorder;
 extern crate num_cpus;
 extern crate crossbeam;
+#[cfg(feature = "wasm")]
+extern crate js_sys;
 
 #[cfg(feature = "wasm")]
 use bellman_ce::singlecore::Worker;
+
 #[cfg(not(feature = "wasm"))]
 use bellman_ce::multicore::Worker;
 
@@ -74,6 +77,7 @@ use super::hash_writer::*;
 use super::keypair_assembly::*;
 use super::keypair::*;
 use super::utils::*;
+
 
 /// MPC parameters are just like bellman `Parameters` except, when serialized,
 /// they contain a transcript of contributions at the end, which can be verified.
@@ -414,7 +418,9 @@ impl MPCParameters {
     pub fn contribute<R: Rng>(
         &mut self,
         rng: &mut R,
-        progress_update_interval: &u32
+        progress_update_interval: &u32,
+        #[cfg(feature = "wasm")]
+        report_progress: &js_sys::Function
     ) -> [u8; 64]
     {
         // Generate a keypair
@@ -446,7 +452,7 @@ impl MPCParameters {
                                     *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                                     count = count + 1;
                                     if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
-                                        println!("progress {} {}", *progress_update_interval, *total_exps)
+                                        println!("progress {} {}", *progress_update_interval, *total_exps);
                                     }
                                 }
                         });
@@ -469,20 +475,29 @@ impl MPCParameters {
             }
         }
 
+
         #[cfg(feature = "wasm")]
-        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32) {
+        fn batch_exp<C: CurveAffine>(bases: &mut [C], coeff: C::Scalar, progress_update_interval: &u32, total_exps: &u32, report_progress: &js_sys::Function, start_count: &u32) {
+            use web_sys::console;
+            use wasm_bindgen::prelude::*;
+            //use std::{thread, time};
+
             let coeff = coeff.into_repr();
 
             let mut projective = vec![C::Projective::zero(); bases.len()];
 
             // Perform wNAF, placing results into `projective`.
             let mut wnaf = Wnaf::new();
-            let mut count = 0;
+            let mut count = *start_count;
             for (base, projective) in bases.iter_mut().zip(projective.iter_mut()) {
                 *projective = wnaf.base(base.into_projective(), 1).scalar(coeff);
                 count = count + 1;
                 if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
-                    println!("progress {} {}", *progress_update_interval, *total_exps)
+                    console::log_1(&format!("progress {} of {}", count, *total_exps).into());
+                    let this = JsValue::null();
+                    let pcount: JsValue = JsValue::from(count);
+                    let exp_count = JsValue::from(*total_exps);
+                    let _ = report_progress.call2(&this, &pcount, &exp_count);
                 }
             }
 
@@ -499,7 +514,15 @@ impl MPCParameters {
         let mut l = (&self.params.l[..]).to_vec();
         let mut h = (&self.params.h[..]).to_vec();
         let total_exps = (l.len() + h.len()) as u32;
+        let mut start_count: u32 = 0;
+        #[cfg(feature = "wasm")]
+        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
+        #[cfg(not(feature = "wasm"))]
         batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps);
+        start_count = l.len() as u32;
+        #[cfg(feature = "wasm")]
+        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
+        #[cfg(not(feature = "wasm"))]
         batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps);
         self.params.l = Arc::new(l);
         self.params.h = Arc::new(h);

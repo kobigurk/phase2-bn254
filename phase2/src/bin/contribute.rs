@@ -74,7 +74,7 @@ fn main() {
     let mut params = MPCParameters::read(reader, disallow_points_at_infinity, true).expect("unable to read params");
 
     println!("Contributing to {}...", in_params_filename);
-    let mut progress_update_interval: u32 = 0;
+    let mut progress_update_interval: u32 = 10000;
     if print_progress {
         let parsed = args[5].parse::<u32>();
         if !parsed.is_err() {

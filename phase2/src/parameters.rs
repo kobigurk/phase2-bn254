@@ -419,6 +419,7 @@ impl MPCParameters {
         &mut self,
         rng: &mut R,
         progress_update_interval: &u32,
+        #[cfg(feature = "wasm")]
         report_progress: &js_sys::Function
     ) -> [u8; 64]
     {
@@ -452,9 +453,6 @@ impl MPCParameters {
                                     count = count + 1;
                                     if *progress_update_interval > 0 && count % *progress_update_interval == 0 {
                                         println!("progress {} {}", *progress_update_interval, *total_exps);
-                                        let this = JsValue::null();
-                                        let xhash: JsValue = JsValue::from(hash.iter().cloned().next());
-                                        report_progress(&this, count, total_exps);
                                     }
                                 }
                         });
@@ -517,9 +515,15 @@ impl MPCParameters {
         let mut h = (&self.params.h[..]).to_vec();
         let total_exps = (l.len() + h.len()) as u32;
         let mut start_count: u32 = 0;
+        #[cfg(feature = "wasm")]
         batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
+        #[cfg(not(feature = "wasm"))]
+        batch_exp(&mut l, delta_inv, &progress_update_interval, &total_exps);
         start_count = l.len() as u32;
+        #[cfg(feature = "wasm")]
         batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps, &report_progress, &start_count);
+        #[cfg(not(feature = "wasm"))]
+        batch_exp(&mut h, delta_inv, &progress_update_interval, &total_exps);
         self.params.l = Arc::new(l);
         self.params.h = Arc::new(h);
 

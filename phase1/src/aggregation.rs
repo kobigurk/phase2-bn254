@@ -357,7 +357,7 @@ mod tests {
     use super::*;
     use crate::helpers::testing::{generate_input, generate_new_challenge, generate_output};
 
-    use zexe_algebra::{Bls12_377, BW6_761};
+    use algebra::{Bls12_377, BW6_761};
 
     fn aggregation_test<E: PairingEngine>(
         powers: usize,

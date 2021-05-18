@@ -1,13 +1,14 @@
-use phase1::{helpers::CurveKind, CurveParameters, Phase1Parameters};
+use phase1::{CurveParameters, Phase1Parameters};
 use phase1_cli::{
     combine, contribute, new_challenge, split, transform_pok_and_correctness, transform_ratios, Command, Phase1Opts,
 };
 use setup_utils::{
-    derive_rng_from_seed, from_slice, upgrade_correctness_check_config, DEFAULT_CONTRIBUTE_CHECK_INPUT_CORRECTNESS,
-    DEFAULT_VERIFY_CHECK_INPUT_CORRECTNESS, DEFAULT_VERIFY_CHECK_OUTPUT_CORRECTNESS,
+    converters::CurveKind, derive_rng_from_seed, from_slice, upgrade_correctness_check_config,
+    DEFAULT_CONTRIBUTE_CHECK_INPUT_CORRECTNESS, DEFAULT_VERIFY_CHECK_INPUT_CORRECTNESS,
+    DEFAULT_VERIFY_CHECK_OUTPUT_CORRECTNESS,
 };
 
-use zexe_algebra::{Bls12_377, PairingEngine as Engine, BW6_761};
+use algebra::{Bls12_377, PairingEngine as Engine, BW6_761};
 
 use gumdrop::Options;
 use std::{fs::read_to_string, process, time::Instant};

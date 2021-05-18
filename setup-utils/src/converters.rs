@@ -1,5 +1,16 @@
-use crate::{ContributionMode, ProvingSystem};
-use setup_utils::{BatchExpMode, SubgroupCheckMode};
+use crate::{BatchExpMode, SubgroupCheckMode};
+
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
+pub enum ContributionMode {
+    Full,
+    Chunked,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ProvingSystem {
+    Groth16,
+    Marlin,
+}
 
 #[derive(Debug, Clone)]
 pub enum CurveKind {

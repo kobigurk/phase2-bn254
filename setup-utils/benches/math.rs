@@ -1,7 +1,7 @@
 use phase1::helpers::testing::random_point_vec;
 use setup_utils::{batch_exp, dense_multiexp, generate_powers_of_tau, BatchExpMode};
 
-use zexe_algebra::{
+use algebra::{
     bls12_377::{Bls12_377, G1Affine},
     AffineCurve, Field, PairingEngine, PrimeField, UniformRand, Zero,
 };

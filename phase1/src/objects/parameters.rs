@@ -1,20 +1,11 @@
-use setup_utils::UseCompression;
+use setup_utils::{
+    converters::{ContributionMode, ProvingSystem},
+    UseCompression,
+};
 
-use zexe_algebra::{ConstantSerializedSize, PairingEngine};
+use algebra::{ConstantSerializedSize, PairingEngine};
 
 use std::marker::PhantomData;
-
-#[derive(Clone, PartialEq, Eq, Debug, Copy)]
-pub enum ContributionMode {
-    Full,
-    Chunked,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ProvingSystem {
-    Groth16,
-    Marlin,
-}
 
 /// The sizes of the group elements of a curve
 #[derive(Clone, PartialEq, Eq, Default, Debug)]
@@ -304,7 +295,7 @@ impl<E: PairingEngine> Phase1Parameters<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zexe_algebra::{Bls12_377, Bls12_381, BW6_761};
+    use algebra::{Bls12_377, Bls12_381, BW6_761};
 
     fn curve_parameters_test<E: PairingEngine>(g1: usize, g2: usize, g1_compressed: usize, g2_compressed: usize) {
         let p = CurveParameters::<E>::new();

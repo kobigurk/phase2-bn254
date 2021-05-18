@@ -1,15 +1,12 @@
-use phase1::{
-    helpers::{curve_from_str, proving_system_from_str, CurveKind},
-    parameters::*,
-    Phase1,
-};
-use setup_utils::{CheckForCorrectness, Groth16Params, Result, UseCompression};
+use phase1::parameters::*;
+use phase1_cli::prepare_phase2;
+use setup_utils::converters::{curve_from_str, proving_system_from_str, CurveKind, ProvingSystem};
+use setup_utils::Result;
 
-use zexe_algebra::{Bls12_377, PairingEngine, BW6_761};
+use algebra::{Bls12_377, BW6_761};
 
 use gumdrop::Options;
-use memmap::*;
-use std::{fs::OpenOptions, time::Instant};
+use std::time::Instant;
 use tracing::info;
 use tracing_subscriber::{
     filter::EnvFilter,
@@ -37,60 +34,8 @@ struct PreparePhase2Opts {
     pub proving_system: ProvingSystem,
     #[options(help = "the size of batches to process", default = "256")]
     pub batch_size: usize,
-    #[options(
-        help = "the number of powers used for phase 1 (circuit size will be 2^{power})",
-        default = "21"
-    )]
+    #[options(help = "the number of powers used for phase 1 (circuit size will be 2^{power})")]
     pub power: usize,
-    #[options(help = "the size (in powers) of the phase 2 circuit", default = "21")]
-    pub phase2_size: u32,
-}
-
-fn prepare_phase2<E: PairingEngine + Sync>(opts: &PreparePhase2Opts) -> Result<()> {
-    let parameters = Phase1Parameters::<E>::new_full(opts.proving_system, opts.power, opts.batch_size);
-    // Try to load response file from disk.
-    let reader = OpenOptions::new()
-        .read(true)
-        .open(&opts.response_fname)
-        .expect("unable open response file in this directory");
-    let response_readable_map = unsafe {
-        MmapOptions::new()
-            .map(&reader)
-            .expect("unable to create a memory map for input")
-    };
-
-    // Create the parameter file
-    let mut writer = OpenOptions::new()
-        .read(false)
-        .write(true)
-        .create_new(true)
-        .open(&opts.phase2_fname)
-        .expect("unable to create parameter file in this directory");
-
-    // Deserialize the accumulator
-    let current_accumulator = Phase1::deserialize(
-        &response_readable_map,
-        UseCompression::Yes,
-        CheckForCorrectness::Full,
-        &parameters,
-    )
-    .expect("unable to read uncompressed accumulator");
-
-    // Load the elements to the Groth16 utility
-    let groth16_params = Groth16Params::<E>::new(
-        2usize.pow(opts.phase2_size),
-        current_accumulator.tau_powers_g1,
-        current_accumulator.tau_powers_g2,
-        current_accumulator.alpha_tau_powers_g1,
-        current_accumulator.beta_tau_powers_g1,
-        current_accumulator.beta_g2,
-    )
-    .expect("could not create Groth16 Lagrange coefficients");
-
-    // Write the parameters
-    groth16_params.write(&mut writer, UseCompression::No)?;
-
-    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -103,8 +48,14 @@ fn main() -> Result<()> {
 
     let now = Instant::now();
     match opts.curve_kind {
-        CurveKind::Bls12_377 => prepare_phase2::<Bls12_377>(&opts)?,
-        CurveKind::BW6 => prepare_phase2::<BW6_761>(&opts)?,
+        CurveKind::Bls12_377 => {
+            let parameters = Phase1Parameters::<Bls12_377>::new_full(opts.proving_system, opts.power, opts.batch_size);
+            prepare_phase2::<Bls12_377>(&opts.phase2_fname, &opts.response_fname, opts.power, &parameters)?
+        }
+        CurveKind::BW6 => {
+            let parameters = Phase1Parameters::<BW6_761>::new_full(opts.proving_system, opts.power, opts.batch_size);
+            prepare_phase2::<BW6_761>(&opts.phase2_fname, &opts.response_fname, opts.power, &parameters)?
+        }
     }
 
     let new_now = Instant::now();

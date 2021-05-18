@@ -1,4 +1,4 @@
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
+use algebra::{AffineCurve, PairingEngine, ProjectiveCurve, Zero};
 
 use rayon::prelude::*;
 
@@ -93,12 +93,12 @@ fn dot_product<C: AffineCurve>(input: &[(C::ScalarField, usize)], coeffs: &[C]) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use phase1::helpers::testing::random_point_vec;
-    use rand::{thread_rng, Rng};
-    use zexe_algebra::{
+    use algebra::{
         bls12_377::{Bls12_377, Fr, G1Affine, G1Projective},
         UniformRand,
     };
+    use phase1::helpers::testing::random_point_vec;
+    use rand::{thread_rng, Rng};
 
     fn gen_input(rng: &mut impl Rng) -> Vec<(Fr, usize)> {
         let scalar = (0..6).map(|_| Fr::rand(rng)).collect::<Vec<_>>();

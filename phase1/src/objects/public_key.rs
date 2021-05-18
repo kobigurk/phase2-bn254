@@ -1,7 +1,7 @@
 use crate::Phase1Parameters;
 use setup_utils::{Error, UseCompression};
 
-use zexe_algebra::{CanonicalDeserialize, CanonicalSerialize, PairingEngine, SerializationError};
+use algebra::{CanonicalDeserialize, CanonicalSerialize, PairingEngine, SerializationError};
 
 use std::io::{Read, Write};
 

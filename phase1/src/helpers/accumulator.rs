@@ -4,12 +4,12 @@ use crate::{helpers::buffers::*, Phase1Parameters, ProvingSystem};
 use cfg_if::cfg_if;
 use setup_utils::{BatchDeserializer, BatchSerializer, Deserializer, Serializer, *};
 
-use zexe_algebra::{AffineCurve, PairingEngine};
+use algebra::{AffineCurve, PairingEngine};
 
 #[cfg(not(feature = "wasm"))]
 use setup_utils::SubgroupCheckMode;
 #[cfg(not(feature = "wasm"))]
-use {crate::ContributionMode, zexe_algebra::batch_verify_in_subgroup};
+use {crate::ContributionMode, algebra::batch_verify_in_subgroup};
 
 #[allow(type_alias_bounds)]
 type AccumulatorElements<E: PairingEngine> = (
@@ -32,7 +32,7 @@ type AccumulatorElementsRef<'a, E: PairingEngine> = (
 
 cfg_if! {
     if #[cfg(not(feature = "wasm"))] {
-        use zexe_algebra::{PrimeField, FpParameters, cfg_iter, Zero};
+        use algebra::{PrimeField, FpParameters, cfg_iter, Zero};
         #[cfg(feature = "parallel")]
         use rayon::prelude::*;
         use tracing::{warn,debug};
@@ -338,7 +338,7 @@ mod tests {
     use super::*;
     use crate::helpers::testing::random_point_vec;
 
-    use zexe_algebra::bls12_377::Bls12_377;
+    use algebra::bls12_377::Bls12_377;
 
     use rand::thread_rng;
 

@@ -2,8 +2,8 @@
 /// to Phase 2-compatible Lagrange Coefficients.
 use crate::{buffer_size, CheckForCorrectness, Deserializer, Result, Serializer, UseCompression};
 
-use zexe_algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
-use zexe_fft::{
+use algebra::{AffineCurve, PairingEngine, PrimeField, ProjectiveCurve};
+use fft::{
     cfg_into_iter, cfg_iter,
     domain::{radix2::Radix2EvaluationDomain, EvaluationDomain},
 };
@@ -271,7 +271,7 @@ mod tests {
         Phase1, Phase1Parameters, ProvingSystem,
     };
 
-    use zexe_algebra::Bls12_377;
+    use algebra::Bls12_377;
 
     fn read_write_curve<E: PairingEngine>(powers: usize, prepared_phase1_size: usize, compressed: UseCompression) {
         fn compat(compression: UseCompression) -> UseCompressionPhase1 {

@@ -5,13 +5,13 @@ mod test {
     use rand::thread_rng;
     use setup_utils::{blank_hash, BatchExpMode, CheckForCorrectness, UseCompression};
 
+    use algebra::{bls12_377::Fr, Bls12_377, Field, UniformRand};
     use blake2::Blake2s;
     use itertools::Itertools;
     use marlin::Marlin;
     use poly_commit::sonic_pc::SonicKZG10;
+    use r1cs_core::{lc, ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
     use std::{collections::BTreeMap, ops::MulAssign};
-    use zexe_algebra::{bls12_377::Fr, Bls12_377, Field, UniformRand};
-    use zexe_r1cs_core::{lc, ConstraintSynthesizer, ConstraintSystemRef, SynthesisError};
 
     #[derive(Copy, Clone)]
     struct Circuit<F: Field> {

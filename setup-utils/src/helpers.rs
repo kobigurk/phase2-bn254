@@ -3,11 +3,11 @@ use crate::{
     errors::{Error, VerificationError},
     Result,
 };
-use zexe_algebra::{
+use algebra::{
     AffineCurve, BatchGroupArithmeticSlice, BigInteger, CanonicalSerialize, ConstantSerializedSize, Field, One,
     PairingEngine, PrimeField, ProjectiveCurve, UniformRand, Zero,
 };
-use zexe_fft::{cfg_chunks_mut, cfg_into_iter, cfg_iter, cfg_iter_mut};
+use fft::{cfg_chunks_mut, cfg_into_iter, cfg_iter, cfg_iter_mut};
 
 use blake2::{digest::generic_array::GenericArray, Blake2b, Digest};
 use rand::{rngs::OsRng, thread_rng, Rng, SeedableRng};
@@ -54,7 +54,13 @@ pub fn print_hash(hash: &[u8]) {
 }
 
 /// Multiply a large number of points by a scalar
-pub fn batch_mul<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField) -> Result<()> {
+pub fn batch_mul<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField, batch_exp_mode: BatchExpMode) -> Result<()> {
+    let exps = vec![*coeff; bases.len()];
+    batch_exp(bases, &exps, None, batch_exp_mode)
+}
+
+/// Multiply a large number of points by a scalar
+pub fn batch_mul_old<C: AffineCurve>(bases: &mut [C], coeff: &C::ScalarField) -> Result<()> {
     let coeff = coeff.into_repr();
     let mut points: Vec<_> = cfg_iter!(bases).map(|base| base.mul(coeff)).collect();
     C::Projective::batch_normalization(&mut points);
@@ -286,7 +292,7 @@ pub fn from_slice(bytes: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zexe_algebra::{
+    use algebra::{
         bls12_377::Bls12_377,
         bls12_381::{Bls12_381, Fr, G1Affine, G2Affine},
     };

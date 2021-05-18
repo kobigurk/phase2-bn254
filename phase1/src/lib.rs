@@ -3,6 +3,8 @@ pub mod helpers;
 pub mod objects;
 pub use objects::*;
 
+pub use setup_utils::converters::{ContributionMode, ProvingSystem};
+
 #[cfg(not(feature = "wasm"))]
 mod aggregation;
 mod computation;
@@ -22,9 +24,9 @@ use setup_utils::*;
 use crate::helpers::accumulator::*;
 
 #[cfg(not(feature = "wasm"))]
-use zexe_algebra::Zero;
+use algebra::Zero;
 
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
+use algebra::{AffineCurve, PairingEngine, ProjectiveCurve, UniformRand};
 
 use rand::Rng;
 use tracing::{debug, info, info_span, trace};

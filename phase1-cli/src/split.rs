@@ -1,7 +1,7 @@
 use phase1::{Phase1, Phase1Parameters, ProvingSystem};
 use setup_utils::UseCompression;
 
-use zexe_algebra::PairingEngine as Engine;
+use algebra::PairingEngine as Engine;
 
 use memmap::*;
 use std::fs::OpenOptions;

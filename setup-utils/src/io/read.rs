@@ -1,7 +1,7 @@
 use crate::{buffer_size, CheckForCorrectness, Error, Result, UseCompression};
 
-use zexe_algebra::AffineCurve;
-use zexe_fft::cfg_chunks;
+use algebra::AffineCurve;
+use fft::cfg_chunks;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;

@@ -60,7 +60,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
 mod tests {
     use super::*;
 
-    use zexe_algebra::{AffineCurve, Bls12_377, BW6_761};
+    use algebra::{AffineCurve, Bls12_377, BW6_761};
 
     fn curve_initialization_test<E: PairingEngine>(powers: usize, batch: usize, compression: UseCompression) {
         for proving_system in &[ProvingSystem::Groth16, ProvingSystem::Marlin] {

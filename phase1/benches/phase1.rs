@@ -4,7 +4,7 @@ use phase1::{
 };
 use setup_utils::*;
 
-use zexe_algebra::Bls12_377;
+use algebra::Bls12_377;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use rand::thread_rng;

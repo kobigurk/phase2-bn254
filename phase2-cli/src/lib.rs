@@ -2,26 +2,17 @@
 #![cfg_attr(nightly, feature(doc_cfg, external_doc))]
 #![cfg_attr(nightly, doc(include = "../README.md"))]
 
-mod combine;
-pub use combine::combine;
+mod new_challenge;
+pub use new_challenge::new_challenge;
 
 mod contribute;
 pub use contribute::contribute;
 
-mod split;
-pub use split::split;
+mod verify;
+pub use verify::verify;
 
-mod new_challenge;
-pub use new_challenge::new_challenge;
-
-mod transform_pok_and_correctness;
-pub use transform_pok_and_correctness::transform_pok_and_correctness;
-
-mod transform_ratios;
-pub use transform_ratios::transform_ratios;
-
-mod prepare_phase2;
-pub use prepare_phase2::prepare_phase2;
+mod combine;
+pub use combine::combine;
 
 use setup_utils::converters::{ContributionMode, CurveKind, ProvingSystem};
 
@@ -36,7 +27,7 @@ use setup_utils::{
 use std::default::Default;
 
 #[derive(Debug, Options, Clone)]
-pub struct Phase1Opts {
+pub struct Phase2Opts {
     help: bool,
     #[options(help = "the seed to derive private elements from")]
     pub seed: String,
@@ -62,10 +53,8 @@ pub struct Phase1Opts {
         parse(try_from_str = "proving_system_from_str")
     )]
     pub proving_system: ProvingSystem,
-    #[options(help = "the size of batches to process", default = "256")]
+    #[options(help = "the size of batches to process", default = "16384")]
     pub batch_size: usize,
-    #[options(help = "the circuit power (circuit size will be 2^{power})", default = "21")]
-    pub power: usize,
     #[options(command)]
     pub command: Option<Command>,
     #[options(
@@ -85,8 +74,6 @@ pub struct Phase1Opts {
         parse(try_from_str = "subgroup_check_mode_from_str")
     )]
     pub subgroup_check_mode: SubgroupCheckMode,
-    #[options(help = "whether to skip ratio check")]
-    pub skip_ratio_check: bool,
 }
 
 // The supported commands
@@ -95,23 +82,12 @@ pub enum Command {
     // this creates a new challenge
     #[options(help = "creates a new challenge for the ceremony")]
     New(NewOpts),
-    #[options(
-        help = "contribute to ceremony by producing a response to a challenge (or create a new challenge if this is the first contribution)"
-    )]
+    #[options(help = "contribute to ceremony by producing a response to a challenge")]
     Contribute(ContributeOpts),
-    #[options(help = "contribute randomness via a random beacon (e.g. a bitcoin block header hash)")]
-    Beacon(ContributeOpts),
-    // this receives a challenge + response file, verifies it and generates a new challenge, for a single chunk.
     #[options(help = "verify the contributions so far and generate a new challenge, for a single chunk")]
-    VerifyAndTransformPokAndCorrectness(VerifyPokAndCorrectnessOpts),
-    // this receives a challenge + response file, verifies it and generates a new challenge, for a full contribution.
-    #[options(help = "verify the contributions so far and generate a new challenge, for a full contribution")]
-    VerifyAndTransformRatios(VerifyRatiosOpts),
-    // this receives a list of chunked responses and combines them into a single response.
-    #[options(help = "receive a list of chunked responses and combines them into a single response")]
+    Verify(VerifyOpts),
+    #[options(help = "combine the contributions and verify the final parameters")]
     Combine(CombineOpts),
-    #[options(help = "receive a full contribution and splits it into chunks")]
-    Split(SplitOpts),
 }
 
 // Options for the Contribute command
@@ -122,6 +98,14 @@ pub struct NewOpts {
     pub challenge_fname: String,
     #[options(help = "the new challenge file hash", default = "challenge.verified.hash")]
     pub challenge_hash_fname: String,
+    #[options(help = "phase 1 file name", default = "phase1")]
+    pub phase1_fname: String,
+    #[options(help = "phase 1 powers")]
+    pub phase1_powers: usize,
+    #[options(help = "number of validators")]
+    pub num_validators: usize,
+    #[options(help = "number of epochs")]
+    pub num_epochs: usize,
 }
 
 // Options for the Contribute command
@@ -144,7 +128,7 @@ pub struct ContributeOpts {
 }
 
 #[derive(Debug, Options, Clone)]
-pub struct VerifyPokAndCorrectnessOpts {
+pub struct VerifyOpts {
     help: bool,
     #[options(help = "the provided challenge file", default = "challenge")]
     pub challenge_fname: String,
@@ -155,38 +139,23 @@ pub struct VerifyPokAndCorrectnessOpts {
     #[options(help = "the response file hash", default = "response.verified.hash")]
     pub response_hash_fname: String,
     #[options(
-        help = "the new challenge file which will be generated in response",
-        default = "new_challenge"
+        help = "the provided new challenge file which will be written to",
+        default = "response"
     )]
     pub new_challenge_fname: String,
-    #[options(
-        help = "the new challenge file which will be generated in response hash",
-        default = "new_challenge.verified.hash"
-    )]
+    #[options(help = "the new challenge file hash", default = "response.verified.hash")]
     pub new_challenge_hash_fname: String,
-}
-
-#[derive(Debug, Options, Clone)]
-pub struct VerifyRatiosOpts {
-    help: bool,
-    #[options(help = "the provided response file which will be verified", default = "response")]
-    pub response_fname: String,
 }
 
 #[derive(Debug, Options, Clone)]
 pub struct CombineOpts {
     help: bool,
+    #[options(help = "the provided query initial file", default = "challenge")]
+    pub initial_query_fname: String,
+    #[options(help = "the provided full initial file", default = "challenge")]
+    pub initial_full_fname: String,
     #[options(help = "the response files which will be combined", default = "response_list")]
     pub response_list_fname: String,
     #[options(help = "the combined response file", default = "combined")]
     pub combined_fname: String,
-}
-
-#[derive(Debug, Options, Clone)]
-pub struct SplitOpts {
-    help: bool,
-    #[options(help = "the prefix for the chunked response files", default = "response")]
-    pub chunk_fname_prefix: String,
-    #[options(help = "the full response file", default = "full")]
-    pub full_fname: String,
 }

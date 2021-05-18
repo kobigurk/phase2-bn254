@@ -4,9 +4,7 @@
 //! Dispose of the private key ASAP once it's been used.
 use setup_utils::{hash_to_g2, CheckForCorrectness, Deserializer, HashWriter, Result, Serializer, UseCompression};
 
-use zexe_algebra::{
-    AffineCurve, CanonicalSerialize, ConstantSerializedSize, PairingEngine, ProjectiveCurve, UniformRand,
-};
+use algebra::{AffineCurve, CanonicalSerialize, ConstantSerializedSize, PairingEngine, ProjectiveCurve, UniformRand};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use rand::Rng;
@@ -204,8 +202,8 @@ impl<E: PairingEngine> PartialEq for PublicKey<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use algebra::Bls12_377;
     use rand::thread_rng;
-    use zexe_algebra::Bls12_377;
 
     #[test]
     fn serialization() {

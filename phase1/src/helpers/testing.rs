@@ -1,8 +1,8 @@
 use crate::{Phase1, Phase1Parameters, PublicKey};
 use setup_utils::*;
 
-use zexe_algebra::{AffineCurve, PairingEngine, ProjectiveCurve};
-use zexe_algebra_core::UniformRand;
+use algebra::{AffineCurve, PairingEngine, ProjectiveCurve};
+use algebra_core::UniformRand;
 
 use rand::{thread_rng, Rng};
 

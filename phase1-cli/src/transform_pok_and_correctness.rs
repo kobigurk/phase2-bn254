@@ -1,6 +1,6 @@
+use algebra::PairingEngine as Engine;
 use phase1::{Phase1, Phase1Parameters, PublicKey};
 use setup_utils::{calculate_hash, print_hash, CheckForCorrectness, SubgroupCheckMode, UseCompression};
-use zexe_algebra::PairingEngine as Engine;
 
 use memmap::*;
 use std::{

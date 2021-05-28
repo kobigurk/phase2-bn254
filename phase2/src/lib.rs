@@ -8,6 +8,8 @@ pub mod parameters;
 #[cfg(not(feature = "wasm"))]
 mod polynomial;
 
+pub mod load_circuit;
+
 pub mod chunked_groth16;
 
 cfg_if! {

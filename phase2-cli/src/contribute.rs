@@ -1,14 +1,12 @@
 use phase2::parameters::MPCParameters;
-use setup_utils::{calculate_hash, print_hash, BatchExpMode, CheckForCorrectness, SubgroupCheckMode, UseCompression};
+use setup_utils::{calculate_hash, print_hash, BatchExpMode, CheckForCorrectness, SubgroupCheckMode};
 
 use algebra::BW6_761;
 
+use crate::{COMPRESS_CONTRIBUTE_INPUT, COMPRESS_CONTRIBUTE_OUTPUT};
 use rand::Rng;
 use std::io::Write;
 use tracing::info;
-
-const COMPRESSED_INPUT: UseCompression = UseCompression::No;
-const COMPRESSED_OUTPUT: UseCompression = UseCompression::Yes;
 
 pub fn contribute(
     challenge_filename: &str,
@@ -33,7 +31,7 @@ pub fn contribute(
 
     let mut parameters = MPCParameters::<BW6_761>::read_fast(
         challenge_contents.as_slice(),
-        COMPRESSED_INPUT,
+        COMPRESS_CONTRIBUTE_INPUT,
         check_input_correctness,
         false,
         SubgroupCheckMode::Auto,
@@ -44,7 +42,7 @@ pub fn contribute(
         .expect("should have successfully contributed");
     let mut serialized_response = vec![];
     parameters
-        .write(&mut serialized_response, COMPRESSED_OUTPUT)
+        .write(&mut serialized_response, COMPRESS_CONTRIBUTE_OUTPUT)
         .expect("should have written input");
     std::fs::File::create(response_filename)
         .expect("unable to create response")

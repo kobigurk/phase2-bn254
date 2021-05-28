@@ -22,9 +22,13 @@ use setup_utils::{
         batch_exp_mode_from_str, contribution_mode_from_str, curve_from_str, proving_system_from_str,
         subgroup_check_mode_from_str,
     },
-    BatchExpMode, SubgroupCheckMode,
+    BatchExpMode, SubgroupCheckMode, UseCompression,
 };
 use std::default::Default;
+
+pub const COMPRESS_CONTRIBUTE_INPUT: UseCompression = UseCompression::No;
+pub const COMPRESS_CONTRIBUTE_OUTPUT: UseCompression = UseCompression::Yes;
+pub const COMBINED_IS_COMPRESSED: UseCompression = UseCompression::No;
 
 #[derive(Debug, Options, Clone)]
 pub struct Phase2Opts {
@@ -98,6 +102,8 @@ pub struct NewOpts {
     pub challenge_fname: String,
     #[options(help = "the new challenge file hash", default = "challenge.verified.hash")]
     pub challenge_hash_fname: String,
+    #[options(help = "the list of challenge files", default = "new_challenge_list")]
+    pub challenge_list_fname: String,
     #[options(help = "phase 1 file name", default = "phase1")]
     pub phase1_fname: String,
     #[options(help = "phase 1 powers")]
@@ -106,6 +112,8 @@ pub struct NewOpts {
     pub num_validators: usize,
     #[options(help = "number of epochs")]
     pub num_epochs: usize,
+    #[options(help = "circuit file name", default = "circuit.constraints")]
+    pub circuit_fname: String,
 }
 
 // Options for the Contribute command

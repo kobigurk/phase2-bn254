@@ -12,6 +12,10 @@ edition = "2018"
 phase2 = { path = "../phase2", default-features = false }
 setup-utils = { path = "../setup-utils", default-features = false }
 
+ark-bls12-377 = { git = "https://github.com/arkworks-rs/curves", features = [ "r1cs" ], rev = "6ed2450b5505de5d451f629bb6642e3977bf66e2" }
+ark-relations = { git = "https://github.com/arkworks-rs/snark", features = [ "std" ], rev = "8d9055d5397b510716ad2951ce1f18675aebe7c8" }
+ark-serialize = { git = "https://github.com/arkworks-rs/algebra", features = [ "derive" ], rev = "8d76d181de0079b7e5a92f6e1133e7be635efdd3" }
+
 algebra = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "algebra", features = ["bls12_377", "bw6_761", "derive"] }
 r1cs_core = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "r1cs-core" }
 groth16 = { git = "https://github.com/scipr-lab/zexe", version = "0.1.1-alpha.0", package = "groth16", features = [] }
@@ -26,6 +30,8 @@ tracing-subscriber = { version = "0.2.3" }
 phase1 = { path = "../phase1" }
 #epoch-snark = { git = "https://github.com/celo-org/celo-bls-snark-rs", branch = "straka/integration_info" }
 epoch-snark = { git = "https://github.com/celo-org/celo-bls-snark-rs", rev = "0995862883b7f88da5ef8e9102f4173a3f3bf20d" }
+
+anyhow = "1"
 
 [dev-dependencies]
 rand_xorshift = { version = "0.2" }

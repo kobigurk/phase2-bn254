@@ -9,6 +9,7 @@ members = [
 
 [patch.'https://github.com/scipr-lab/zexe']
 algebra_core = { git = "https://github.com/celo-org/zexe", package = "algebra-core", default-features = false, features = ["derive"] }
+algebra_core_derive = { git = "https://github.com/celo-org/zexe", package = "algebra-core-derive", default-features = false, features = [] }
 algebra = { git = "https://github.com/celo-org/zexe", package = "algebra", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 crypto-primitives = { git = "https://github.com/celo-org/zexe", package = "crypto-primitives", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }
 fft = { git = "https://github.com/celo-org/zexe", package = "ff-fft", default-features = false, features = ["ed_on_bls12_381", "bls12_381", "bls12_377"] }

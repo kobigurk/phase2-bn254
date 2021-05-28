@@ -30,11 +30,11 @@ fn execute_cmd<E: Engine>(opts: Phase2Opts) {
             new_challenge(
                 &opt.challenge_fname,
                 &opt.challenge_hash_fname,
+                &opt.challenge_list_fname,
                 opts.chunk_size,
                 &opt.phase1_fname,
                 opt.phase1_powers,
-                opt.num_validators,
-                opt.num_epochs,
+                &opt.circuit_fname,
             );
         }
         Command::Contribute(opt) => {
@@ -65,6 +65,7 @@ fn execute_cmd<E: Engine>(opts: Phase2Opts) {
                 &opt.new_challenge_fname,
                 &opt.new_challenge_hash_fname,
                 opts.subgroup_check_mode,
+                false,
             );
         }
         Command::Combine(opt) => {
@@ -73,6 +74,7 @@ fn execute_cmd<E: Engine>(opts: Phase2Opts) {
                 &opt.initial_full_fname,
                 &opt.response_list_fname,
                 &opt.combined_fname,
+                false,
             );
         }
     };

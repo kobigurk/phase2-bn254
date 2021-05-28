@@ -1,4 +1,4 @@
-use phase2::parameters::MPCParameters;
+use phase2::parameters::{verify_transcript, MPCParameters};
 use setup_utils::{print_hash, CheckForCorrectness, SubgroupCheckMode, UseCompression};
 
 use algebra::{CanonicalSerialize, BW6_761};
@@ -7,15 +7,14 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use tracing::info;
 
-const INITIAL_IS_COMPRESSED: UseCompression = UseCompression::No;
-const CONTRIBUTION_IS_COMPRESSED: UseCompression = UseCompression::Yes;
-const COMBINED_IS_COMPRESSED: UseCompression = UseCompression::No;
+use crate::{COMBINED_IS_COMPRESSED, COMPRESS_CONTRIBUTE_INPUT, COMPRESS_CONTRIBUTE_OUTPUT};
 
 pub fn combine(
     initial_query_filename: &str,
     initial_full_filename: &str,
     response_list_filename: &str,
     combined_filename: &str,
+    combine_initial: bool,
 ) {
     info!("Combining phase 2");
 
@@ -25,7 +24,7 @@ pub fn combine(
     let full_contents = std::fs::read(initial_full_filename).expect("should have initial full parameters");
     let full_parameters = MPCParameters::<BW6_761>::read_fast(
         full_contents.as_slice(),
-        INITIAL_IS_COMPRESSED,
+        UseCompression::No,
         CheckForCorrectness::No,
         false,
         SubgroupCheckMode::Auto,
@@ -36,20 +35,25 @@ pub fn combine(
         std::io::Cursor::new(std::fs::read(initial_query_filename).expect("should have read initial query"));
     let query_parameters = MPCParameters::<BW6_761>::read_groth16_fast(
         &mut query_contents,
-        INITIAL_IS_COMPRESSED,
+        UseCompression::No,
         CheckForCorrectness::No,
         false,
         SubgroupCheckMode::Auto,
     )
     .expect("should have deserialized initial query params");
 
+    let parameters_compressed = if combine_initial {
+        COMPRESS_CONTRIBUTE_INPUT
+    } else {
+        COMPRESS_CONTRIBUTE_OUTPUT
+    };
     let mut all_parameters = vec![];
     for line in response_list_reader.lines() {
         let line = line.expect("should have read line");
         let contents = std::fs::read(line).expect("should have read response");
         let parameters = MPCParameters::<BW6_761>::read_fast(
             contents.as_slice(),
-            CONTRIBUTION_IS_COMPRESSED,
+            parameters_compressed,
             CheckForCorrectness::No,
             false,
             SubgroupCheckMode::Auto,
@@ -61,9 +65,14 @@ pub fn combine(
     let combined =
         MPCParameters::<BW6_761>::combine(&query_parameters, &all_parameters).expect("should have combined parameters");
 
-    let contributions_hash = full_parameters
-        .verify(&combined)
-        .expect("should have verified successfully");
+    let contributions_hash = if combine_initial {
+        verify_transcript(full_parameters.cs_hash, &combined.contributions).expect("should have verified successfully")
+    } else {
+        full_parameters
+            .verify(&combined)
+            .expect("should have verified successfully")
+    };
+
     info!("Contributions hashes:");
     for contribution_hash in contributions_hash {
         print_hash(&contribution_hash[..]);

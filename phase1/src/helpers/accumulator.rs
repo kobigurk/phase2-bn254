@@ -100,10 +100,12 @@ cfg_if! {
                 compression,
                 CheckForCorrectness::OnlyNonZero,
             )?;
+
             const SECURITY_PARAM: usize = 128;
             const BATCH_SIZE: usize = 1 << 12;
             let now = std::time::Instant::now();
-            let all_in_prime_order_subgroup = match (elements.len() > BATCH_SIZE, subgroup_check_mode) {
+            let prime_order_subgroup_check_pass = match (elements.len() > BATCH_SIZE, subgroup_check_mode) {
+                (_, SubgroupCheckMode::No) => true,
                 (true, SubgroupCheckMode::Auto) | (_, SubgroupCheckMode::Batched) => {
                     match batch_verify_in_subgroup(elements, SECURITY_PARAM, &mut rand::thread_rng()) {
                         Ok(()) => true,
@@ -122,7 +124,7 @@ cfg_if! {
                 }
             };
             debug!("Subgroup verification for {} elems: {}us", end - start, now.elapsed().as_micros());
-            if !all_in_prime_order_subgroup {
+            if !prime_order_subgroup_check_pass {
                 return Err(Error::IncorrectSubgroup);
             }
             Ok(())

@@ -90,6 +90,7 @@ pub enum SubgroupCheckMode {
     Auto,
     Direct,
     Batched,
+    No,
 }
 
 impl fmt::Display for SubgroupCheckMode {
@@ -98,6 +99,7 @@ impl fmt::Display for SubgroupCheckMode {
             SubgroupCheckMode::Auto => write!(f, "Auto"),
             SubgroupCheckMode::Direct => write!(f, "Direct"),
             SubgroupCheckMode::Batched => write!(f, "Batched"),
+            SubgroupCheckMode::No => write!(f, "No"),
         }
     }
 }
@@ -135,7 +137,8 @@ pub fn check_subgroup<C: AffineCurve>(
 ) -> core::result::Result<(), Error> {
     const SECURITY_PARAM: usize = 128;
     const BATCH_SIZE: usize = 1 << 12;
-    let all_in_prime_order_subgroup = match (elements.len() > BATCH_SIZE, subgroup_check_mode) {
+    let prime_order_subgroup_check_pass = match (elements.len() > BATCH_SIZE, subgroup_check_mode) {
+        (_, SubgroupCheckMode::No) => true,
         (true, SubgroupCheckMode::Auto) | (_, SubgroupCheckMode::Batched) => {
             match batch_verify_in_subgroup(elements, SECURITY_PARAM, &mut rand::thread_rng()) {
                 Ok(()) => true,
@@ -147,7 +150,7 @@ pub fn check_subgroup<C: AffineCurve>(
                 .is_zero()
         }),
     };
-    if !all_in_prime_order_subgroup {
+    if !prime_order_subgroup_check_pass {
         return Err(Error::IncorrectSubgroup);
     }
 

@@ -381,6 +381,7 @@ impl<'a, E: PairingEngine + Sync> Phase1<'a, E> {
                                     .expect(
                                         "could not check element are non zero and in prime order subgroup (beta g1)",
                                     );
+
                                     if ratio_check {
                                         check_power_ratios::<E>(
                                             (beta_g1, compressed_output, CheckForCorrectness::No),

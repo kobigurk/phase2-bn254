@@ -1,4 +1,4 @@
-FROM rust:slim as builder
+FROM rust:slim-buster as builder
 RUN apt-get update && \
     apt-get install -y pkg-config libssl-dev && \
     rm -rf /var/lib/apt/lists/*

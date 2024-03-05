@@ -1,0 +1,94 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: []
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    env:
+      IAS_SPID: ${{ secrets.IAS_SPID }}
+      SGX_ENABLED: ${{ secrets.SGX_ENABLED }}
+      IAS_API_KEY: ${{ secrets.IAS_API_KEY }}
+      PINATA_API_KEY: ${{ secrets.PINATA_API_KEY }}
+      ACCOUNT_MNEMONIC: ${{ secrets.ACCOUNT_MNEMONIC }}
+      PINATA_API_SECRET: ${{ secrets.PINATA_API_SECRET }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+
+      - name: Install build-essential, curl, git, wget, and Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl git wget
+          sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+          sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update
+          sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+          echo "Installed build-essential, curl, git, wget, and Docker"
+
+      - name: Setup Rust and Cargo
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.51.0
+          override: true
+          components: rustc, cargo
+
+      - name: Build app
+        run: sh build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist
+          path: ./dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: ./dist
+
+      - name: Prepare release
+        run: zip -r dist.zip dist
+
+      - name: Get the current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d-%H-%M')"
+
+      - name: Create new release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.date.outputs.date }}
+          release_name: "Release: ${{ steps.date.outputs.date }}"
+          draft: false
+          prerelease: false
+          body: "Bazk new release at ${{ steps.date.outputs.date }}"
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_name: dist.zip
+          asset_path: ./dist.zip
+          asset_content_type: application/zip
